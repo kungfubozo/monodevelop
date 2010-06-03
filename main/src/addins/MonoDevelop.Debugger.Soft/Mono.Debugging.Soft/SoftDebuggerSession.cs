@@ -944,9 +944,8 @@ namespace Mono.Debugging.Soft
 				if (types.ContainsKey (typeName)) {
 					if (typeName != "System.Exception" && typeName != "<Module>")
 						LoggingService.LogError ("Type '" + typeName + "' loaded more than once", null);
-				} else {
-					ResolveBreakpoints (t);
-				}
+				} 
+				ResolveBreakpoints (t);
 			}
 			else if (e is ThreadStartEvent) {
 				ThreadStartEvent ts = (ThreadStartEvent)e;
