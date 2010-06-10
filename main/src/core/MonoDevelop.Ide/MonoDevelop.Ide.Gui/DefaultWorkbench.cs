@@ -57,7 +57,8 @@ namespace MonoDevelop.Ide.Gui
 		readonly static string toolbarsPath    = "/MonoDevelop/Ide/Toolbar";
 		readonly static string stockLayoutsPath    = "/MonoDevelop/Ide/WorkbenchLayouts";
 		
-		static string configFile = PropertyService.Locations.Config.Combine ("EditingLayout.xml");
+		readonly static string configFileBase = "EditingLayout2.xml";
+		static string configFile = PropertyService.Locations.Config.Combine (configFileBase);
 		const string fullViewModeTag = "[FullViewMode]";
 		const int MAX_LASTACTIVEWINDOWS = 10;
 		
@@ -864,17 +865,20 @@ namespace MonoDevelop.Ide.Gui
 			// create DockItems for all the pads
 			foreach (PadCodon content in padContentCollection)
 				AddPad (content, content.DefaultPlacement, content.DefaultStatus);
-			
-			try {
-				if (System.IO.File.Exists (configFile)) {
-					dock.LoadLayouts (configFile);
-					foreach (string layout in dock.Layouts) {
-						if (!layouts.Contains (layout) && !layout.EndsWith (fullViewModeTag))
-							layouts.Add (layout);
+				
+			foreach (string basePath in new string[]{PropertyService.DataPath, PropertyService.Locations.Config}) {
+				string configFile = System.IO.Path.Combine (basePath, configFileBase);
+				try {
+					if (System.IO.File.Exists (configFile)) {
+						dock.LoadLayouts (configFile);
+						foreach (string layout in dock.Layouts) {
+							if (!layouts.Contains (layout) && !layout.EndsWith (fullViewModeTag))
+								layouts.Add (layout);
+						}
 					}
+				} catch (Exception ex) {
+					LoggingService.LogError (ex.ToString ());
 				}
-			} catch (Exception ex) {
-				LoggingService.LogError (ex.ToString ());
 			}
 		}
 		
