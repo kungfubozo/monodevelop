@@ -56,6 +56,7 @@ namespace MonoDevelop.Ide.Gui
 		readonly static string viewContentPath = "/MonoDevelop/Ide/Pads";
 		readonly static string toolbarsPath    = "/MonoDevelop/Ide/Toolbar";
 		readonly static string stockLayoutsPath    = "/MonoDevelop/Ide/WorkbenchLayouts";
+		readonly static string appName = "MonoDevelop (Unity)";
 		
 		readonly static string configFileBase = "EditingLayout2.xml";
 		static string configFile = PropertyService.Locations.Config.Combine (configFileBase);
@@ -204,7 +205,7 @@ namespace MonoDevelop.Ide.Gui
 		
 		public DefaultWorkbench()
 		{
-			Title = "MonoDevelop";
+			Title = appName;
 			LoggingService.LogInfo ("Creating DefaultWorkbench");
 			
 			WidthRequest = normalBounds.Width;
@@ -495,9 +496,9 @@ namespace MonoDevelop.Ide.Gui
 							post = "*";
 						}
 						if (window.ViewContent.Project != null) {
-							Title = window.ViewContent.Project.Name + " - " + window.ViewContent.PathRelativeToProject + post + " - MonoDevelop";
+							Title = string.Format("{0} - {1}{2} - {3}", window.ViewContent.Project.Name, window.ViewContent.PathRelativeToProject, post, appName);
 						} else {
-							Title = window.ViewContent.ContentName + post + " - MonoDevelop";
+							Title = string.Format("{0}{1} - {2}", window.ViewContent.ContentName, post, appName);
 						}
 					}
 				} else {
@@ -513,9 +514,9 @@ namespace MonoDevelop.Ide.Gui
 		void SetDefaultTitle ()
 		{
 			if (IdeApp.ProjectOperations.CurrentSelectedProject != null) {
-				Title = IdeApp.ProjectOperations.CurrentSelectedProject.Name + " - MonoDevelop";
+				Title = string.Format("{0} - {1}", IdeApp.ProjectOperations.CurrentSelectedProject.Name, appName);
 			} else {
-				Title = "MonoDevelop";
+				Title = appName;
 			}
 		}
 		
