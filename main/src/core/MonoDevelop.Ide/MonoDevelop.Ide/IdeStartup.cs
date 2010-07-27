@@ -93,7 +93,7 @@ namespace MonoDevelop.Ide
 			} catch (Exception ex) {
 				LoggingService.LogError ("Error initialising GLib logging.", ex);
 			}
-			
+
 			//OSXFIXME
 			Gtk.Application.Init ("monodevelop", ref args);
 			InternalLog.Initialize ();
@@ -109,18 +109,18 @@ namespace MonoDevelop.Ide
 			
 			var startupInfo = new StartupInfo (remainingArgs);
 			
-//			// If a combine was specified, force --newwindow.
-//			
-//			if(!options.NewWindow && startupInfo.HasFiles) {
-//				Counters.Initialization.Trace ("Pre-Initializing Runtime to load files in existing window");
-//				Runtime.Initialize (true);
+			// If a combine was specified, force --newwindow.
+			
+			if(!options.NewWindow && startupInfo.HasFiles) {
+				Counters.Initialization.Trace ("Pre-Initializing Runtime to load files in existing window");
+				Runtime.Initialize (true);
 //				foreach (var file in startupInfo.RequestedFileList) {
 //					if (MonoDevelop.Projects.Services.ProjectService.IsWorkspaceItemFile (file.FileName)) {
 //						options.NewWindow = true;
 //						break;
 //					}
 //				}
-//			}
+			}
 			
 			DefaultTheme = Gtk.Settings.Default.ThemeName;
 			if (!string.IsNullOrEmpty (IdeApp.Preferences.UserInterfaceTheme))
@@ -346,7 +346,8 @@ namespace MonoDevelop.Ide
 				} else {
 						IdeApp.Workbench.OpenDocument (file, line, column, true);
 				}
-			} catch {
+			} catch (Exception ex) {
+				LoggingService.LogError ("Error opening file", ex);
 			}
 			IdeApp.Workbench.Present ();
 			return false;
