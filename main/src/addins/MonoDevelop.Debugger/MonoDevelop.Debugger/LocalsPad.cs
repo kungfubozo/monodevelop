@@ -45,12 +45,16 @@ namespace MonoDevelop.Debugger
 
 		public override void OnUpdateList ()
 		{
-			base.OnUpdateList ();
-			StackFrame frame = DebuggingService.CurrentFrame;
-			
-			if (frame == null || !FrameEquals (frame, lastFrame)) {
-				tree.ClearExpressions ();
-				lastExpressions = null;
+			try {
+				base.OnUpdateList ();
+				StackFrame frame = DebuggingService.CurrentFrame;
+				
+				if (frame == null || !FrameEquals (frame, lastFrame)) {
+					tree.ClearExpressions ();
+					lastExpressions = null;
+				}
+			} catch (Exception ex) {
+				MonoDevelop.Core.LoggingService.LogError ("Error updating locals", ex);
 			}
 			lastFrame = frame;
 			
