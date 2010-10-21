@@ -99,6 +99,20 @@ namespace MonoDevelop.Debugger.Soft
 			return new SoftDebuggerSession ();
 		}
 		
+		public DebuggerFeatures SupportedFeatures {
+			get {
+				return DebuggerFeatures.Breakpoints | 
+					   DebuggerFeatures.Pause | 
+					   DebuggerFeatures.Stepping | 
+					   DebuggerFeatures.DebugFile |
+					   DebuggerFeatures.ConditionalBreakpoints |
+					   DebuggerFeatures.Tracepoints |
+					   DebuggerFeatures.Catchpoints | 
+					   DebuggerFeatures.Disassembly | 
+					   DebuggerFeatures.Attaching;
+			}
+		}
+		
 		public static void SetUserAssemblyNames (SoftDebuggerStartInfo dsi, IList<string> files)
 		{
 			if (files == null || files.Count == 0)
