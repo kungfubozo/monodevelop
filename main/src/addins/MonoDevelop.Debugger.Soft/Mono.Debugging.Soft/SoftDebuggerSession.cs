@@ -476,13 +476,15 @@ namespace Mono.Debugging.Soft
 
 		protected override void OnAttachToProcess (long processId)
 		{
+			// int port = 4242;
 			// FIXME: Come up with a scheme for this.
-			int port = 4242; // (int)processId;
+			long port = processId;
 			
-			if (1025 > processId)
+			// Don't attempt to run on a privileged port
+			if (port <= 1024)
 				port += 1024;
 				
-			vm = VirtualMachineManager.Connect (new IPEndPoint (IPAddress.Loopback, port));
+			ConnectionStarted (VirtualMachineManager.Connect (new IPEndPoint (IPAddress.Loopback, (int)port)));
 		}
 
 		protected override void OnContinue ()
@@ -955,12 +957,12 @@ namespace Mono.Debugging.Soft
 			else if (e is TypeLoadEvent) {
 				var t = ((TypeLoadEvent)e).Type;
 				
-				string typeName = t.FullName;
-				
-// 				if (types.ContainsKey (typeName)) {
-// 					if (typeName != "System.Exception" && typeName != "<Module>")
-// 						LoggingService.LogError ("Type '" + typeName + "' loaded more than once", null);
-// 				} 
+//				string typeName = t.FullName;
+//
+//                if (types.ContainsKey(typeName)) {
+//                    if (typeName != "System.Exception")
+//                        LoggingService.LogError("Type '" + typeName + "' loaded more than once", null);
+//                }
 				ResolveBreakpoints (t);
 			}
 			else if (e is ThreadStartEvent) {
