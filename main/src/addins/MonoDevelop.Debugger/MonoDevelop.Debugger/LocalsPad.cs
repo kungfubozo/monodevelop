@@ -45,9 +45,11 @@ namespace MonoDevelop.Debugger
 
 		public override void OnUpdateList ()
 		{
+			StackFrame frame = null;
+
 			try {
 				base.OnUpdateList ();
-				StackFrame frame = DebuggingService.CurrentFrame;
+				frame = DebuggingService.CurrentFrame;
 				
 				if (frame == null || !FrameEquals (frame, lastFrame)) {
 					tree.ClearExpressions ();
