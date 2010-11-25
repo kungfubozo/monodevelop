@@ -290,6 +290,13 @@
 		<Description>Extensions to the text editor. Classes must be a subclass of TextEditorExtension.</Description>
 		<ExtensionNode name="Tool" type="MonoDevelop.Ide.Extensions.CustomToolExtensionNode"/>
 	</ExtensionPoint>
+
+	<!-- Disable updater in Unity builds
+	<ExtensionPoint path = "/MonoDevelop/Ide/Updater" name = "Updater information">
+		<Description>Path of an updateinfo file.</Description>
+		<ExtensionNode name="UpdateInfo" type="MonoDevelop.Ide.Updater.UpdateInfoExtensionNode"/>
+	</ExtensionPoint>
+	-->
 	
 	<!-- Extensions -->
 	
@@ -614,11 +621,14 @@
 			</Condition>
 		</Section>
 		<Section id="SourceCode" _label="Source Code">
-			<Condition id="ItemType" value="DotNetProject">
-				<Section id="DotNetNamingPolicies" _label=".NET Naming Policies">
+			<Section id="DotNetNamingPolicies" _label=".NET Naming Policies">
+				<Condition id="ItemType" value="Solution">
 					<Panel id = "NamespaceSynchronisationPanel" class = "MonoDevelop.Ide.Projects.OptionPanels.NamespaceSynchronisationPanel" />
-				</Section>
-			</Condition>
+				</Condition>
+				<Condition id="ItemType" value="SolutionItem">
+					<Panel id = "NamespaceSynchronisationPanel" class = "MonoDevelop.Ide.Projects.OptionPanels.NamespaceSynchronisationPanel" />
+				</Condition>
+			</Section>
 			<Condition id="ItemType" value="Solution">
 				<Section id="CodeFormattingPolicies" _label="Code Formatting" icon="md-formatting" fill = "true" class="MonoDevelop.Ide.Projects.OptionPanels.CodeFormattingPanel" />
 			</Condition>
@@ -651,6 +661,9 @@
 	<Extension path = "/MonoDevelop/Ide/StartupHandlers">
 		<Class class = "MonoDevelop.Ide.Gui.AddinUpdateHandler"/>
 		<Class class = "MonoDevelop.Ide.Gui.Dialogs.TipOfTheDayStartup"/>
+		<!-- Disable updater in Unity builds 
+		<Class class = "MonoDevelop.Ide.Updater.CheckForUpdatesOnStartUpHandler" />
+		-->
 	</Extension>
 	
 	<Extension path = "/MonoDevelop/Ide/Commands">
@@ -756,6 +769,7 @@
 				_label = "_Remove trailing white spaces" />
  		<Command id = "MonoDevelop.Ide.Commands.EditCommands.JoinWithNextLine"
 				shortcut = "Control|Shift|J"
+				macShortcut = "Meta|Shift|J"
 				_description = "Join the current line with the next line" 
 				_label = "_Join Lines" />
 		<Command id = "MonoDevelop.Ide.Commands.EditCommands.WordCount"
@@ -1164,14 +1178,14 @@
 				_label = "Navigate _Back"
 				icon = "md-navigate-back"
 				defaultHandler = "MonoDevelop.Ide.Commands.NavigateBack"
-				shortcut = "Alt|Left"
+				shortcut = "Control|Alt|Left"
 				macShortcut= "Meta|Alt|Left"
 				_description = "Move to previous point in code navigation history"/>
 		<Command id = "MonoDevelop.Ide.Commands.NavigationCommands.NavigateForward"
 				_label = "Navigate _Forward"
 				icon = "md-navigate-forward"
 				defaultHandler = "MonoDevelop.Ide.Commands.NavigateForward"
-				shortcut = "Alt|Right"
+				shortcut = "Control|Alt|Right"
 				macShortcut= "Meta|Alt|Right"
 				_description = "Move to next point in code navigation history"/>
 		<Command id = "MonoDevelop.Ide.Commands.NavigationCommands.NavigateHistory"
@@ -1189,18 +1203,21 @@
 				_label = "_Zoom In"
 				icon = "gtk-zoom-in" 
 				shortcut = "Control|+"
+				macShortcut = "Meta|+"
 				_description = "Zooms view in" />
 		<Command id = "MonoDevelop.Ide.Commands.ViewCommands.ZoomOut"
 				defaultHandler = "MonoDevelop.Ide.Commands.ZoomOut"
 				_label = "Zoom _Out"
 				icon = "gtk-zoom-out" 
 				shortcut = "Control|-"
+				macShortcut = "Meta|-"
 				_description = "Zooms view out" />
 		<Command id = "MonoDevelop.Ide.Commands.ViewCommands.ZoomReset"
 				defaultHandler = "MonoDevelop.Ide.Commands.ZoomReset"
 				_label = "_Normal Size"
 				icon = "gtk-zoom-100" 
 				shortcut = "Control|0"
+				macShortcut = "Meta|0"
 				_description = "Resets zoom to default" />
 		<Command id = "MonoDevelop.Ide.Commands.ViewCommands.FocusCurrentDocument"
 				defaultHandler = "MonoDevelop.Ide.Commands.FocusCurrentDocumentHandler"
@@ -1263,17 +1280,18 @@
 		<Command id = "MonoDevelop.Ide.Commands.WindowCommands.SwitchSplitWindow"
 				defaultHandler = "MonoDevelop.Ide.Commands.SwitchSplitWindow"
 				shortcut = "Control|M"
+				macShortcut = "Meta|M"
 				_label = "_Switch Between Splits" />
 		<Command id = "MonoDevelop.Ide.Commands.WindowCommands.SwitchNextDocument"
 				defaultHandler = "MonoDevelop.Ide.Commands.SwitchNextDocument"
 				shortcut = "Control|Tab"
-				macShortcut = "Control|Tab"
+				macShortcut = "Meta|Tab"
 				_label = "Switch to next document"
 				_description = "Switch to next document" />
 		<Command id = "MonoDevelop.Ide.Commands.WindowCommands.SwitchPreviousDocument"
 				defaultHandler = "MonoDevelop.Ide.Commands.SwitchPreviousDocument"
 				shortcut = "Control|Shift|Tab"
-				macShortcut = "Control|Shift|Tab"
+				macShortcut = "Meta|Shift|Tab"
 				_label = "Switch to previous document"
 				_description = "Switch to previous document" />
 		</Category>
@@ -1298,6 +1316,12 @@
 				_label = "_About" 
 				icon = "gtk-about" 
 				_description = "Show about dialog" />
+		<!-- Disable updater in Unity builds
+		<Command id  = "MonoDevelop.Ide.Updater.UpdateCommands.CheckForUpdates"
+				defaultHandler = "MonoDevelop.Ide.Updater.CheckForUpdatesHandler"
+				_label = "_Check for Updates"
+				_description = "Check for updates to MonoDevelop and packages it requires" />
+		-->
 		</Category>
 		
 		<!-- SearchCommands -->
@@ -1313,7 +1337,8 @@
 				_label = "_Replace..." 
 				icon = "gtk-find-and-replace" 
 				_description = "Search for and replace text" 
-				shortcut = "Control|H" />
+				shortcut = "Control|H"
+				macShortcut = "Meta|H" />
 
 		<Command id = "MonoDevelop.Ide.Commands.SearchCommands.FindNext"
 				_label = "Find _Next" 
@@ -1343,7 +1368,8 @@
 		<Command id = "MonoDevelop.Ide.Commands.SearchCommands.FindPreviousSelection"
 				_label = "Find _Previous Selection" 
 				_description = "Search backwards for the selected text" 
-				shortcut = "Shift|Control|F3" />
+				shortcut = "Shift|Control|F3"
+				macShortcut = "Meta|Shift|E" />
 
 		<Command id = "MonoDevelop.Ide.Commands.SearchCommands.FindInFiles"
 				defaultHandler = "MonoDevelop.Ide.FindInFiles.FindInFilesHandler"
@@ -1357,6 +1383,7 @@
 				_label = "R_eplace in Files..." 
 				icon = "md-replace-in-files" 
 				shortcut = "Control|Shift|H"
+				macShortcut = "Meta|Shift|H"
 				_description = "Search for and replace text in all files of a directory" />
 		
 		<Command id = "MonoDevelop.Ide.Commands.SearchCommands.GotoType"
@@ -1384,6 +1411,7 @@
 		<Command id = "MonoDevelop.Ide.Commands.SearchCommands.ToggleBookmark"
 				icon = "md-toggle-bookmark"
 				shortcut = "Control|F2"
+				macShortcut = "Control|Meta|2"
 				_description = "Toggle bookmark"
 				_label = "_Toggle Bookmark" />
 		<Command id = "MonoDevelop.Ide.Commands.SearchCommands.PrevBookmark"
@@ -1430,7 +1458,8 @@
 				shortcut = "Alt|Shift|space" />
 		<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.ShowCodeTemplateWindow"
 				_label = "I_nsert Template..." 
-				shortcut = "Control|t" />
+				shortcut = "Control|t"
+				macShortcut = "Meta|t" />
 		<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.LineEnd"
 				_label = "Go to end of line" />
 		<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.LineStart"
@@ -1473,13 +1502,15 @@
 				_label = "Delete to end of line"
 				_description="Deletes to end of line, or if at end, deletes line ending"
 				shortcut="Control|K"
-				macShortcut = "Control|K" />
+				macShortcut = "Meta|K" />
 		<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.MoveBlockUp"
 				_label = "Move the line or highlighted selection up"
-				shortcut="Alt|Up" />
+				shortcut="Alt|Up"
+				macShortcut="Alt|Up" />
 		<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.MoveBlockDown"
 				_label = "Move the line or highlighted selection down"
-				shortcut="Alt|Down" />
+				shortcut="Alt|Down"
+				macShortcut="Alt|Down" />
 		<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.ShowParameterCompletionWindow"
 				_label = "Show Parameter List"
 				macShortcut = "Alt|Shift|Escape"
@@ -1487,7 +1518,8 @@
 		<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.GotoMatchingBrace"
 				_label = "Go to Matching _Brace" 
 				description = "Go to Matching Brace" 
-				shortcut = "Control|B" />
+				shortcut = "Control|B"
+				macShortcut = "Meta|B" />
 		<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.SelectionMoveLeft"
 				_label = "Expand selection to the left" />
 		<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.SelectionMoveRight"
@@ -1536,7 +1568,8 @@
 				_label = "Move caret to EOL and insert new line" />
 		<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.CompleteStatement"
 				_label = "Completes the current statement"
-				shortcut = "Control|Shift|Return" />
+				shortcut = "Control|Shift|Return"
+				macShortcut = "Meta|Shift|Return" />
 		<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.DeletePrevWord"
 				_label = "Delete previous word" />
 		<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.DeleteNextWord"
@@ -2165,6 +2198,9 @@
 		<ItemSet id = "Help" _label = "_Help">
 			<CommandItem id = "MonoDevelop.Ide.Commands.HelpCommands.Help" />
 			<CommandItem id = "MonoDevelop.Ide.Commands.HelpCommands.TipOfTheDay" />
+			<!-- Disable updater in Unity builds
+			<CommandItem id = "MonoDevelop.Ide.Updater.UpdateCommands.CheckForUpdates" />
+			-->
 			<SeparatorItem id = "Separator2" />
 			<ItemSet id = "Web" _label = "_Web">
 				<LinkItem id = "MonoDevelop" _label = "MonoDevelop" link = "http://www.monodevelop.com" />
@@ -2196,6 +2232,7 @@
 
 	<Extension path = "/MonoDevelop/Ide/FileTemplateTypes">
 		<FileTemplateType name = "File" class = "MonoDevelop.Ide.Templates.TextFileDescriptionTemplate"/>
+		<FileTemplateType name = "RawFile" class = "MonoDevelop.Ide.Templates.RawFileDescriptionTemplate"/>
 		<FileTemplateType name = "CodeDomFile" class = "MonoDevelop.Ide.Templates.CodeDomFileDescriptionTemplate"/>
 		<FileTemplateType name = "ProjectResource" class = "MonoDevelop.Ide.Templates.ResourceFileDescriptionTemplate"/>
 		<FileTemplateType name = "CodeTranslationFile" class = "MonoDevelop.Ide.Templates.CodeTranslationFileDescriptionTemplate"/>

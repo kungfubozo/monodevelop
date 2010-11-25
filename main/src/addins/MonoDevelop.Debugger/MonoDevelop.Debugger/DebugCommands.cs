@@ -68,9 +68,8 @@ namespace MonoDevelop.Debugger
 	{
 		protected override void Run ()
 		{
-			if (DebuggingService.IsDebugging) {
-				if (!DebuggingService.IsRunning)
-					DebuggingService.Resume ();
+			if (DebuggingService.IsDebugging && !DebuggingService.IsRunning) {
+				DebuggingService.Resume ();
 				return;
 			}
 		
@@ -137,7 +136,7 @@ namespace MonoDevelop.Debugger
 		
 		protected override void Update (CommandInfo info)
 		{
-			if (DebuggingService.IsDebugging) {
+			if (DebuggingService.IsDebugging && !DebuggingService.IsRunning) {
 				info.Enabled = true;
 				info.Text = GettextCatalog.GetString ("_Continue");
 				info.Description = GettextCatalog.GetString ("Continue the execution of the application");

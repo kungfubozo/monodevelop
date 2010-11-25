@@ -642,7 +642,7 @@ namespace MonoDevelop.CSharp.Refactoring
 		
 		public override object VisitForeachStatement(ForeachStatement foreachStatement, object data)
 		{
-			if (searchedMember is LocalVariable && foreachStatement.VariableName == searchedMemberName && searchedMemberLocation.Line == foreachStatement.StartLocation.Line && searchedMemberLocation.Column == foreachStatement.StartLocation.Column) {
+			if (searchedMember is LocalVariable && foreachStatement.VariableName == searchedMemberName && searchedMemberLocation.Line == foreachStatement.StartLocation.Line - 1 && searchedMemberLocation.Column == foreachStatement.StartLocation.Column - 1) {
 				int line, col;
 				SearchText (searchedMemberName, foreachStatement.StartLocation.Line, foreachStatement.StartLocation.Column, out line, out col);
 				AddUniqueReference (line, col, searchedMemberName);

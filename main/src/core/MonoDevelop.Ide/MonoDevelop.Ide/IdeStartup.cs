@@ -290,7 +290,7 @@ namespace MonoDevelop.Ide
 		void ListenCallback (IAsyncResult state)
 		{
 			Socket sock = (Socket)state.AsyncState;
-            List<FileOpenInformation> files = new List<FileOpenInformation> ();
+			List<FileOpenInformation> files = new List<FileOpenInformation> ();
 
 			Socket client = sock.EndAccept (state);
 			((Socket)state.AsyncState).BeginAccept (new AsyncCallback (ListenCallback), sock);

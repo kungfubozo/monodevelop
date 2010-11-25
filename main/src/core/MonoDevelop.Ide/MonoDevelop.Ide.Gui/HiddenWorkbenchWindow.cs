@@ -25,7 +25,6 @@
 // THE SOFTWARE.
 
 using System;
-using System.Collections.Generic;
 
 namespace MonoDevelop.Ide.Gui
 {
@@ -62,7 +61,9 @@ namespace MonoDevelop.Ide.Gui
 			set { viewContent = value; }
 		}
 		
-		public IEnumerable<IAttachableViewContent> SubViewContents { get { return new IAttachableViewContent[0]; } }
+		public System.Collections.ArrayList SubViewContents {
+			get { return new System.Collections.ArrayList (); }
+		}
 		
 		public MonoDevelop.Ide.Gui.IBaseViewContent ActiveViewContent {
 			get { return ViewContent;}

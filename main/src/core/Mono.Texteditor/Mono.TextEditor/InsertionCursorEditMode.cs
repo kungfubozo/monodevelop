@@ -26,7 +26,6 @@
 
 using System;
 using System.Collections.Generic;
-using Mono.TextEditor.PopupWindow;
 
 namespace Mono.TextEditor
 {
@@ -93,60 +92,9 @@ namespace Mono.TextEditor
 		}
 	}
 	
-	public class HelpWindowEditMode : SimpleEditMode
+	public class InsertionCursorEditMode : SimpleEditMode
 	{
-		protected TextEditor editor;
-		
-		public new TextEditor Editor {
-			get {
-				return this.editor;
-			}
-			set {
-				this.editor = value;
-			}
-		}
-		
-		public ModeHelpWindow HelpWindow {
-			get;
-			set;
-		}
-		
-		protected void ShowHelpWindow ()
-		{
-			if (HelpWindow == null) 
-				return;
-			MoveHelpWindow (null, null);
-			editor.SizeAllocated += MoveHelpWindow;
-			HelpWindow.Show ();
-		}
-		
-		public void DestroyHelpWindow ()
-		{
-			if (HelpWindow == null) 
-				return;
-			editor.SizeAllocated -= MoveHelpWindow;
-			HelpWindow.Destroy ();
-			HelpWindow = null;
-		}
-		
-		void MoveHelpWindow (object o, Gtk.SizeAllocatedArgs args)
-		{
-			if (editor == null || HelpWindow == null)
-				return;
-			int ox, oy;
-			editor.GdkWindow.GetOrigin (out ox, out oy);
-			
-			Gdk.Rectangle geometry = editor.Screen.GetMonitorGeometry (editor.Screen.GetMonitorAtPoint (ox, oy));
-			var req = HelpWindow.SizeRequest ();
-			
-			int x = System.Math.Min (ox + editor.Allocation.Width - req.Width / 2, geometry.Width - req.Width);
-			int y = System.Math.Min (oy + editor.Allocation.Height - req.Height / 2, geometry.Height - req.Height);
-			HelpWindow.Move (x, y);
-		}
-	}
-	
-	public class InsertionCursorEditMode : HelpWindowEditMode
-	{
+		TextEditor editor;
 		List<InsertionPoint> insertionPoints;
 		CursorDrawer drawer;
 		
@@ -215,13 +163,10 @@ namespace Mono.TextEditor
 			
 			editor.ScrollTo (insertionPoints[CurIndex].Location);
 			editor.QueueDraw ();
-			
-			ShowHelpWindow ();
 		}
 		
 		protected virtual void OnExited (InsertionCursorEventArgs e)
 		{
-			DestroyHelpWindow ();
 			editor.Caret.IsVisible = true;
 			editor.TextViewMargin.RemoveDrawer (drawer);
 			editor.CurrentMode = oldMode;

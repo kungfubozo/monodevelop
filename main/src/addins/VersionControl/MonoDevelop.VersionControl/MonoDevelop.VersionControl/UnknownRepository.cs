@@ -92,9 +92,9 @@ namespace MonoDevelop.VersionControl
 		{
 		}
 		
-		public override Annotation[] GetAnnotations (MonoDevelop.Core.FilePath repositoryPath)
+		public override string[] GetAnnotations (MonoDevelop.Core.FilePath repositoryPath)
 		{
-			return new Annotation[0];
+			return new string[0];
 		}
 	}
 }

@@ -130,8 +130,12 @@ namespace MonoDevelop.Ide.CodeCompletion
 		{
 			list.CompletionString = PartialWord;
 			
-			if (IsRealized && !Visible)
-				Show ();
+			if (list.filteredItems.Count == 0 && !list.PreviewCompletionString) {
+				Hide ();
+			} else {
+				if (IsRealized && !Visible)
+					Show ();
+			}
 			
 			int width = list.WidthRequest;
 			int height = list.HeightRequest + (footer != null ? footer.Allocation.Height : 0);
@@ -249,7 +253,7 @@ namespace MonoDevelop.Ide.CodeCompletion
 				
 			case Gdk.Key.Up:
 				if ((modifier & Gdk.ModifierType.ShiftMask) == Gdk.ModifierType.ShiftMask) {
-					if (!SelectionEnabled && !CompletionWindowManager.ForceSuggestionMode)
+					if (!SelectionEnabled /*&& !CompletionWindowManager.ForceSuggestionMode*/)
 						AutoCompleteEmptyMatch = AutoSelect = true;
 					if (!List.InCategoryMode) {
 						List.InCategoryMode = true;
@@ -260,7 +264,7 @@ namespace MonoDevelop.Ide.CodeCompletion
 				}
 				if (SelectionEnabled && list.filteredItems.Count < 2)
 					return KeyActions.CloseWindow | KeyActions.Process;
-				if (!SelectionEnabled && !CompletionWindowManager.ForceSuggestionMode) {
+				if (!SelectionEnabled /*&& !CompletionWindowManager.ForceSuggestionMode*/) {
 					AutoCompleteEmptyMatch = AutoSelect = true;
 				} else {
 					list.MoveCursor (-1);
@@ -269,7 +273,7 @@ namespace MonoDevelop.Ide.CodeCompletion
 
 			case Gdk.Key.Down:
 				if ((modifier & Gdk.ModifierType.ShiftMask) == Gdk.ModifierType.ShiftMask) {
-					if (!SelectionEnabled && !CompletionWindowManager.ForceSuggestionMode)
+					if (!SelectionEnabled /*&& !CompletionWindowManager.ForceSuggestionMode*/)
 						AutoCompleteEmptyMatch = AutoSelect = true;
 					if (!List.InCategoryMode) {
 						List.InCategoryMode = true;
@@ -281,7 +285,7 @@ namespace MonoDevelop.Ide.CodeCompletion
 				if (SelectionEnabled && list.filteredItems.Count < 2)
 					return KeyActions.CloseWindow | KeyActions.Process;
 				
-				if (!SelectionEnabled && !CompletionWindowManager.ForceSuggestionMode) {
+				if (!SelectionEnabled /*&& !CompletionWindowManager.ForceSuggestionMode*/) {
 					AutoCompleteEmptyMatch = AutoSelect = true;
 				} else {
 					list.MoveCursor (1);

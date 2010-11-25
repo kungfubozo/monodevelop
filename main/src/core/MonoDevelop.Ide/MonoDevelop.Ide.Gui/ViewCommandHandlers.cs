@@ -538,10 +538,7 @@ namespace MonoDevelop.Ide.Gui
 			}
 			
 			data.Document.BeginAtomicUndo ();
-			foreach (var info in removeList) {
-				((Mono.TextEditor.IBuffer)data.Document).Remove (info.Position, info.Length);
-				data.Document.CommitLineUpdate (data.Document.OffsetToLineNumber (info.Position));
-			}
+			removeList.ForEach (info => ((Mono.TextEditor.IBuffer)data.Document).Remove (info.Position, info.Length));
 			data.Caret.Offset = Math.Min (data.Caret.Offset, data.Document.Length - 1);
 			data.Document.EndAtomicUndo ();
 		}

@@ -23,7 +23,11 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE. -->
  
+<<<<<<< HEAD
 <SyntaxMode name = "C" mimeTypes="text/x-csrc;text/x-objcsrc"> <!-- The C++ syntax mode handles .h files since they're often C++ -->
+=======
+<SyntaxMode name = "C" mimeTypes="text/x-csrc"> <!-- The C++ syntax mode handles .h files since they're often C++ -->
+>>>>>>> 8e8346e82bf1f74d85944591a7c357334d370465
 	
 	<Property name="LineComment">//</Property>
 	<Property name="BlockCommentStart">/*</Property>

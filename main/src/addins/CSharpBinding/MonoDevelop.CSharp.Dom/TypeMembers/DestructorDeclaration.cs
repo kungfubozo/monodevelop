@@ -33,8 +33,6 @@ namespace MonoDevelop.CSharp.Dom
 {
 	public class DestructorDeclaration : AbstractMemberBase
 	{
-		public const int TildeRole = 100;
-		
 		public BlockStatement Body {
 			get {
 				return (BlockStatement)GetChildByRole (Roles.Body);

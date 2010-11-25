@@ -125,7 +125,7 @@ namespace MonoDevelop.Platform
 			    args += "\"";
 			
 			var psi = new ProcessStartInfo ("cmd.exe", args) {
-				CreateNoWindow = true,
+				CreateNoWindow = false,
 				WorkingDirectory = workingDirectory,
 				UseShellExecute = false,
 			};
@@ -137,5 +137,16 @@ namespace MonoDevelop.Platform
 			proc.Start ();
 			return proc;
         }
+		
+		protected override RecentFiles CreateRecentFilesProvider ()
+		{
+			return new MonoDevelop.Platform.WindowsRecentFiles ();
+		}
+		
+		public override string GetUpdaterUrl ()
+		{
+			return string.Empty; // Disable updater in Unity builds
+			// return "http://go-mono.com/macupdate/update";
+		}
 	}
 }

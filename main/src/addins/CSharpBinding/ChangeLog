@@ -1,33 +1,3 @@
-2010-07-07  Mike Krüger  <mkrueger@novell.com>
-
-	* MonoDevelop.CSharp.Formatting/CSharpIndentEngineStack.cs:
-	  added bounds check
-
-2010-07-07  Mike Krüger  <mkrueger@novell.com>
-
-	* MonoDevelop.CSharp.Formatting/CSharpIndentEngineStack.cs:
-	  added bounds check
-
-2010-07-06  Mike Krüger  <mkrueger@novell.com>
-
-	* MonoDevelop.CSharp.Formatting/CSharpIndentEngineStack.cs:
-	  Indenting should now reflect the mono style.
-
-2010-07-06  Mike Krüger  <mkrueger@novell.com>
-
-	* MonoDevelop.CSharp.Formatting/CSharpIndentEngineStack.cs:
-	  Indenting should now reflect the mono style.
-
-2010-07-06  Mike Krüger  <mkrueger@novell.com>
-
-	* MonoDevelop.CSharp.Completion/CSharpTextEditorCompletion.cs:
-	  Worked on region box.
-
-2010-07-05  Mike Krüger  <mkrueger@novell.com>
-
-	* MonoDevelop.CSharp.Completion/CSharpTextEditorCompletion.cs:
-	  Region combo is now separated from the rest of the path.
-
 2010-07-05  Mike Krüger  <mkrueger@novell.com>
 
 	* MonoDevelop.CSharp.Resolver/ResolveVisitor.cs: Fixed 'Bug
@@ -39,41 +9,11 @@
 	  Fixed 'Bug 619799 - Renaming variable also invokes
 	  auto-complete'.
 
-2010-07-03  Mike Krüger  <mkrueger@novell.com>
-
-	* MonoDevelop.CSharp.Dom/CSharpAmbience.cs:
-	* MonoDevelop.CSharp.Completion/DropDownBoxListWindow.cs:
-	* MonoDevelop.CSharp.Completion/CSharpTextEditorCompletion.cs:
-	  Worked on quick navigation bar
-
-2010-07-03  Mike Krüger  <mkrueger@novell.com>
-
-	* MonoDevelop.CSharp.Completion/CSharpTextEditorCompletion.cs:
-	  Improved handling of inner classes.
-
-2010-07-02  Mike Krüger  <mkrueger@novell.com>
-
-	* Makefile.am:
-	* CSharpBinding.csproj:
-	* MonoDevelop.CSharp.Completion/DropDownBoxListWindow.cs:
-	* MonoDevelop.CSharp.Completion/CSharpTextEditorCompletion.cs:
-	  C# editor extension now uses the IPathedDocument subsystem.
-
 2010-07-01  Mike Krüger  <mkrueger@novell.com>
 
 	* MonoDevelop.CSharp.Completion/CSharpTextEditorCompletion.cs:
 	  Fixed 'Bug 618676 - C# code editor removes "override" word
 	  after choosing one of intellisense variants'.
-
-2010-06-29  Mike Krüger  <mkrueger@novell.com>
-
-	* MonoDevelop.CSharp.Parser/CSharpParser.cs: Added support for
-	  fixed fields & constants.
-
-2010-06-29  Mike Krüger  <mkrueger@novell.com>
-
-	* MonoDevelop.CSharp.Parser/CSharpParser.cs: Fields are now
-	  working.
 
 2010-06-28  Mike Krüger  <mkrueger@novell.com>
 

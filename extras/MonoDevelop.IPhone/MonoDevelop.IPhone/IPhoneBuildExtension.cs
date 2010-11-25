@@ -59,13 +59,6 @@ namespace MonoDevelop.IPhone
 			var conf = (IPhoneProjectConfiguration) proj.GetConfiguration (configuration);
 			bool isDevice = conf.Platform == IPhoneProject.PLAT_IPHONE;
 			
-			if (!IPhoneFramework.SdkIsInstalled (conf.MtouchSdkVersion)) {
-				var r = new BuildResult ();
-				//FIXME: fall back to higher SDK?
-				r.AddError (string.Format ("Apple iPhone SDK version '{0}' is not installed", conf.MtouchSdkVersion));
-				return r;
-			}
-			
 			if (IPhoneFramework.SimOnly && isDevice) {
 				//if in the GUI, show a dialog too
 				if (MonoDevelop.Ide.IdeApp.IsInitialized)
@@ -73,11 +66,33 @@ namespace MonoDevelop.IPhone
 				return IPhoneFramework.GetSimOnlyError ();
 			}
 			
-			BuildResult result = null;
+			var result = new BuildResult ();
+			
+			var sdkVersion = conf.MtouchSdkVersion.ResolveIfDefault ();
+			
+			if (!IPhoneFramework.SdkIsInstalled (sdkVersion)) {
+				sdkVersion = IPhoneFramework.GetClosestInstalledSdk (sdkVersion);
+				
+				if (sdkVersion.IsUseDefault || !IPhoneFramework.SdkIsInstalled (sdkVersion)) {
+					if (conf.MtouchSdkVersion.IsUseDefault)
+						result.AddError (
+							string.Format ("The Apple iPhone SDK is not installed."));
+					else
+						result.AddError (
+							string.Format ("Apple iPhone SDK version '{0}' is not installed, and no newer version was found.",
+							conf.MtouchSdkVersion));
+					return result;
+				}
+					
+				result.AddWarning (
+					string.Format ("Apple iPhone SDK version '{0}' is not installed. Using newer version '{1}' instead'.",
+					conf.MtouchSdkVersion, sdkVersion));
+			}
+			
 			IPhoneAppIdentity identity = null;
 			if (isDevice) {
 				monitor.BeginTask (GettextCatalog.GetString ("Detecting signing identity..."), 0);
-				if ((result = GetIdentity (monitor, proj, conf, out identity)).ErrorCount > 0)
+				if ((result = GetIdentity (monitor, proj, conf, out identity).Append (result)).ErrorCount > 0)
 					return result;
 				monitor.Log.WriteLine ("Provisioning profile: \"{0}\" ({1})", identity.Profile.Name, identity.Profile.Uuid);
 				monitor.Log.WriteLine ("Signing Identity: \"{0}\"", Keychain.GetCertificateCommonName (identity.SigningKey));
@@ -120,7 +135,7 @@ namespace MonoDevelop.IPhone
 				foreach (string asm in proj.GetReferencedAssemblies (configuration).Distinct ())
 					args.AppendFormat (" -r=\"{0}\"", asm);
 				
-				AppendExtrasMtouchArgs (args, proj, conf);
+				AppendExtrasMtouchArgs (args, sdkVersion, proj, conf);
 				
 				args.AppendFormat (" \"{0}\"", conf.CompiledOutputName);
 				
@@ -151,7 +166,7 @@ namespace MonoDevelop.IPhone
 			    	(appInfoIn != null && new FilePair (appInfoIn.FilePath, plistOut).NeedsBuilding ())) {
 				try {
 					monitor.BeginTask (GettextCatalog.GetString ("Updating application manifest"), 0);
-					if (result.Append (UpdateInfoPlist (monitor, proj, conf, identity, appInfoIn, plistOut)).ErrorCount > 0)
+					if (result.Append (UpdateInfoPlist (monitor, sdkVersion, proj, conf, identity, appInfoIn, plistOut)).ErrorCount > 0)
 						return result;
 				} finally {
 					monitor.EndTask ();
@@ -171,10 +186,10 @@ namespace MonoDevelop.IPhone
 			}
 			
 			try {
-				if (result.Append (ProcessPackaging (monitor, proj, conf, identity)).ErrorCount > 0)
+				if (result.Append (ProcessPackaging (monitor, sdkVersion, proj, conf, identity)).ErrorCount > 0)
 					return result;
 			} finally {
-				//if packaging failed, make sure that it's marked as needing buildind
+				//if packaging failed, make sure that it's marked as needing building
 				if (result.ErrorCount > 0 && File.Exists (conf.AppDirectory.Combine ("PkgInfo")))
 					File.Delete (conf.AppDirectory.Combine ("PkgInfo"));	
 			}	
@@ -183,7 +198,8 @@ namespace MonoDevelop.IPhone
 			return result;
 		}
 
-		static internal void AppendExtrasMtouchArgs (StringBuilder args, IPhoneProject proj, IPhoneProjectConfiguration conf)
+		static internal void AppendExtrasMtouchArgs (StringBuilder args, IPhoneSdkVersion sdkVersion, 
+			IPhoneProject proj, IPhoneProjectConfiguration conf)
 		{
 			if (conf.MtouchDebug)
 				args.Append (" -debug");
@@ -205,8 +221,8 @@ namespace MonoDevelop.IPhone
 				args.Append (conf.MtouchI18n);
 			}
 			
-			if (conf.MtouchSdkVersion != "3.0")
-				args.AppendFormat (" -sdk=\"{0}\"", conf.MtouchSdkVersion);
+			if (!sdkVersion.Equals (IPhoneSdkVersion.V3_0))
+				args.AppendFormat (" -sdk=\"{0}\"", sdkVersion);
 			
 			if (conf.MtouchMinimumOSVersion != "3.0")
 				args.AppendFormat (" -targetver=\"{0}\"", conf.MtouchMinimumOSVersion);
@@ -235,8 +251,8 @@ namespace MonoDevelop.IPhone
 			}
 		}
 		
-		BuildResult UpdateInfoPlist (IProgressMonitor monitor, IPhoneProject proj, IPhoneProjectConfiguration conf,
-		                             IPhoneAppIdentity identity, ProjectFile template, string plistOut)
+		BuildResult UpdateInfoPlist (IProgressMonitor monitor, IPhoneSdkVersion sdkVersion, IPhoneProject proj,
+			IPhoneProjectConfiguration conf, IPhoneAppIdentity identity, ProjectFile template, string plistOut)
 		{
 			return MacBuildUtilities.CreateMergedPlist (monitor, template, plistOut, (PlistDocument doc) => {
 				var result = new BuildResult ();
@@ -245,9 +261,8 @@ namespace MonoDevelop.IPhone
 					doc.Root = dict = new PlistDictionary ();
 				
 				bool sim = conf.Platform != IPhoneProject.PLAT_IPHONE;
-				var sdkversion = IPhoneSdkVersion.Parse (conf.MtouchSdkVersion);
-				bool v3_2_orNewer = sdkversion.CompareTo (IPhoneSdkVersion.V3_2) >= 0;
-				bool v4_0_orNewer = sdkversion.CompareTo (IPhoneSdkVersion.V4_0) >= 0;
+				bool v3_2_orNewer = sdkVersion.CompareTo (IPhoneSdkVersion.V3_2) >= 0;
+				bool v4_0_orNewer = sdkVersion.CompareTo (IPhoneSdkVersion.V4_0) >= 0;
 				bool supportsIPhone = (proj.SupportedDevices & TargetDevice.IPhone) != 0;
 				bool supportsIPad = (proj.SupportedDevices & TargetDevice.IPad) != 0;
 				
@@ -268,28 +283,29 @@ namespace MonoDevelop.IPhone
 					}
 				}
 				
-				//newer icons
+				//newer icons - see http://developer.apple.com/library/ios/#qa/qa2010/qa1686.html
 				if (v3_2_orNewer && !dict.ContainsKey ("CFBundleIconFiles")) {
 					var arr = new PlistArray ();
 					dict["CFBundleIconFiles"] = arr;
 					
 					if (supportsIPhone)
-						AddIconRelativeIfNotEmpty (proj, arr, proj.BundleIcon);
+						AddIconRelativeIfNotEmpty (proj, arr, proj.BundleIcon, "Icon.png");
+					
+					if (v4_0_orNewer && supportsIPhone)
+						if (!AddIconRelativeIfNotEmpty (proj, arr, proj.BundleIconHigh, "Icon@2x.png"))
+							result.AddWarning ("iPhone high res bundle icon has not been set (iPhone Application options panel)");
+					
+					if (supportsIPad)
+						if (!AddIconRelativeIfNotEmpty (proj, arr, proj.BundleIconIPad, "Icon-72.png"))
+							result.AddWarning ("iPad bundle icon has not been set (iPhone Application options panel)");
 					
 					AddIconRelativeIfNotEmpty (proj, arr, proj.BundleIconSpotlight, "Icon-Small.png");
-					if (supportsIPad) {
-						AddIconRelativeIfNotEmpty (proj, arr, proj.BundleIconIPadSpotlight, "Icon-Small-50.png");
-						if (!AddIconRelativeIfNotEmpty (proj, arr, proj.BundleIconIPad))
-							result.AddWarning ("iPad bundle icon has not been set (iPhone Application options panel)");
-					}
 					
-					if (v4_0_orNewer) {
-						if (supportsIPhone) {
-							if (!AddIconRelativeIfNotEmpty (proj, arr, proj.BundleIconHigh))
-								result.AddWarning ("iPhone high res bundle icon has not been set (iPhone Application options panel)");
-							AddIconRelativeIfNotEmpty (proj, arr, proj.BundleIconSpotlightHigh, "Icon-Small@2x.png");
-						}
-					}
+					if (supportsIPad)
+						AddIconRelativeIfNotEmpty (proj, arr, proj.BundleIconIPadSpotlight, "Icon-Small-50.png");
+					
+					if (v4_0_orNewer && supportsIPhone)
+						AddIconRelativeIfNotEmpty (proj, arr, proj.BundleIconSpotlightHigh, "Icon-Small@2x.png");
 				}
 				
 				SetIfNotPresent (dict, "CFBundleIdentifier", identity.BundleID);
@@ -302,12 +318,27 @@ namespace MonoDevelop.IPhone
 				SetIfNotPresent (dict,  "CFBundleSupportedPlatforms",
 					new PlistArray () { sim? "iPhoneSimulator" : "iPhoneOS" });
 				SetIfNotPresent (dict, "CFBundleVersion", proj.BundleVersion ?? "1.0");
+				
+				var sdkSettings = IPhoneFramework.GetSdkSettings (sdkVersion);
+				var dtSettings = IPhoneFramework.GetDTSettings ();
+				
+				if (!sim) {
+					SetIfNotPresent (dict, "DTCompiler", sdkSettings.DTCompiler);
+					SetIfNotPresent (dict, "DTPlatformBuild", sdkSettings.DTPlatformBuild);
+				}
 				SetIfNotPresent (dict, "DTPlatformName", sim? "iphonesimulator" : "iphoneos");
-				SetIfNotPresent (dict, "DTSDKName", IPhoneFramework.GetDTSdkName (sdkversion, sim));
+				if (!sim) {
+					SetIfNotPresent (dict, "DTPlatformVersion", dtSettings.DTPlatformVersion);
+				}
+				SetIfNotPresent (dict, "DTSDKName", sim? sdkSettings.AlternateSDK : sdkSettings.CanonicalName);
+				if (!sim) {
+					SetIfNotPresent (dict, "DTXcode", dtSettings.DTXcode);
+					SetIfNotPresent (dict, "DTXcodeBuild", dtSettings.DTXcodeBuild);
+				}
+				
 				SetIfNotPresent (dict,  "LSRequiresIPhoneOS", true);
 				if (v3_2_orNewer)
 					SetIfNotPresent (dict,  "UIDeviceFamily", GetSupportedDevices (proj.SupportedDevices));
-				SetIfNotPresent (dict, "DTPlatformVersion", IPhoneFramework.DTPlatformVersion);
 				
 				SetIfNotPresent (dict, "MinimumOSVersion", conf.MtouchMinimumOSVersion);
 				
@@ -465,6 +496,10 @@ namespace MonoDevelop.IPhone
 			var projFiles = buildData.Items.OfType<ProjectFile> ();
 			string appDir = cfg.AppDirectory;
 			
+			var sdkVersion = cfg.MtouchSdkVersion.ResolveIfDefault ();
+			if (!IPhoneFramework.SdkIsInstalled (sdkVersion))
+				sdkVersion = IPhoneFramework.GetClosestInstalledSdk (sdkVersion);
+			
 			var result = MacBuildUtilities.UpdateCodeBehind (monitor, proj.CodeBehindGenerator, projFiles);
 			if (result.ErrorCount > 0)
 				return result;
@@ -481,7 +516,7 @@ namespace MonoDevelop.IPhone
 			var contentFiles = GetContentFilePairs (projFiles, appDir)
 				.Where (NeedsBuilding).ToList ();
 			
-			contentFiles.AddRange (GetIconContentFiles (proj, cfg));
+			contentFiles.AddRange (GetIconContentFiles (sdkVersion, proj, cfg));
 			
 			if (contentFiles.Count > 0) {
 				monitor.BeginTask (GettextCatalog.GetString ("Copying content files"), contentFiles.Count);	
@@ -502,40 +537,38 @@ namespace MonoDevelop.IPhone
 			return result;
 		}
 		
-		static IEnumerable<FilePair> GetIconContentFiles (IPhoneProject proj, IPhoneProjectConfiguration conf)
+		static IEnumerable<FilePair> GetIconContentFiles (IPhoneSdkVersion sdkVersion, IPhoneProject proj,
+			IPhoneProjectConfiguration conf)
 		{
-			var sdkversion = IPhoneSdkVersion.Parse (conf.MtouchSdkVersion);
-			bool v3_2_orNewer = sdkversion.CompareTo (IPhoneSdkVersion.V3_2) >= 0;
-			bool v4_0_orNewer = sdkversion.CompareTo (IPhoneSdkVersion.V4_0) >= 0;
+			bool v3_2_orNewer = sdkVersion.CompareTo (IPhoneSdkVersion.V3_2) >= 0;
+			bool v4_0_orNewer = sdkVersion.CompareTo (IPhoneSdkVersion.V4_0) >= 0;
 			bool supportsIPhone = (proj.SupportedDevices & TargetDevice.IPhone) != 0;
 			bool supportsIPad = (proj.SupportedDevices & TargetDevice.IPad) != 0;
 			var appDir = conf.AppDirectory;
 			
-			if (supportsIPhone) {
-				if (!proj.BundleIcon.IsNullOrEmpty)
-					yield return new FilePair (proj.BundleIcon, appDir.Combine (proj.BundleIcon.FileName));
-			}
+			if (supportsIPhone && !proj.BundleIcon.IsNullOrEmpty)
+					yield return new FilePair (proj.BundleIcon, appDir.Combine ("Icon.png"));
 			
 			if (!proj.BundleIconSpotlight.IsNullOrEmpty)
 				yield return new FilePair (proj.BundleIconSpotlight, appDir.Combine ("Icon-Small.png"));
 			
 			if (v3_2_orNewer && supportsIPad) {
 				if (!proj.BundleIconIPad.IsNullOrEmpty)
-					yield return new FilePair (proj.BundleIconIPad, appDir.Combine (proj.BundleIconIPad.FileName));
+					yield return new FilePair (proj.BundleIconIPad, appDir.Combine ("Icon-72.png"));
 				if (!proj.BundleIconIPadSpotlight.IsNullOrEmpty)
 					yield return new FilePair (proj.BundleIconIPadSpotlight, appDir.Combine ("Icon-Small-50.png"));
 			}
 			
 			if (supportsIPhone && v4_0_orNewer) {
 				if (!proj.BundleIconHigh.IsNullOrEmpty)
-					yield return new FilePair (proj.BundleIconHigh, appDir.Combine (proj.BundleIconHigh.FileName));
+					yield return new FilePair (proj.BundleIconHigh, appDir.Combine ("Icon@2x.png"));
 				if (!proj.BundleIconSpotlightHigh.IsNullOrEmpty)
 					yield return new FilePair (proj.BundleIconSpotlightHigh, appDir.Combine ("Icon-Small@2x.png"));
 			}
 		}
 		
-		static BuildResult ProcessPackaging (IProgressMonitor monitor, IPhoneProject proj, IPhoneProjectConfiguration conf,
-		                                     IPhoneAppIdentity identity)
+		static BuildResult ProcessPackaging (IProgressMonitor monitor, IPhoneSdkVersion sdkVersion, IPhoneProject proj,
+			IPhoneProjectConfiguration conf, IPhoneAppIdentity identity)
 		{
 			//don't bother signing in the sim
 			bool isDevice = conf.Platform == IPhoneProject.PLAT_IPHONE;
@@ -556,11 +589,11 @@ namespace MonoDevelop.IPhone
 				return result;
 			
 			string xcent;
-			if (result.Append (GenXcent (monitor, proj, conf, identity, out xcent)).ErrorCount > 0)
+			if (result.Append (GenXcent (monitor, sdkVersion, proj, conf, identity, out xcent)).ErrorCount > 0)
 				return result;
 			
 			string resRules;
-			if (result.Append (PrepareResourceRules (monitor, conf, out resRules)).ErrorCount > 0)
+			if (result.Append (PrepareResourceRules (monitor, sdkVersion, conf, out resRules)).ErrorCount > 0)
 				return result;
 			
 			if (result.Append (SignAppBundle (monitor, proj, conf, identity.SigningKey, resRules, xcent)).ErrorCount > 0)
@@ -805,8 +838,8 @@ namespace MonoDevelop.IPhone
 			return appid;
 		}
 		
-		static BuildResult GenXcent (IProgressMonitor monitor, IPhoneProject proj, IPhoneProjectConfiguration conf,
-		                      IPhoneAppIdentity identity, out string xcentName)
+		static BuildResult GenXcent (IProgressMonitor monitor, IPhoneSdkVersion sdkVersion, IPhoneProject proj, 
+			IPhoneProjectConfiguration conf, IPhoneAppIdentity identity, out string xcentName)
 		{
 			xcentName = conf.CompiledOutputName.ChangeExtension (".xcent");
 			
@@ -819,7 +852,7 @@ namespace MonoDevelop.IPhone
 					return BuildError ("Entitlements file \"" + conf.CodesignEntitlements + "\" not found.");
 				srcFile = conf.CodesignEntitlements;
 			} else {
-				srcFile = "/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS" + conf.MtouchSdkVersion
+				srcFile = "/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS" + sdkVersion.ToString ()
 					+ ".sdk/Entitlements.plist";
 			}
 			
@@ -915,7 +948,7 @@ namespace MonoDevelop.IPhone
 			}
 		}
 		
-		static BuildResult PrepareResourceRules (IProgressMonitor monitor, IPhoneProjectConfiguration conf, out string resRulesFile)
+		static BuildResult PrepareResourceRules (IProgressMonitor monitor, IPhoneSdkVersion sdkVersion, IPhoneProjectConfiguration conf, out string resRulesFile)
 		{
 			resRulesFile = conf.AppDirectory.Combine ("ResourceRules.plist");
 			
@@ -926,7 +959,7 @@ namespace MonoDevelop.IPhone
 			
 			string resRulesSrc = String.IsNullOrEmpty (conf.CodesignResourceRules)
 				? "/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS"
-					+ conf.MtouchSdkVersion + ".sdk/ResourceRules.plist"
+					+ sdkVersion.ToString () + ".sdk/ResourceRules.plist"
 				: (string) conf.CodesignResourceRules;
 			if (File.Exists (resRulesSrc)) {
 				File.Copy (resRulesSrc, resRulesFile, true);

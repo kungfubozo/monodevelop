@@ -1,30 +1,30 @@
-2010-07-29  Levi Bard  <levi@unity3d.com>
+2010-08-03  Lluis Sanchez Gual  <lluis@novell.com>
 
-	* MonoDevelop.Ide.Commands/WindowCommands.cs:
-	  Disable document switcher by default on windows.
+	* MonoDevelop.Ide/RootWorkspace.cs: Pick a good default
+	  configuration when loading a solution for the first time.
+	  Fixes bug 627297 - Projects from VS.NET solution are not
+	  build.
 
-2010-07-27  Levi Bard  <levi@unity3d.com>
+2010-07-19  Michael Hutchinson  <mhutchinson@novell.com>
 
-	* MonoDevelop.Ide/IdeStartup.cs:
-	* MonoDevelop.Ide.Gui/StartupInfo.cs:
-	  Make opening files at startup more robust.
-
-2010-07-23  Levi Bard  <levi@unity3d.com>
-
-	* MonoDevelop.Ide/IdeStartup.cs:
-	  If a combine is specified, don't 
-	  force new window.
-
-2010-07-20  Levi Bard  <levi@unity3d.com>
-
-	* MonoDevelop.Ide.CodeCompletion/CompletionListWindow.cs:
-	  Ensure that results are displayed once they come in for
-	  mutable completion lists.
-
-2010-07-15  Levi Bard  <levi@unity3d.com>
-
+	* MonoDevelop.Ide/Ide.cs:
+	* MonoDevelop.Ide.Gui/Document.cs:
+	* MonoDevelop.Ide.Gui/Workbench.cs:
 	* MonoDevelop.Ide/RootWorkspace.cs:
-	  Don't second-guess NeedsReload logic.
+	* MonoDevelop.Ide/DesktopService.cs:
+	* MonoDevelop.Ide.Desktop/RecentItem.cs:
+	* MonoDevelop.Ide.Desktop/RecentOpen.cs:
+	* MonoDevelop.Ide.Commands/FileCommands.cs:
+	* MonoDevelop.Ide.Desktop/PlatformService.cs:
+	* MonoDevelop.Ide.Desktop/RecentFileStorage.cs: Moved recent
+	  files/projects lists to the desktopservice/platformservice
+	  so it can be made platform-dependent.
+
+2010-07-19  Michael Hutchinson  <mhutchinson@novell.com>
+
+	* MonoDevelop.Ide.ProgressMonitoring/BaseProgressMonitor.cs:
+	  Better fix for Bug 617276 - MonoDevelop crashes when
+	  clicking on a script error in Unity3d.
 
 2010-07-14  Levi Bard  <levi@unity3d.com>
 
@@ -32,15 +32,49 @@
 	* MonoDevelop.Ide/IdeStartup.cs:
 	  Don't open projects as source files.
 
-2010-07-13  Levi Bard  <levi@unity3d.com>
+2010-07-14  Mike Krüger  <mkrueger@novell.com>
 
-	* MonoDevelop.Ide.Gui/DefaultWorkbench.cs:
-	  Restore previous window state at launch on OSX.
+	* MonoDevelop.Components/SearchEntry.cs: Fixed potential issue
+	  in search entry when reparenting.
 
-2010-07-09  Levi Bard  <levi@unity3d.com>
+2010-07-12  Michael Hutchinson  <mhutchinson@novell.com>
 
-	* MonoDevelop.Ide/RootWorkspace.cs:
-	  Implement less disk-intensive project autoupdate.
+	* MonoDevelop.Ide.Extensions/TextEditorExtensionNode.cs:
+	  Case-insensitive file extension comparison.
+
+2010-07-12  Levi Bard  <levi@unity3d.com>
+
+	* MonoDevelop.Ide.ProgressMonitoring/BaseProgressMonitor.cs:
+	  Fix #617276: MD crashes when clicking a script error in Unity3d.
+
+2010-07-11  Michael Hutchinson  <mhutchinson@novell.com>
+
+	* MonoDevelop.Ide.addin.xml:
+	* MonoDevelop.Ide.Projects.OptionPanels/NamespaceSynchronisationPanel.cs:
+	  Naming policies panel should be shown for all items that
+	  contain DotNetProject, not just DotNetProject. 
+
+2010-07-11  Michael Hutchinson  <mhutchinson@novell.com>
+
+	* gtk-gui/gui.stetic: Flsuh.
+
+	* Makefile.am:
+	* gtk-gui/objects.xml: Removed objects.xml from the
+	  Makefile.am since it's not in the project file and was
+	  breaking the build when MD added a resource ID to the
+	  makefile.
+
+2010-07-11  Michael Hutchinson  <mhutchinson@novell.com>
+
+	* MonoDevelop.Ide.addin.xml: The "navigate forward/back"
+	  commands now use the Xcode binding, and a similar binding on
+	  Windows so they no longer block the subword navigation. Also
+	  add a Mac binding for "move selection up/down"
+
+2010-07-09  Mike Krüger  <mkrueger@novell.com>
+
+	* MonoDevelop.Components/SearchEntry.cs: taken out event
+	  handler on destroy.
 
 2010-07-05  Mike Krüger  <mkrueger@novell.com>
 
@@ -48,29 +82,10 @@
 	  619800 - Auto-complete of nothing shouldn't auto-complete as
 	  void'.
 
-2010-07-02  Mike Krüger  <mkrueger@novell.com>
-
-	* MonoDevelop.Ide.csproj:
-	* MonoDevelop.Components/PathBar.cs:
-	* MonoDevelop.Ide.Gui/SdiWorkspaceWindow.cs:
-	* MonoDevelop.Ide.Gui.Content/IPathedDocument.cs: Worked on
-	  pathed document subsystem.
-
-2010-06-30  Mike Krüger  <mkrueger@novell.com>
-
-	* MonoDevelop.Ide.Gui/IWorkbenchWindow.cs:
-	* MonoDevelop.Ide.Gui/SdiWorkspaceWindow.cs:
-	* MonoDevelop.Ide.Gui/HiddenWorkbenchWindow.cs: Addeds subview
-	  contents to the interface.
-
 2010-06-29  Carlo Kok  <ck@remobjects.com>
 
 	* MonoDevelop.Ide.Extensions/MimeTypeOptionsPanelNode.cs: Make
 	  the label localizable.
-
-2010-06-29  Mike Krüger  <mkrueger@novell.com>
-
-	* MonoDevelop.Ide.Gui/Document.cs: Exposed workbench window.
 
 2010-06-29  Lluis Sanchez Gual  <lluis@novell.com>
 
@@ -134,13 +149,6 @@
 	* MonoDevelop.Ide/RootWorkspace.cs: Disabled
 	  OnRunProjectChecks timeout because it churns disk, wastes
 	  power on laptop.
-
-2010-06-15  Michael Hutchinson  <mhutchinson@novell.com>
-
-	* MonoDevelop.Ide.CodeCompletion/ListWidget.cs:
-	* MonoDevelop.Ide.CodeCompletion/ListWindow.cs: when there are
-	  no matches, display a message to indicate that the
-	  completion list is still handling input
 
 2010-06-15  Michael Hutchinson  <mhutchinson@novell.com>
 
@@ -214,10 +222,6 @@
 	* MonoDevelop.Ide.Gui.Pads.ProjectPad/FileOperationsBuilderExtension.cs:
 	  Use platform service CanOpenTerminal/OpenInTerminal instead
 	  of hardcoded gnome-terminal.
-
-2010-06-08  Levi Bard  <levi@unity3d.com>
-
-	* MonoDevelop.Ide/Ide.cs: Don't reload an already loaded solution.
 
 2010-06-08  Michael Hutchinson  <mhutchinson@novell.com>
 
