@@ -34,6 +34,7 @@ using Mono.Debugging.Client;
 using Mono.Debugger.Soft;
 using Mono.Debugging.Evaluation;
 using MDB = Mono.Debugger.Soft;
+using System.Net;
 using System.Net.Sockets;
 using System.IO;
 using System.Reflection;
@@ -319,7 +320,8 @@ namespace Mono.Debugging.Soft
 
 		protected override void OnAttachToProcess (long processId)
 		{
-			throw new System.NotImplementedException ();
+			long port = 56000 + (processId % 1000);
+			HandleConnection (VirtualMachineManager.Connect (new IPEndPoint (IPAddress.Loopback, (int)port)));
 		}
 
 		protected override void OnContinue ()
@@ -334,7 +336,9 @@ namespace Mono.Debugging.Soft
 
 		protected override void OnDetach ()
 		{
-			throw new System.NotImplementedException ();
+			EndLaunch ();
+			vm.Disconnect ();
+			vm.Dispose ();
 		}
 
 		protected override void OnExit ()
@@ -684,8 +688,8 @@ namespace Mono.Debugging.Soft
 			if (e is TypeLoadEvent) {
 				var t = ((TypeLoadEvent)e).Type;
 				
-				string typeName = t.FullName;
-
+//				string typeName = t.FullName;
+//
 //                if (types.ContainsKey(typeName)) {
 //                    if (typeName != "System.Exception")
 //                        LoggingService.LogError("Type '" + typeName + "' loaded more than once", null);
@@ -720,7 +724,11 @@ namespace Mono.Debugging.Soft
 			}
 			
 			if (resume)
-				vm.Resume ();
+				try {
+					vm.Resume ();
+				} catch (InvalidOperationException) {
+					// VM may not be suspended when attaching
+				}
 			else {
 				if (currentStepRequest != null) {
 					currentStepRequest.Enabled = false;

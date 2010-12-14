@@ -77,6 +77,7 @@ namespace MonoDevelop.Debugger
 			
 			comboDebs.Sensitive = false;
 			buttonOk.Sensitive = false;
+			tree.Selection.UnselectAll ();
 			tree.Selection.Changed += OnSelectionChanged;
 			
 			Gtk.TreeIter it;
@@ -128,6 +129,11 @@ namespace MonoDevelop.Debugger
 		protected virtual void OnEntryFilterChanged (object sender, System.EventArgs e)
 		{
 			FillList ();
+		}
+		
+		protected virtual void OnRowActivated (object o, Gtk.RowActivatedArgs args)
+		{
+			Respond (Gtk.ResponseType.Ok);
 		}
 		
 		public ProcessInfo SelectedProcess {
