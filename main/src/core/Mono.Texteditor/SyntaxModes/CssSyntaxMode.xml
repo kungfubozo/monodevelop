@@ -23,11 +23,7 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE. -->
  
-<<<<<<< HEAD
-<SyntaxMode name = "CSS" mimeTypes="text/x-css">
-=======
-<SyntaxMode name = "CSS" mimeTypes="text/css">
->>>>>>> 8e8346e82bf1f74d85944591a7c357334d370465
+<SyntaxMode name = "CSS" mimeTypes="text/x-css;text/css">
 	<Delimiters>&amp;&lt;&gt;~!@%^*()+=|\#/{}[]:;"' ,	?</Delimiters>
 	
 	<Property name="BlockCommentStart">/*</Property>
@@ -186,8 +182,4 @@
 			<Word>UNDONE</Word>
 		</Keywords>	
 	</Rule>
-<<<<<<< HEAD
 </SyntaxMode>
-=======
-</SyntaxMode>
->>>>>>> 8e8346e82bf1f74d85944591a7c357334d370465

@@ -273,7 +273,6 @@
 			<Word>listheader</Word>
 		</Keywords>
 	</Rule>
-<<<<<<< HEAD
 	
 	<Keywords color="keyword.type">
 		<Word>Application</Word>
@@ -612,7 +611,4 @@
 		<Word>WheelHit</Word>
 		<Word>iPhoneAccelerationEvent</Word>
 	</Keywords>
-=======
->>>>>>> 8e8346e82bf1f74d85944591a7c357334d370465
-
 </SyntaxMode>
