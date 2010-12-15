@@ -66,7 +66,7 @@ namespace MonoDevelop.Debugger
 						engs.Add (de);
 					}
 				} catch (Exception ex) {
-					LoggingService.LogError ("Could not get attachablbe processes.", ex);
+					LoggingService.LogError ("Could not get attachable processes.", ex);
 				}
 				comboDebs.AppendText (de.Name);
 			}
