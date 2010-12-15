@@ -64,7 +64,8 @@ namespace MonoDevelop.Debugger.Soft
 			if (!String.IsNullOrEmpty (dsi.LogMessage))
 				LogWriter (false, dsi.LogMessage + "\n");
 			
-			OnConnecting (VirtualMachineManager.BeginListen (dbgEP, conEP, HandleCallbackErrors (ListenCallback)));
+			// OnConnecting (VirtualMachineManager.BeginListen (dbgEP, conEP, HandleCallbackErrors (ListenCallback)));
+			OnConnecting (VirtualMachineManager.BeginListen (dbgEP, conEP, ListenCallback));
 			ShowListenDialog (dsi);
 		}
 		

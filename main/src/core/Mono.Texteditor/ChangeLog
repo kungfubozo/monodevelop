@@ -1,12 +1,40 @@
+2010-07-15  Mike Krüger  <mkrueger@novell.com>
+
+	* Mono.TextEditor/TextViewMargin.cs: Added null check.
+
+2010-07-12  Mike Krüger  <mkrueger@novell.com>
+
+	* Mono.TextEditor/TextViewMargin.cs: Fixed 'Bug 621483 - MD
+	  hangs for a few seconds when searching'.
+
+2010-07-12  Mike Krüger  <mkrueger@novell.com>
+
+	* Mono.TextEditor/DefaultEditActions.cs: Implemented 'Bug
+	  621461 - shift+tab should outdent a code line without
+	  selecting it' / shift-tab behaves now like in gedit.
+
+2010-07-09  Mike Krüger  <mkrueger@novell.com>
+
+	* Mono.TextEditor/TextEditor.cs: fixed build.
+
+2010-07-09  Mike Krüger  <mkrueger@novell.com>
+
+	* Mono.TextEditor/TextEditor.cs: Added some gdk window checks.
+
+2010-07-09  Mike Krüger  <mkrueger@novell.com>
+
+	* Mono.TextEditor/DefaultEditActions.cs: Fixed indent
+	  selection.
+
+2010-07-09  Mike Krüger  <mkrueger@novell.com>
+
+	* Mono.TextEditor.Highlighting/Rule.cs: Fixed 'Bug 620977 -
+	  Special characters in source code crashes MD'.
+
 2010-07-08  Mike Krüger  <mkrueger@novell.com>
 
-	* Mono.TextEditor/TextMarker.cs: Changed the isVisible flag
-	  setting.
-
-2010-07-07  Mike Krüger  <mkrueger@novell.com>
-
-	* Mono.TextEditor/TextMarker.cs: Text marker now defaults to
-	  visible.
+	* Mono.TextEditor/DeleteActions.cs: Fixed 'Bug 620854 -
+	  "delete to end of line" messes up edited file'.
 
 2010-07-05  Mike Krüger  <mkrueger@novell.com>
 
@@ -33,18 +61,6 @@
 
 	* Mono.TextEditor/TextLinkEditMode.cs: Fixed text link
 	  markers.
-
-2010-06-29  Mike Krüger  <mkrueger@novell.com>
-
-	* Styles/BrownStyle.xml:
-	* Styles/IrBlackStyle.xml:
-	* Styles/OblivionStyle.xml:
-	* Styles/TangoLightStyle.xml:
-	* Mono.TextEditor/Document.cs:
-	* Mono.TextEditor/TextEditor.cs:
-	* Mono.TextEditor/TextViewMargin.cs:
-	* Mono.TextEditor.Highlighting/Style.cs: Some styling changes
-	  for the version control gui.
 
 2010-06-24  Mike Krüger  <mkrueger@novell.com>
 
@@ -79,12 +95,6 @@
 	* Mono.TextEditor/Document.cs: Fixed 'Bug 615624 - Pressing
 	  DOWN after RETURN moves cursor to beginning of blank lines
 	  instead of to the indent'.
-
-2010-06-21  Mike Krüger  <mkrueger@novell.com>
-
-	* Mono.TextEditor/TextLinkEditMode.cs:
-	* Mono.TextEditor/InsertionCursorEditMode.cs: Text link edit
-	  mode can now show mode help windows as well.
 
 2010-06-18  Mike Krüger  <mkrueger@novell.com>
 

@@ -252,6 +252,7 @@ namespace Mono.Debugging.Soft
 		{
 			try {
 				SoftEvaluationContext cx = (SoftEvaluationContext) ctx;
+				// LocalVariable local = cx.Frame.GetVisibleVariableByName (name);
 				LocalVariable local = cx.Frame.Method.GetLocal (name);
 				if (local != null)
 					return new VariableValueReference (ctx, name, local);
@@ -265,8 +266,9 @@ namespace Mono.Debugging.Soft
 		public override IEnumerable<ValueReference> GetLocalVariables (EvaluationContext ctx)
 		{
 			SoftEvaluationContext cx = (SoftEvaluationContext) ctx;
-			LocalVariable[] locals;
+			IList<LocalVariable> locals;
 			try {
+				// locals = cx.Frame.GetVisibleVariables ();
 				locals = cx.Frame.Method.GetLocals ();
 			} catch (AbsentInformationException) {
 				yield break;

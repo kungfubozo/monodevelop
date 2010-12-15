@@ -145,9 +145,9 @@ namespace Mono.TextEditor
 		{
 			if (!data.CanEditSelection)
 				return;
-			if (data.IsMultiLineSelection) {
+//			if (data.IsMultiLineSelection) {
 				RemoveIndentSelection (data);
-				return;
+/*				return;
 			} else {
 				LineSegment line = data.Document.GetLine (data.Caret.Line);
 				int visibleColumn = 0;
@@ -164,19 +164,22 @@ namespace Mono.TextEditor
 						break;
 					}
 				}
-			}
+			}*/
 		}
 		
 		public static void GetSelectedLines (TextEditorData data, out int startLineNr, out int endLineNr)
 		{
 			if (data.IsSomethingSelected) {
+				DocumentLocation start, end;
 				if (data.MainSelection.Anchor < data.MainSelection.Lead) {
-					startLineNr = data.MainSelection.Anchor.Line;
-					endLineNr = data.MainSelection.Lead.Column == 0 ? data.MainSelection.Lead.Line - 1 : data.MainSelection.Lead.Line;
+					start = data.MainSelection.Anchor;
+					end = data.MainSelection.Lead;
 				} else {
-					startLineNr = data.MainSelection.Lead.Line;
-					endLineNr = data.MainSelection.Anchor.Line;
+					start = data.MainSelection.Lead;
+					end = data.MainSelection.Anchor;
 				}
+				startLineNr = start.Line;
+				endLineNr = end.Column == 0 ? end.Line - 1 : end.Line;
 			} else {
 				startLineNr = endLineNr = data.Caret.Line;
 			}

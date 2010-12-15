@@ -28,6 +28,7 @@ using System;
 using System.Xml.Linq;
 using System.Text;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace MonoDevelop.MacDev.InterfaceBuilder
 {
@@ -37,8 +38,8 @@ namespace MonoDevelop.MacDev.InterfaceBuilder
 		
 		public int? Id { get; private set; }
 		
-		protected void DeserializeContents (IEnumerable<XElement> children, Dictionary<string, Func<IBObject>> constructors,
-		                                            IReferenceResolver resolver)
+		protected void DeserializeContents (IEnumerable<XElement> children,
+			Dictionary<string, Func<IBObject>> constructors, IReferenceResolver resolver)
 		{
 			foreach (XElement child in children) {
 				XAttribute keyAtt = child.Attribute ("key");
@@ -50,7 +51,9 @@ namespace MonoDevelop.MacDev.InterfaceBuilder
 					try {
 						OnPropertyDeserialized (keyStr, val);
 					} catch (Exception ex) {
-						Console.WriteLine ("Error assigning {0}={1} to {2} in id {3}:\n{4}", keyStr, val, GetType (), Id, ex);
+						MonoDevelop.Core.LoggingService.LogWarning (
+							"IB Parser: Error assigning {0}={1} to {2} in id {3}:\n{4}",
+							keyStr, val, GetType (), Id, ex);
 					}
 				}
 			}
@@ -69,7 +72,7 @@ namespace MonoDevelop.MacDev.InterfaceBuilder
 			var ib = val as IBObject;
 			
 			if (idAtt != null) {
-				int id = Int32.Parse (idAtt.Value);
+				int id = Int32.Parse (idAtt.Value, CultureInfo.InvariantCulture);
 				if (ib != null) {
 					ib.Id = id;
 					resolver.Add (ib);
@@ -88,9 +91,9 @@ namespace MonoDevelop.MacDev.InterfaceBuilder
 		{
 			switch (element.Name.ToString ()) {
 			case "int":
-				return Int32.Parse (element.Value);
+				return Int32.Parse (element.Value, CultureInfo.InvariantCulture);
 			case "integer":
-				return Int32.Parse (element.Attribute ("value").Value);
+				return Int32.Parse (element.Attribute ("value").Value, CultureInfo.InvariantCulture);
 			case "nil":
 				return null;
 			case "string":
@@ -114,11 +117,11 @@ namespace MonoDevelop.MacDev.InterfaceBuilder
 			case "boolean":
 				return element.Attribute ("value").Value == "YES";
 			case "double":
-				return Double.Parse (element.Value);
+				return Double.Parse (element.Value, CultureInfo.InvariantCulture);
 			case "float":
-				return float.Parse (element.Value);
+				return float.Parse (element.Value, CultureInfo.InvariantCulture);
 			case "real":
-				return float.Parse (element.Attribute ("value").Value);
+				return float.Parse (element.Attribute ("value").Value, CultureInfo.InvariantCulture);
 			case "bytes":
 				//FIXME: figure out the encoding they're using. it's not straight base 64
 				return new AppleEvilByteArrayEncoding (element.Value);
@@ -126,15 +129,15 @@ namespace MonoDevelop.MacDev.InterfaceBuilder
 				var refAtt = element.Attribute ("ref");
 				IBReference xibRef;
 				if (refAtt != null) {
-					xibRef = new IBReference (Int32.Parse (refAtt.Value));
+					xibRef = new IBReference (Int32.Parse (refAtt.Value, CultureInfo.InvariantCulture));
 					resolver.Add (xibRef);
 				} else {
 					//FIXME: handle null references more robustly
 					xibRef = new IBReference (Int32.MinValue);
 				}
 				return xibRef;
-			case "object":
-				string className = element.Attribute ("class").Value;
+			case "object": {
+				var className = (string) element.Attribute ("class");
 				Func<IBObject> constructor;
 				IBObject obj;
 				if (constructors.TryGetValue (className, out constructor))
@@ -142,6 +145,21 @@ namespace MonoDevelop.MacDev.InterfaceBuilder
 				else
 					obj = new UnknownIBObject (className);
 				return obj;
+			}
+			case "array": {
+				var className = (string) element.Attribute ("class");
+				if (className == null)
+					return new NSArray ();
+				else if (className == "NSMutableArray")
+					return new NSMutableArray ();
+				throw new InvalidOperationException ("Unknown array class '" + className + "'");
+			}
+			case "dictionary": {
+				var className = (string) element.Attribute ("class");
+				if (className == "NSMutableDictionary")
+					return new NSMutableDictionaryDirect ();
+				throw new InvalidOperationException ("Unknown dictionary class '" + className + "'");
+			}
 			default:
 				throw new Exception (String.Format ("Cannot handle primitive type {0}", element.Name));
 			}

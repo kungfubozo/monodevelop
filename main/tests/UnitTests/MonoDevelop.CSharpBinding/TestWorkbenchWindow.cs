@@ -30,7 +30,6 @@ using System;
 using System.Collections;
 
 using MonoDevelop.Ide.Gui;
-using System.Collections.Generic;
 
 namespace MonoDevelop.CSharpBinding.Tests
 {
@@ -66,9 +65,11 @@ namespace MonoDevelop.CSharpBinding.Tests
 			get { return viewContent; }
 			set { viewContent = value; }
 		}
-
-		public IEnumerable<IAttachableViewContent> SubViewContents { get { return new IAttachableViewContent[0]; } }
-
+		
+		public ArrayList SubViewContents {
+			get { return new ArrayList (); }
+		}
+		
 		public IBaseViewContent ActiveViewContent {
 			get { return ViewContent;}
 			set {}

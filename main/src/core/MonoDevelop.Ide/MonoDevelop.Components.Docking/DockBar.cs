@@ -65,6 +65,8 @@ namespace MonoDevelop.Components.Docking
 			
 			switch (position) {
 				case PositionType.Top: al.BottomPadding = sizePadding; al.LeftPadding = al.RightPadding = startPadding; break;
+
+				// HACK Unity: Add padding so we can grab the drag handles on win and osx
 				case PositionType.Bottom: al.TopPadding = sizePadding; al.LeftPadding = startPadding; al.RightPadding = startPadding+10; break;
 				case PositionType.Left: al.RightPadding = sizePadding; al.TopPadding = al.BottomPadding = startPadding; break;
 				case PositionType.Right: al.LeftPadding = sizePadding; al.TopPadding = al.BottomPadding = startPadding; break;

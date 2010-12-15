@@ -42,7 +42,7 @@ namespace MonoDevelop.Ide.Gui
 		DefaultWorkbench workbench;
 		IViewContent content;
 		
-		List<IAttachableViewContent> subViewContents = null;
+		ArrayList subViewContents = null;
 		Notebook subViewNotebook = null;
 		Toolbar subViewToolbar = null;
 		PathBar pathBar = null;
@@ -141,9 +141,9 @@ namespace MonoDevelop.Ide.Gui
 			}
 		}
 		
-		public IEnumerable<IAttachableViewContent> SubViewContents {
+		public ArrayList SubViewContents {
 			get {
-				return (IEnumerable<IAttachableViewContent>)subViewContents ?? new IAttachableViewContent[0];
+				return subViewContents;
 			}
 		}
 		
@@ -390,7 +390,7 @@ namespace MonoDevelop.Ide.Gui
 			if (subViewContents != null)
 				return;
 			
-			subViewContents = new List<IAttachableViewContent> ();
+			subViewContents = new ArrayList ();
 			
 			box.Remove (this.ViewContent.Control);
 			

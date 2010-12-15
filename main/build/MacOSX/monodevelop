@@ -71,7 +71,7 @@ fi
 #mono version check
 
 REQUIRED_MAJOR=2
-REQUIRED_MINOR=4
+REQUIRED_MINOR=6
 APPNAME="MonoDevelop"
 
 VERSION_TITLE="Cannot launch $APPNAME"

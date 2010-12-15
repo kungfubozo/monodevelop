@@ -6,6 +6,8 @@ ADDINS=$(MACOS)/lib/monodevelop/AddIns
 BUNDLED_FRAMEWORK_DIR=$(MAC_APP_DIR)/Contents/Frameworks/Mono.framework
 FINAL_INSTALL_DIR=/Applications/$(MAC_APP_DIR)
 MODERN_GTK_DIR=../../../../gtk
+EXTRAS=$(top_srcdir)/../extras
+ARTIFACTS=$(top_srcdir)/../../artifacts
 
 CLEANFILES = MonoDevelop.dmg MonoDevelop.app
 #DISTCLEANFILES = 
@@ -37,6 +39,7 @@ MonoDevelop.app:
 	sed -e "s/@BUNDLE_VERSION@/$(BUNDLE_VERSION)/" -e "s/@ASSEMBLY_VERSION@/$(ASSEMBLY_VERSION)/" Info.plist.in > $(MAC_APP_DIR)/Contents/Info.plist
 	cp ../../theme-icons/Mac/*.icns $(MAC_APP_DIR)/Contents/Resources/
 	cp monodevelop.orig $(MACOS)/monodevelop
+	cp mono-version-check $(MACOS)/mono-version-check
 	cp mdtool.orig $(MACOS)/mdtool
 	cp MonoDevelopProperties.xml EditingLayout2.xml $(MAC_APP_DIR)/Contents/MacOS/lib/monodevelop/data/options
 
@@ -53,7 +56,6 @@ MonoDevelop.app:
 # Remove addins that don't work on OSX
 	rm -rf  $(ADDINS)/GnomePlatform* \
 	  $(ADDINS)/WindowsPlatform* \
-	  $(ADDINS)/MonoDevelop.GtkCore* \
 	  $(ADDINS)/MonoDevelop.Gettext/*
 	
 # remove stuff we don't need
@@ -64,16 +66,23 @@ MonoDevelop.app:
 	  $(MACOS)/lib/monodevelop/bin/repository-cache* \
 	  $(MACOS)/lib/monodevelop/AddIns/MonoDevelop.TextTemplating/Mono.TextTemplating.Tests*
 
+# add extras known to work on Mac, if they exist
+	for ADDIN in MonoDevelop.IPhone MonoDevelop.MonoMac MonoDevelop.Database; do \
+		(ls $(EXTRAS)/$${ADDIN}/build/* > /dev/null 2>&1 && \
+			echo "Copying $${ADDIN}" && \
+			mkdir -p $(MAC_APP_LIB_DIR)/AddIns/$${ADDIN} && \
+			cp -pR $(EXTRAS)/$${ADDIN}/build/* $(MAC_APP_LIB_DIR)/AddIns/$${ADDIN}/ ) \
+		|| (echo "Skipping $${ADDIN}" && echo "$${ADDIN}" >> missing-stuff)  ; \
+	done
+
+# add the binary artifacts if they exist
+	mkdir -p $(MACOS)/lib/{moonlight,pkgconfig}
+	mkdir -p $(MACOS)/MonoDoc.app/
+	test ! -d $(ARTIFACTS)/MoonSDK ||  cp -pR $(ARTIFACTS)/MoonSDK/* $(MACOS)/lib/moonlight/
+	test ! -d $(ARTIFACTS)/MonoDoc.app ||  cp -pR $(ARTIFACTS)/MonoDoc.app/* $(MACOS)/MonoDoc.app/
+
 # update revision in updateinfo
-	if test -d ../../../.git/svn; then svn_info="git log --no-color --first-parent -n1 --grep=git-svn-id: --pretty=format:%b | sed -n -e 's,git-svn-id: \(.*\)@\(.*\) .*,URL: \1 Revision: \2,p'"; fi; \
-	if test -d ../../../.svn; then svn_info='svn info'; fi; \
-	if test -n "$$svn_info"; then \
-		version=$$(cd ../../..; \
-			LANG=C; export LANG; \
-			eval $$svn_info | sed -n -e '/Last Changed Rev/ s/.*: //p'; \
-		); \
-		echo "a3140c14-ef90-4019-ae6c-9d93804d6611 $$version" > "$(MACOS)/updateinfo"; \
-	fi;
+	echo "a3140c14-ef90-4019-ae6c-9d93804d6611 $$(cat release-info)" > "$(MACOS)/updateinfo"
 
 # touch the directory so that update dependencies work
 	touch MonoDevelop.app
@@ -122,5 +131,8 @@ mono-bundle: MonoDevelop.app
 	
 MonoDevelop.app.zip: mono-bundle
 	zip -r9uq MonoDevelop.app.zip MonoDevelop.app
+
+#update-png:
+#	/Applications/Inkscape.app/Contents/Resources/script --without-gui --export-png=`pwd`/dmg-bg.png `pwd`/dmg-bg.svg
 
 .PHONY: MonoDevelop.app

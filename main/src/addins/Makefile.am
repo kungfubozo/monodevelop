@@ -30,5 +30,4 @@ SUBDIRS = \
 	MonoDevelop.CodeMetrics \
 	MonoDevelop.Debugger.Soft \
 	WindowsPlatform \
-	MonoDevelop.HexEditor \
-	MonoDevelop.DocFood
+	MonoDevelop.HexEditor

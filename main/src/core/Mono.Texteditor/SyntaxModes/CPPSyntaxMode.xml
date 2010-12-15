@@ -24,7 +24,6 @@
  THE SOFTWARE. -->
  
 <SyntaxMode name = "C++" mimeTypes="text/x-c++src;text/x-objc++src;text/x-c++hdr;text/x-chdr" extends="text/x-csrc">
-
 	<Property name="LineComment">//</Property>
 	<Property name="BlockCommentStart">/*</Property>
 	<Property name="BlockCommentEnd">*/</Property>

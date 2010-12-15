@@ -65,8 +65,6 @@ namespace Mono.TextEditor
 		bool isDisposed = false;
 		IMMulticontext imContext;
 		Gdk.EventKey lastIMEvent;
-		Gdk.Key lastIMEventMappedKey;
-		Gdk.ModifierType lastIMEventMappedModifier;
 		bool imContextActive;
 		
 		string currentStyleName;
@@ -449,7 +447,7 @@ namespace Mono.TextEditor
 		{
 			try {
 				if (IsRealized && IsFocus) {
-					uint lastChar = Keyval.ToUnicode ((uint)lastIMEventMappedKey);
+					uint lastChar = Keyval.ToUnicode (lastIMEvent.KeyValue);
 					
 					//this, if anywhere, is where we should handle UCS4 conversions
 					for (int i = 0; i < ca.Str.Length; i++) {
@@ -461,9 +459,9 @@ namespace Mono.TextEditor
 							utf32Char = (int) ca.Str[i];
 						}
 						
-						//include the other pre-IM state *if* the post-IM char matches the pre-IM (key-mapped) one
+						//include the key & state if possible, i.e. if the char matches the unprocessed one
 						if (lastChar == utf32Char)
-							OnIMProcessedKeyPressEvent (lastIMEventMappedKey, lastChar, lastIMEventMappedModifier);
+							OnIMProcessedKeyPressEvent (lastIMEvent.Key, lastChar, lastIMEvent.State);
 						else
 							OnIMProcessedKeyPressEvent ((Gdk.Key)0, (uint)utf32Char, Gdk.ModifierType.None);
 					}
@@ -755,28 +753,28 @@ namespace Mono.TextEditor
 			}
 		}
 		
-		/// <summary>Handles key input after key mapping and input methods.</summary>
-		/// <param name="key">The mapped keycode.</param>
-		/// <param name="unicodeChar">A UCS4 character. If this is nonzero, it overrides the keycode.</param>
-		/// <param name="modifier">Keyboard modifier, excluding any consumed by key mapping or IM.</param>
 		public void SimulateKeyPress (Gdk.Key key, uint unicodeChar, ModifierType modifier)
 		{
-			ModifierType filteredModifiers = modifier & (ModifierType.ShiftMask | ModifierType.Mod1Mask
-				 | ModifierType.ControlMask | ModifierType.MetaMask | ModifierType.SuperMask);
+			ModifierType filteredModifiers = modifier & (ModifierType.ShiftMask | ModifierType.Mod1Mask | ModifierType.ControlMask | ModifierType.MetaMask | ModifierType.SuperMask);
+			
+			ModifierType modifiersThatPermitChars = ModifierType.ShiftMask;
+			if (Platform.IsMac)
+				modifiersThatPermitChars |= ModifierType.Mod1Mask;
+			
+			if ((filteredModifiers & ~modifiersThatPermitChars) != 0)
+				unicodeChar = 0;
+			
 			CurrentMode.InternalHandleKeypress (this, textEditorData, key, unicodeChar, filteredModifiers);
 			RequestResetCaretBlink ();
 		}
 		
-		bool IMFilterKeyPress (Gdk.EventKey evt, Gdk.Key mappedKey, Gdk.ModifierType mappedModifiers)
+		bool IMFilterKeyPress (Gdk.EventKey evt)
 		{
 			if (lastIMEvent == evt)
 				return false;
 			
-			if (evt.Type == EventType.KeyPress) {
+			if (evt.Type == EventType.KeyPress)
 				lastIMEvent = evt;
-				lastIMEventMappedKey = mappedKey;
-				lastIMEventMappedModifier = mappedModifiers;
-			}
 			
 			if (imContext.FilterKeypress (evt)) {
 				imContextActive = true;
@@ -790,7 +788,8 @@ namespace Mono.TextEditor
 		
 		internal void HideMouseCursor ()
 		{
-			GdkWindow.Cursor = invisibleCursor;
+			if (GdkWindow != null)
+				GdkWindow.Cursor = invisibleCursor;
 		}
 		
 		protected override bool OnKeyPressEvent (Gdk.EventKey evt)
@@ -816,7 +815,7 @@ namespace Mono.TextEditor
 				SimulateKeyPress (key, unicodeChar, mod);
 				return true;
 			}
-			bool filter = IMFilterKeyPress (evt, key, mod);
+			bool filter = IMFilterKeyPress (evt);
 			if (!filter) {
 				return OnIMProcessedKeyPressEvent (key, unicodeChar, mod);
 			}
@@ -834,7 +833,7 @@ namespace Mono.TextEditor
 		
 		protected override bool OnKeyReleaseEvent (EventKey evnt)
 		{
-			if (IMFilterKeyPress (evnt, 0, ModifierType.None))
+			if (IMFilterKeyPress (evnt))
 				imContextActive = true;
 			return true;
 		}
@@ -1090,7 +1089,7 @@ namespace Mono.TextEditor
 				startPos = textViewMargin.XOffset;
 			} else {
 				margin = GetMarginAtX ((int)x, out startPos);
-				if (margin != null)
+				if (margin != null && GdkWindow != null)
 					GdkWindow.Cursor = margin.MarginCursor;
 			}
 
@@ -1143,7 +1142,8 @@ namespace Mono.TextEditor
 			textViewMargin.HideCodeSegmentPreviewWindow ();
 			
 			if (e.Mode == CrossingMode.Normal) {
-				GdkWindow.Cursor = null;
+				if (GdkWindow != null)
+					GdkWindow.Cursor = null;
 				if (oldMargin != null)
 					oldMargin.MouseLeft ();
 			}
@@ -1482,7 +1482,7 @@ namespace Mono.TextEditor
 			if (e.Area.Contains (TextViewMargin.caretX, TextViewMargin.caretY))
 				textViewMargin.DrawCaret (e.Window);
 			
-			return base.OnExposeEvent (e);
+			return true;
 		}
 
 		#region TextEditorData functions
@@ -2215,7 +2215,8 @@ namespace Mono.TextEditor
 			};
 			
 			int ox = 0, oy = 0;
-			this.GdkWindow.GetOrigin (out ox, out oy);
+			if (GdkWindow != null)
+				this.GdkWindow.GetOrigin (out ox, out oy);
 			
 			int w;
 			double xalign;

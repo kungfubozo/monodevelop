@@ -634,19 +634,18 @@ namespace MonoDevelop.Ide.CodeCompletion
 		void OnCompletionDataChanged (object s, EventArgs args)
 		{
 			ResetSizes ();
-			HideFooter ();
-			
 			//try to capture full selection state so as not to interrupt user
 			string last = null;
-
-			if (Visible) {
+			if (Visible)
 				last = List.AutoSelect ? CurrentCompletionText : PartialWord;
+
+			HideFooter ();
+			if (Visible) {
 				//don't reset the user-entered word when refilling the list
 				var tmp = this.List.AutoSelect;
-				// Fill the list before resetting so that we get the correct size
-				FillList ();
 				Reset (false);
 				this.List.AutoSelect = tmp;
+				FillList ();
 				if (last != null )
 					SelectEntry (last);
 			}

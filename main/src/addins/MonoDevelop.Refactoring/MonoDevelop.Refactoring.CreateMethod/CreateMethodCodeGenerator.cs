@@ -37,7 +37,6 @@ using MonoDevelop.Core;
 using Mono.TextEditor;
 using MonoDevelop.Ide;
 using System.Text;
-using Mono.TextEditor.PopupWindow;
 
 namespace MonoDevelop.Refactoring.CreateMethod
 {
@@ -188,15 +187,6 @@ namespace MonoDevelop.Refactoring.CreateMethod
 				}
 			}
 			
-			ModeHelpWindow helpWindow = new ModeHelpWindow ();
-			helpWindow.TransientFor = IdeApp.Workbench.RootWindow;
-			helpWindow.TitleText = GettextCatalog.GetString ("<b>Create Method -- Targeting</b>");
-			helpWindow.Items.Add (new KeyValuePair<string, string> (GettextCatalog.GetString ("<b>Key</b>"), GettextCatalog.GetString ("<b>Behavior</b>")));
-			helpWindow.Items.Add (new KeyValuePair<string, string> (GettextCatalog.GetString ("<b>Up</b>"), GettextCatalog.GetString ("Move to <b>previous</b> target point.")));
-			helpWindow.Items.Add (new KeyValuePair<string, string> (GettextCatalog.GetString ("<b>Down</b>"), GettextCatalog.GetString ("Move to <b>next</b> target point.")));
-			helpWindow.Items.Add (new KeyValuePair<string, string> (GettextCatalog.GetString ("<b>Enter</b>"), GettextCatalog.GetString ("<b>Declare new method</b> at target point.")));
-			helpWindow.Items.Add (new KeyValuePair<string, string> (GettextCatalog.GetString ("<b>Esc</b>"), GettextCatalog.GetString ("<b>Cancel</b> this refactoring.")));
-			mode.HelpWindow = helpWindow;
 			mode.StartMode ();
 			mode.Exited += delegate(object s, InsertionCursorEventArgs args) {
 				if (args.Success) {

@@ -131,7 +131,7 @@ namespace Mono.TextEditor
 		#endregion
 	}
 	
-	public class TextLinkEditMode : HelpWindowEditMode
+	public class TextLinkEditMode : SimpleEditMode
 	{
 		List<TextLink> links;
 		int baseOffset;
@@ -162,6 +162,11 @@ namespace Mono.TextEditor
 			}
 		}
 		
+		public new TextEditor Editor {
+			get;
+			set;
+		}
+		
 		public bool SetCaretPosition {
 			get;
 			set;
@@ -174,7 +179,7 @@ namespace Mono.TextEditor
 		TextLinkTooltipProvider tooltipProvider;
 		public TextLinkEditMode (TextEditor editor, int baseOffset, List<TextLink> links)
 		{
-			this.editor = editor;
+			this.Editor = editor;
 			this.links = links;
 			this.baseOffset = baseOffset;
 			this.endOffset = editor.Caret.Offset;
@@ -182,14 +187,6 @@ namespace Mono.TextEditor
 			this.Editor.TooltipProviders.Insert (0, tooltipProvider);
 			this.SetCaretPosition = true;
 			this.SelectPrimaryLink = true;
-		}
-		
-		public event EventHandler Cancel;
-		protected virtual void OnCancel (EventArgs e)
-		{
-			EventHandler handler = this.Cancel;
-			if (handler != null)
-				handler (this, e);
 		}
 
 		TextLink closedLink = null;
@@ -237,16 +234,15 @@ namespace Mono.TextEditor
 					}
 				}
 			}
-			TextLink firstLink = links.First (l => l.IsEditable);
-			if (SelectPrimaryLink)
-				Setlink (firstLink);
 			Editor.Document.TextReplaced += UpdateLinksOnTextReplace;
 			this.Editor.Caret.PositionChanged += HandlePositionChanged;
 			this.UpdateTextLinks ();
 			this.HandlePositionChanged (null, null);
+			TextLink firstLink = links.First (l => l.IsEditable);
+			if (SelectPrimaryLink)
+				Setlink (firstLink);
 			Editor.Document.CommitUpdateAll ();
 			this.undoDepth = Editor.Document.GetCurrentUndoDepth ();
-			ShowHelpWindow ();
 		}
 		
 		void Setlink (TextLink link)
@@ -263,7 +259,6 @@ namespace Mono.TextEditor
 		
 		void ExitTextLinkMode ()
 		{
-			DestroyHelpWindow ();
 			isExited = true;
 			DestroyWindow ();
 			textLinkMarkers.ForEach (m => Editor.Document.RemoveMarker (m));
@@ -401,8 +396,6 @@ namespace Mono.TextEditor
 				} else {
 					ExitTextLinkMode ();
 				}
-				if (key == Gdk.Key.Escape)
-					OnCancel (EventArgs.Empty);
 				return;
 			default:
 				wasReplaced = false;
