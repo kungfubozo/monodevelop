@@ -124,6 +124,7 @@ sub build_boo_md_addins {
 }
 
 sub package_monodevelop {
+	system("cp -R $mdRoot/* $root/monodevelop/main/build");
 	chdir "$root/monodevelop";
 	print "Collecting built files so they can be packaged on a mac\n";
 	unlink "MonoDevelop.tar.gz";
