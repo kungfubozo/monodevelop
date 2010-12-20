@@ -6,107 +6,129 @@ use File::Spec;
 use File::Copy;
 use File::Path;
 
-# OpenSUSE system dependencies
-# TODO: Can the version numbers be forced in zypper so the system can be duplicated 100%?
-# (svn) (git)
-# automake
-#	autoconf automake m4
-# mono-core mono-devel
-#	glib2-devel glibc-devel libgdiplus0 linux-kernel-headers mono-core mono-data mono-data-sqlite mono-devel mono-extras mono-web mono-winforms
-# mono-addins
-#	glib-sharp2 gtk-sharp2 mono-addins
-# intltool
-#	gettext-tools intltool
-# glade-sharp2
-# monodoc-core
-# mono-nunit
-# make
-# nant
-# java-1_6_0-sun
-
-my $root = File::Spec->rel2abs( dirname($0) );
-
+my $root = "";
 my $nant = "nant";
-
-die "MonoDevelop for Mac must be built on a Linux machine" if $^O ne "linux";
-
-if (!$ENV{UNITY_THISISABUILDMACHINE})
-{
-	chdir "$root/monodevelop";
-	system ("git pull") && die ("failed to update monodevelop");
-	chdir "$root/MonoDevelop.Debugger.Soft.Unity";
-	system ("git pull") && die ("failed to update MonoDevelop.Debugger.Soft.Unity");
-	chdir "$root/boo";
-	system ("git pull") && die ("failed to update boo");
-	chdir "$root/unityscript";
-	system ("git pull") && die ("failed to update unityscript");
-	chdir "$root/boo-md-addins";
-	system ("git pull") && die ("failed to update boo-md-addins");
-}
-chdir $root;
-
-# Check sources
-die ("Must grab Unity MonoDevelop source from github first") if !-d "monodevelop";
-die ("Must grab Unity MonoDevelop Soft Debugger source from github first") if !-d "MonoDevelop.Debugger.Soft.Unity";
-die ("Must grab Boo implementation") if !-d "boo";
-die ("Must grab Boo extensions") if !-d "boo-extensions";
-die ("Must grab Boo MD addins implementation") if !-d "boo-md-addins";
-die ("Must grab Unityscript implementation") if !-d "unityscript";
-
-chdir "$root/monodevelop";
-system("./configure --profile=mac");
-system("make");
-
-chdir "$root/MonoDevelop.Debugger.Soft.Unity";
-system("xbuild /property:Configuration=Release /t:Rebuild");
-
 my $mdSource = "$root/monodevelop/main/build";
 my $mdRoot = "$root/tmp/monodevelop";
 
-chdir $root;
-#mkpath "$mdRoot/bin";
-#mkpath "$mdRoot/AddIns";
-#mkpath "$mdRoot/data";
-rmtree "tmp";
-mkpath "tmp";
-# TODO: First, we assembled the final monodevelop product in tmp/monodevelop, but now, currently (maybe temporarily) we need to build monodevelop, send the build folder to a mac and package it there, so the monodevelop dir needs all the bits in place before sending (can't be assembled in another folder)
-system("ln -s ../monodevelop/main/build tmp/monodevelop");
+main();
 
-# Unity soft debugger
-mkpath "$mdRoot/AddIns/MonoDevelop.Debugger.Soft.Unity";
-copy "$root/MonoDevelop.Debugger.Soft.Unity/obj/Release/MonoDevelop.Debugger.Soft.Unity.dll", "$mdRoot/AddIns/MonoDevelop.Debugger.Soft.Unity" or die ("Failed to copy MonoDevelop.Debugger.Soft.Unity");	
+sub main {
+	die "MonoDevelop for Mac must be built on a Linux machine" if $^O ne "linux";
+	get_root();
+	prepare_sources();
+	build_monodevelop();
+	build_debugger();
+	finalize_monodevelop();
+	build_boo();
+	build_boo_extensions();
+	build_unityscript();
+	build_boo_md_addins(); 
+	package_monodevelop();
+}
 
-chdir "$root/boo";
-system("$nant rebuild") && die ("Failed to build Boo");
-mkpath "$mdRoot/AddIns/BackendBindings/Boo/boo";
-system("rsync -av --exclude=*.mdb  \"$root/boo/build/\" \"$mdRoot/AddIns/BackendBindings/Boo/boo\"");
+sub get_root {
+	$root = File::Spec->rel2abs( dirname($0) );
+	chdir $root;
+	$root = File::Spec->rel2abs( File::Spec->updir() );
+}
 
-chdir "$root/boo-extensions";
-system("$nant rebuild") && die ("Failed to build Boo");
+sub prepare_sources {
+	if (!$ENV{UNITY_THISISABUILDMACHINE})
+	{	
+		printf ("Detected that this is not a build machine.\n");
+		printf ("Pulling latest MonoDevelop . . .\n");
+		chdir "$root/monodevelop";
+		system ("git pull") && die ("failed to update monodevelop");
+		printf ("Pulling latest MonoDevelop.Debugger.Soft.Unity . . .\n");
+		chdir "$root/MonoDevelop.Debugger.Soft.Unity";
+		system ("git pull") && die ("failed to update MonoDevelop.Debugger.Soft.Unity");
+		printf ("Pulling latest boo . . .\n");
+		chdir "$root/boo";
+		system ("git pull") && die ("failed to update boo");
+		printf ("Pulling latest unityscript . . .\n");
+		chdir "$root/unityscript";
+		system ("git pull") && die ("failed to update unityscript");
+		printf ("Pulling laest boo-md-addins . . .\n");
+		chdir "$root/boo-md-addins";
+		system ("git pull") && die ("failed to update boo-md-addins");
+	}
+	chdir $root;
 
-chdir "$root/unityscript";
-my $javascriptFiles =  "$mdRoot/AddIns/BackendBindings/UnityScript/bin";
-mkpath $javascriptFiles;
-rmtree "$root/unityscript/bin";
-system("$nant rebuild") && die ("Failed to build UnityScript");
-system("rsync -av --exclude=*.mdb --exclude=*Tests* --exclude=nunit* \"$root/unityscript/bin/\" \"$javascriptFiles\"");
+	# Check sources
+	die ("Must grab Unity MonoDevelop Soft Debugger source from github first") if !-d "MonoDevelop.Debugger.Soft.Unity";
+	die ("Must grab Boo implementation") if !-d "boo";
+	die ("Must grab Boo extensions") if !-d "boo-extensions";
+	die ("Must grab Boo MD addins implementation") if !-d "boo-md-addins";
+	die ("Must grab Unityscript implementation") if !-d "unityscript";
+}
 
-chdir "$root/boo-md-addins";
-copy "$root/dependencies/build.properties", "$root/boo-md-addins/build.properties";
-system("$nant rebuild") && die ("Failed to build Boo based addins");
-copy "$root/boo-md-addins/build/Boo.MonoDevelop.dll", "$mdRoot/AddIns/BackendBindings/Boo";
-copy "$root/boo-md-addins/build/Boo.Ide.dll", "$mdRoot/AddIns/BackendBindings/Boo";
-copy "$root/boo-md-addins/build/UnityScript.Ide.dll", "$mdRoot/AddIns/BackendBindings/Boo";
-copy "$root/boo-md-addins/build/Boo.MonoDevelop.Util.dll", "$mdRoot/AddIns/BackendBindings/Boo";
+sub build_monodevelop {
+	chdir "$root/monodevelop";
+	system("./configure --profile=mac");
+	system("make");
+}
 
-copy "$root/boo-md-addins/build/UnityScript.MonoDevelop.dll", "$mdRoot/AddIns/BackendBindings/UnityScript";
-copy "$root/boo-md-addins/build/UnityScript.Ide.dll", "$mdRoot/AddIns/BackendBindings/UnityScript";
-copy "$root/boo-md-addins/build/Boo.Ide.dll", "$mdRoot/AddIns/BackendBindings/UnityScript";
-copy "$root/boo-md-addins/build/Boo.MonoDevelop.Util.dll", "$mdRoot/AddIns/BackendBindings/UnityScript";
+sub build_debugger {
+	chdir "$root/MonoDevelop.Debugger.Soft.Unity";
+	system("xbuild /property:Configuration=Release /t:Rebuild");
+}
 
-chdir "$root/monodevelop";
-print "Collecting built files so they can be packaged on a mac\n";
-unlink "MonoDevelop.tar.gz";
-system("tar cfz MonoDevelop.tar.gz *");
-move "MonoDevelop.tar.gz", "$root";
-chdir "$root";
+sub finalize_monodevelop {
+	chdir $root;
+	rmtree "tmp";
+	mkpath "tmp";
+
+	# TODO: First, we assembled the final monodevelop product in tmp/monodevelop, but now, currently (maybe temporarily) we need to build monodevelop, send the build folder to a mac and package it there, so the monodevelop dir needs all the bits in place before sending (can't be assembled in another folder)
+	system("ln -s ../monodevelop/main/build tmp/monodevelop");
+
+	# Unity soft debugger
+	mkpath "$mdRoot/AddIns/MonoDevelop.Debugger.Soft.Unity";
+	copy "$root/MonoDevelop.Debugger.Soft.Unity/obj/Release/MonoDevelop.Debugger.Soft.Unity.dll", "$mdRoot/AddIns/MonoDevelop.Debugger.Soft.Unity" or die ("Failed to copy MonoDevelop.Debugger.Soft.Unity");	
+}
+
+sub build_boo {
+	chdir "$root/boo";
+	system("$nant rebuild") && die ("Failed to build Boo");
+	mkpath "$mdRoot/AddIns/BackendBindings/Boo/boo";
+	system("rsync -av --exclude=*.mdb  \"$root/boo/build/\" \"$mdRoot/AddIns/BackendBindings/Boo/boo\"");
+}
+
+sub build_boo_extensions {
+	chdir "$root/boo-extensions";
+	copy "$root/monodevelop/dependencies/build.properties", "$root/boo-extensions/build.properties";
+	system("$nant rebuild") && die ("Failed to build Boo");
+}
+
+sub build_unityscript {
+	chdir "$root/unityscript";
+	my $javascriptFiles =  "$mdRoot/AddIns/BackendBindings/UnityScript/bin";
+	mkpath $javascriptFiles;
+	rmtree "$root/unityscript/bin";
+	system("$nant rebuild") && die ("Failed to build UnityScript");
+	system("rsync -av --exclude=*.mdb --exclude=*Tests* --exclude=nunit* \"$root/unityscript/bin/\" \"$javascriptFiles\"");
+}
+
+sub build_boo_md_addins {
+	chdir "$root/boo-md-addins";
+	copy "$root/monodevelop/dependencies/build.properties", "$root/boo-md-addins/build.properties";
+	system("$nant rebuild") && die ("Failed to build Boo-based addins");
+	copy "$root/boo-md-addins/build/Boo.MonoDevelop.dll", "$mdRoot/AddIns/BackendBindings/Boo";
+	copy "$root/boo-md-addins/build/Boo.Ide.dll", "$mdRoot/AddIns/BackendBindings/Boo";
+	copy "$root/boo-md-addins/build/UnityScript.Ide.dll", "$mdRoot/AddIns/BackendBindings/Boo";
+	copy "$root/boo-md-addins/build/Boo.MonoDevelop.Util.dll", "$mdRoot/AddIns/BackendBindings/Boo";
+	copy "$root/boo-md-addins/build/UnityScript.MonoDevelop.dll", "$mdRoot/AddIns/BackendBindings/UnityScript";
+	copy "$root/boo-md-addins/build/UnityScript.Ide.dll", "$mdRoot/AddIns/BackendBindings/UnityScript";
+	copy "$root/boo-md-addins/build/Boo.Ide.dll", "$mdRoot/AddIns/BackendBindings/UnityScript";
+	copy "$root/boo-md-addins/build/Boo.MonoDevelop.Util.dll", "$mdRoot/AddIns/BackendBindings/UnityScript";
+}
+
+sub package_monodevelop {
+	system("cp -R $mdRoot/* $root/monodevelop/main/build");
+	chdir "$root/monodevelop";
+	print "Collecting built files so they can be packaged on a mac\n";
+	unlink "MonoDevelop.tar.gz";
+	system("tar cfz MonoDevelop.tar.gz main extras");
+	move "MonoDevelop.tar.gz", "$root";
+	chdir "$root";
+}
