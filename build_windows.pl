@@ -99,7 +99,7 @@ system("xcopy /s \"$gtkPath/lib/Mono.Posix\" \"$mdRoot/bin\"");
 system("xcopy /s \"$gtkPath/lib/gtk-sharp-2.0\" \"$mdRoot/bin\"");
 system("xcopy /s \"$gtkPath/lib/Mono.Cairo\" \"$mdRoot/bin\"");
 # TODO: An installer should execute "gdk-pixbuf-query-loaders.exe > ../etc/gtk-2.0/gdk-pixbuf.loaders" after installing files to get a proper loader file
-copy "$root/dependencies/gdk-pixbuf.loaders", "$mdRoot/etc/gtk-2.0";
+copy "$root/monodevelop/dependencies/gdk-pixbuf.loaders", "$mdRoot/etc/gtk-2.0";
 
 # Mono Libraries dependency files
 system("xcopy /s \"$monolibPath/lib/mono/2.0\" \"$mdRoot/bin\"");
