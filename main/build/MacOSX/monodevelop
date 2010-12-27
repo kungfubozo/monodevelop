@@ -7,6 +7,9 @@ DIR=$(cd "$(dirname "$0")"; pwd)
 FINAL_INSTALL_DIR="$DIR/../Frameworks/Mono.framework"
 MONO_FRAMEWORK_PATH="$FINAL_INSTALL_DIR/Versions/Current"
 
+# Seeing some corrupted/missing symlinks in 3.2beta installs...
+ln -sf 2.6 "${MONO_FRAMEWORK_PATH}"
+
 if test "x${TMPDIR}" = "x"; then
 	# Make sure TMPDIR gets set - should never be reached on OSX
 	TMPDIR=/tmp
