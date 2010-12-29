@@ -8,8 +8,8 @@ use File::Path;
 
 my $root = "";
 my $nant = "nant";
-my $mdSource = "$root/monodevelop/main/build";
-my $mdRoot = "$root/tmp/monodevelop";
+my $mdSource = "";
+my $mdRoot = "";
 
 main();
 
@@ -31,6 +31,9 @@ sub get_root {
 	$root = File::Spec->rel2abs( dirname($0) );
 	chdir $root;
 	$root = File::Spec->rel2abs( File::Spec->updir() );
+
+	$mdSource = "$root/monodevelop/main/build";
+	$mdRoot = "$root/tmp/monodevelop";
 }
 
 sub prepare_sources {
