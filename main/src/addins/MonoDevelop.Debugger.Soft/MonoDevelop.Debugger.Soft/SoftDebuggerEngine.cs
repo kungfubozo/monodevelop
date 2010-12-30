@@ -93,7 +93,6 @@ namespace MonoDevelop.Debugger.Soft
 		
 		public ProcessInfo[] GetAttachableProcesses ()
 		{
-			return new ProcessInfo[0];
 			var infos = new List<ProcessInfo> ();
 			string baseProcessName;
 			
