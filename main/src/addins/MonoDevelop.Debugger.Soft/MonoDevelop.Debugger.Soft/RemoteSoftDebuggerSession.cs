@@ -46,6 +46,8 @@ namespace MonoDevelop.Debugger.Soft
 		ProcessInfo[] procs;
 		Gtk.Dialog dialog;
 		string appName;
+		Func<bool> retryConnection;
+		int connectionAttempts = 0;
 		
 		protected override void OnRun (DebuggerStartInfo startInfo)
 		{
@@ -55,6 +57,58 @@ namespace MonoDevelop.Debugger.Soft
 		/// <summary>Starts the debugger listening for a connection over TCP/IP</summary>
 		protected void StartListening (RemoteDebuggerStartInfo dsi)
 		{
+/*
+			IPEndPoint dbgEP, conEP;
+			PreConnectionInit (dsi, out dbgEP, out conEP);
+			
+			var callback = HandleConnectionCallbackErrors (ListenCallback);
+			OnConnecting (VirtualMachineManager.BeginListen (dbgEP, conEP, callback));
+			ShowConnectingDialog (dsi);
+		}
+		
+		/// <summary>Starts the debugger connecting to a remote IP</summary>
+		protected void StartConnecting (RemoteDebuggerStartInfo dsi, int maxAttempts, int timeBetweenAttempts)
+		{
+			if (timeBetweenAttempts < 0 || timeBetweenAttempts > 10000)
+				throw new ArgumentException ("timeBetweenAttempts");
+			
+			IPEndPoint dbgEP, conEP;
+			PreConnectionInit (dsi, out dbgEP, out conEP);
+			
+			var callback = HandleConnectionCallbackErrors (ConnectCallback);
+			connectionAttempts = 0;
+			
+			retryConnection = () => {
+				connectionAttempts++;
+				if (maxAttempts == 1 || Exited) {
+					return false;
+				}
+				if (maxAttempts > 1)
+					maxAttempts--;
+				try {
+					if (timeBetweenAttempts > 0)
+						System.Threading.Thread.Sleep (timeBetweenAttempts);
+					
+					OnConnecting (VirtualMachineManager.BeginConnect (dbgEP, conEP, callback));
+				} catch (Exception ex2) {
+					retryConnection = null;
+					OnConnectionError (ex2);
+					return false;
+				}
+				return true;
+			};
+			
+			ShowConnectingDialog (dsi);
+			
+			OnConnecting (VirtualMachineManager.BeginConnect (dbgEP, conEP, callback));
+		}
+		
+		void PreConnectionInit (RemoteDebuggerStartInfo dsi, out IPEndPoint dbgEP, out IPEndPoint conEP)
+		{
+			if (appName != null)
+				throw new InvalidOperationException ("Cannot initialize connection more than once");
+			
+*/
 			appName = dsi.AppName;
 			RegisterUserAssemblies (dsi.UserAssemblyNames);
 			
@@ -63,10 +117,31 @@ namespace MonoDevelop.Debugger.Soft
 			
 			if (!String.IsNullOrEmpty (dsi.LogMessage))
 				LogWriter (false, dsi.LogMessage + "\n");
+/*
+		}
+		
+		protected override void OnConnectionError (Exception ex)
+		{
+			if (retryConnection != null) {
+				if (ShouldRetryConnection (ex, connectionAttempts) && retryConnection ())
+					return;
+				retryConnection = null;
+			}
+*/
 			
 			// OnConnecting (VirtualMachineManager.BeginListen (dbgEP, conEP, HandleCallbackErrors (ListenCallback)));
 			OnConnecting (VirtualMachineManager.BeginListen (dbgEP, conEP, ListenCallback));
 			ShowListenDialog (dsi);
+		}
+
+		protected virtual bool ShouldRetryConnection (Exception ex, int attemptNumber)
+		{
+			var sx = ex as SocketException;
+			if (sx != null) {
+				if (sx.ErrorCode == 10061) //connection refused
+					return true;
+			}
+			return false;
 		}
 		
 		void ListenCallback (IAsyncResult ar)
