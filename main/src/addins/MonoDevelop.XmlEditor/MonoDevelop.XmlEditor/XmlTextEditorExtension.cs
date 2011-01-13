@@ -72,7 +72,7 @@ namespace MonoDevelop.XmlEditor
 		public override void Initialize ()
 		{
 			base.Initialize ();
-			XmlEditorOptions.XmlSchemaAssociationChanged += HandleXmlSchemaAssociationChanged;
+			XmlEditorOptions.XmlFileAssociationChanged += HandleXmlFileAssociationChanged;
 			XmlSchemaManager.UserSchemaAdded += UserSchemaAdded;
 			XmlSchemaManager.UserSchemaRemoved += UserSchemaRemoved;
 			SetDefaultSchema (FileExtension);
@@ -88,7 +88,7 @@ namespace MonoDevelop.XmlEditor
 			}
 		}
 
-		void HandleXmlSchemaAssociationChanged (object sender, XmlSchemaAssociationChangedEventArgs e)
+		void HandleXmlFileAssociationChanged (object sender, XmlFileAssociationChangedEventArgs e)
 		{
 			if (e.Extension == FileExtension)
 				SetDefaultSchema (FileExtension);
@@ -99,7 +99,7 @@ namespace MonoDevelop.XmlEditor
 		{
 			if (!disposed) {
 				disposed = false;
-				XmlEditorOptions.XmlSchemaAssociationChanged -= HandleXmlSchemaAssociationChanged;
+				XmlEditorOptions.XmlFileAssociationChanged -= HandleXmlFileAssociationChanged;
 				XmlSchemaManager.UserSchemaAdded -= UserSchemaAdded;
 				XmlSchemaManager.UserSchemaRemoved -= UserSchemaRemoved;
 				base.Dispose ();
@@ -108,38 +108,33 @@ namespace MonoDevelop.XmlEditor
 		
 		#region Code completion
 		
-//		IEditableTextBuffer GetBuffer ()
-//		{
-//			IEditableTextBuffer buf = Document.GetContent<IEditableTextBuffer> ();
-//			System.Diagnostics.Debug.Assert (buf != null);
-//			return buf;
-//		}
-		
-		XmlElementPath GetCurrentPath ()
+		XmlElementPath GetElementPath ()
 		{
-			return ConvertPath (Tracker.Engine.Nodes.OfType<XElement> ().Reverse ());
+			return ConvertPath (GetCurrentPath ());
 		}
 		
-		static XmlElementPath ConvertPath (IEnumerable<XElement> path)
+		XmlElementPath ConvertPath (IList<XObject> path)
 		{
-			XmlElementPath elementPath = new XmlElementPath ();
-			var namespaces = new Dictionary<string, string> ();
-			string defaultNamespace = null;
-			foreach (XElement el in path) {
-				foreach (XAttribute att in el.Attributes) {
-					if (att.Name.HasPrefix) {
-						if (att.Name.Prefix == "xmlns")
-							namespaces [att.Name.Name] = att.Value;
-					} else {
-						if (att.Name.Name == "xmlns")
-							defaultNamespace = att.Value;
+			var elementPath = new XmlElementPath ();
+			
+			if (defaultSchemaCompletionData != null && !string.IsNullOrEmpty (defaultSchemaCompletionData.NamespaceUri))
+				elementPath.Namespaces.AddPrefix (defaultSchemaCompletionData.NamespaceUri, defaultNamespacePrefix ?? "");
+			
+			foreach (var obj in path) {
+				var el = obj as XElement;
+				if (el == null)
+					continue;
+				foreach (var att in el.Attributes) {
+					if (!string.IsNullOrEmpty (att.Value)) {
+						if (att.Name.HasPrefix) {
+							if (att.Name.Prefix == "xmlns")
+								elementPath.Namespaces.AddPrefix (att.Value, att.Name.Name);
+						} else if (att.Name.Name == "xmlns") {
+								elementPath.Namespaces.AddPrefix (att.Value, "");
+						}
 					}
 				}
-				string ns = null;
-				if (el.Name.HasPrefix)
-					namespaces.TryGetValue (el.Name.Prefix, out ns);
-				else
-					ns = defaultNamespace;
+				string ns = elementPath.Namespaces.GetNamespace (el.Name.HasPrefix? el.Name.Prefix : "");
 				QualifiedName qn = new QualifiedName (el.Name.Name, ns, el.Name.Prefix ?? String.Empty);
 				elementPath.Elements.Add (qn);
 			}
@@ -148,13 +143,13 @@ namespace MonoDevelop.XmlEditor
 		
 		protected override void GetElementCompletions (CompletionDataList list)
 		{	
-			XmlElementPath path = GetCurrentPath ();
+			var path = GetElementPath ();
 			if (path.Elements.Count > 0) {
 				IXmlCompletionProvider schema = FindSchema (path);
 				if (schema == null)
 					schema = inferredCompletionData;
 				if (schema != null) {
-					CompletionData[] completionData = schema.GetChildElementCompletionData (path);
+					var completionData = schema.GetChildElementCompletionData (path);
 					if (completionData != null)
 						list.AddRange (completionData);
 				}
@@ -168,30 +163,24 @@ namespace MonoDevelop.XmlEditor
 		protected override CompletionDataList GetAttributeCompletions (IAttributedXObject attributedOb,
 			Dictionary<string, string> existingAtts)
 		{
-			XmlElementPath path = GetCurrentPath ();
+			var path = GetElementPath ();
 			if (path.Elements.Count > 0) {
 				IXmlCompletionProvider schema = FindSchema (path);
 				if (schema == null)
 					schema = inferredCompletionData;
-				if (schema != null) {
-					CompletionData[] completionData = schema.GetAttributeCompletionData (path);
-					if (completionData != null)
-						return new CompletionDataList (completionData);
-				}
+				if (schema != null)
+					return schema.GetAttributeCompletionData (path);
 			}
 			return null;
 		}
 		
 		protected override CompletionDataList GetAttributeValueCompletions (IAttributedXObject attributedOb, XAttribute att)
 		{
-			XmlElementPath path = GetCurrentPath ();
+			var path = GetElementPath ();
 			if (path.Elements.Count > 0) {
-				XmlSchemaCompletionData schema = FindSchema (path);
-				if (schema != null) {
-					CompletionData[] completionData = schema.GetAttributeValueCompletionData (path, att.Name.FullName);
-					if (completionData != null)
-						return new CompletionDataList (completionData);
-				}
+				var schema = FindSchema (path);
+				if (schema != null)
+					return schema.GetAttributeValueCompletionData (path, att.Name.FullName);
 			}
 			return null;
 		}
@@ -253,7 +242,7 @@ namespace MonoDevelop.XmlEditor
 		public XmlSchemaObject GetSchemaObjectSelected (XmlSchemaCompletionData currentSchemaCompletionData)
 		{
 			// Find element under cursor.
-			XmlElementPath path = GetCurrentPath ();
+			XmlElementPath path = GetElementPath ();
 			
 			//attribute name under cursor, if valid
 			string attributeName = null;
@@ -273,7 +262,7 @@ namespace MonoDevelop.XmlEditor
 				XmlSchemaElement element = schemaCompletionData.FindElement(path);
 				schemaObject = element;
 				if (element != null) {
-					if (attributeName.Length > 0) {
+					if (!string.IsNullOrEmpty (attributeName)) {
 						XmlSchemaAttribute attribute = schemaCompletionData.FindAttribute(element, attributeName);
 						if (attribute != null) {
 							if (currentSchemaCompletionData != null) {
@@ -468,7 +457,7 @@ namespace MonoDevelop.XmlEditor
 					return true;
 			}
 			
-			return XmlFileExtensions.IsXmlFileExtension (System.IO.Path.GetExtension (fileName));
+			return XmlFileAssociationManager.IsXmlFileExtension (System.IO.Path.GetExtension (fileName));
 		}
 		
 		public static bool IsMimeTypeHandled (string mimeType)

@@ -36,6 +36,7 @@ using MonoDevelop.Projects;
 using MonoDevelop.Core.Assemblies;
 using MonoDevelop.Ide;
 using MonoDevelop.Core.ProgressMonitoring;
+using MonoDevelop.MacDev;
 
 namespace MonoDevelop.IPhone
 {
@@ -182,12 +183,14 @@ namespace MonoDevelop.IPhone
 				}
 			}
 			
-			var args = new System.Text.StringBuilder ();
-			args.AppendFormat ("-xcode=\"{0}\" -v", xcodeDir);
+			var args = new ProcessArgumentBuilder ();
+			args.AddQuotedFormat ("-xcode={0}", xcodeDir);
+			args.Add ("-v");
+			
 			foreach (ProjectFile pf in proj.Files) {
 				if (pf.BuildAction == BuildAction.Content) {
 					var rel = pf.ProjectVirtualPath;
-					args.AppendFormat (" -res=\"{0}\",\"{1}\"", pf.FilePath, rel);
+					args.AddQuotedFormat ("-res={0},{1}", pf.FilePath, rel);
 					
 					//hack around mtouch 1.0 bug. create resource directories
 					string subdir = rel.ParentDirectory;
@@ -202,21 +205,21 @@ namespace MonoDevelop.IPhone
 						return;
 					}
 				} else if (pf.BuildAction == BuildAction.Page) {
-					args.AppendFormat (" -res=\"{0}\"", pf.FilePath);
+					args.AddQuotedFormat ("-res={0}", pf.FilePath);
 				}
 			}
 			
-			args.AppendFormat (" -res=\"{0}\",\"Info.plist\"", conf.AppDirectory.Combine ("Info.plist"));
+			args.AddQuotedFormat ("-res={0},Info.plist", conf.AppDirectory.Combine ("Info.plist"));
 			
 			foreach (string asm in proj.GetReferencedAssemblies (slnConf).Distinct ())
-				args.AppendFormat (" -r=\"{0}\"", asm);
+				args.AddQuotedFormat ("-r={0}", asm);
 			
 			var sdkVersion = conf.MtouchSdkVersion.ResolveIfDefault ();
 			if (!IPhoneFramework.SdkIsInstalled (sdkVersion))
 				sdkVersion = IPhoneFramework.GetClosestInstalledSdk (sdkVersion);
 			
 			IPhoneBuildExtension.AppendExtrasMtouchArgs (args, sdkVersion, proj, conf);
-			args.AppendFormat (" \"{0}\"", conf.CompiledOutputName);
+			args.AddQuoted (conf.CompiledOutputName);
 			
 			string argStr = args.ToString ();
 			
@@ -276,7 +279,12 @@ namespace MonoDevelop.IPhone
 					return;
 				
 				var zipFile = dlg.SelectedFile;
-				var cmd = string.Format ("-r '{0}' '{1}'", zipFile, conf.AppDirectory);
+				var builder = new ProcessArgumentBuilder ();
+				builder.Add ("-r", "-y");
+				builder.AddQuoted (zipFile);
+				builder.AddQuoted (conf.AppDirectory.FileName);
+				var cmd = builder.ToString ();
+				var workingDirectory = conf.AppDirectory.ParentDirectory;
 				
 				new System.Threading.Thread (delegate () {
 					IProgressMonitor monitor = null;
@@ -293,7 +301,7 @@ namespace MonoDevelop.IPhone
 						
 						//don't use StartConsoleProcess, it disposes the pad
 						procOp = Runtime.ProcessService.StartProcess (
-							"zip", cmd, conf.AppDirectory.ParentDirectory, console.Out, console.Error, null);
+							"zip", cmd, workingDirectory, console.Out, console.Error, null);
 						opMon = new AggregatedOperationMonitor (monitor, procOp);
 						
 						procOp.WaitForCompleted ();

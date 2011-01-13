@@ -118,7 +118,7 @@ namespace MonoDevelop.Core
 		{
 			string platform;
 			if (PropertyService.IsWindows)
-				platform = "Windows";
+				platform = "Win32";
 			else if (PropertyService.IsMac)
 				platform = "Mac";
 			else
@@ -133,7 +133,7 @@ namespace MonoDevelop.Core
 			if (InstrumentationService.Enabled) {
 				LoggingService.LogInfo ("Instrumentation Service started");
 				try {
-					int port = InstrumentationService.PublishService (0);
+					int port = InstrumentationService.PublishService ();
 					LoggingService.LogInfo ("Instrumentation available at port " + port);
 				} catch (Exception ex) {
 					LoggingService.LogError ("Instrumentation service could not be published", ex);
