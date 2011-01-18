@@ -136,4 +136,5 @@
   <Property key="MonoDevelop.Core.LastRunVersion" value="5" />
   <Property key="MonoDevelop.Core.LastRunRevision" value="0" />
   <Property key="SharpDevelop.LoadPrevProjectOnStartup" value="False" />
+  <Property key="CompleteWithSpaceOrPunctuation" value="False" />
 </MonoDevelopProperties>

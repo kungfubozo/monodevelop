@@ -28,6 +28,7 @@ using System;
 using System.Collections.Generic;
 using MonoDevelop.Projects;
 using MonoDevelop.Core;
+using MonoDevelop.Core.Execution;
 using System.Diagnostics;
 using MonoDevelop.MacDev.Plist;
 using System.Linq;
@@ -67,9 +68,11 @@ namespace MonoDevelop.MacDev
 				monitor.BeginTask (GettextCatalog.GetString ("Compiling interface definitions"), 0);	
 				foreach (var file in ibfiles) {
 					file.EnsureOutputDirectory ();
-					var psi = new ProcessStartInfo ("ibtool",
-						String.Format ("\"{0}\" --compile \"{1}\"", file.Input, file.Output)
-					);
+					var args = new ProcessArgumentBuilder ();
+					args.AddQuoted (file.Input);
+					args.Add ("--compile");
+					args.AddQuoted (file.Output);
+					var psi = new ProcessStartInfo ("ibtool", args.ToString ());
 					monitor.Log.WriteLine (psi.FileName + " " + psi.Arguments);
 					psi.WorkingDirectory = outputRoot;
 					string errorOutput;
