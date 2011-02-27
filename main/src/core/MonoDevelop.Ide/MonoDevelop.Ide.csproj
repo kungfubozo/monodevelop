@@ -1429,6 +1429,8 @@
     <Compile Include="MonoDevelop.Components\SectionList.cs" />
     <Compile Include="MonoDevelop.Ide.OnlineTemplates\OnlineTemplateService.cs" />
     <Compile Include="MonoDevelop.Ide.OnlineTemplates\ProjectTemplateIndex.cs" />
+    <Compile Include="MonoDevelop.Ide.Projects\TemplatePickerWidget.cs" />
+    <Compile Include="MonoDevelop.Ide.Projects\NewProjectOptionsWidget.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="ChangeLog" />
