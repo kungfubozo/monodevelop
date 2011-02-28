@@ -477,7 +477,7 @@ namespace Mono.Debugging.Soft
 		protected override void OnAttachToProcess (long processId)
 		{
 			long port = 56000 + (processId % 1000);
-			HandleConnection (VirtualMachineManager.Connect (new IPEndPoint (IPAddress.Loopback, (int)port)));
+			StartConnecting (new SoftDebuggerStartInfo (new SoftDebuggerConnectArgs (null, IPAddress.Loopback, (int)port)), 3, 1000);
 		}
 
 		protected override void OnContinue ()
@@ -493,7 +493,7 @@ namespace Mono.Debugging.Soft
 		protected override void OnDetach ()
 		{
 			EndLaunch ();
-			vm.Disconnect ();
+			// vm.Disconnect ();
 			vm.Dispose ();
 		}
 

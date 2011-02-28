@@ -53,7 +53,7 @@ namespace MonoDevelop.Startup
 
 			// On Windows log all output to a log file
 
-            string configPath = PropertyService.ConfigPath;
+			string configPath = PropertyService.Locations.Config;
 			if (!Directory.Exists (configPath))
 				Directory.CreateDirectory (configPath);
 
