@@ -822,7 +822,11 @@ namespace Mono.Debugging.Soft
 				if (es.Events.Length != 1)
 					throw new InvalidOperationException ("EventSet has unexpected combination of events");
 				HandleEvent (es[0]);
-				vm.Resume ();
+				try {
+					vm.Resume ();
+				} catch (InvalidOperationException) {
+					// The VM is not suspended!
+				}
 			}
 		}
 		
