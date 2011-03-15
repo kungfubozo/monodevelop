@@ -56,6 +56,7 @@ namespace MonoDevelop.Ide.ProgressMonitoring
 		ProgressTracker progressTracker;
 		LogTextWriter logger;
 		bool canceled;
+		bool runningPendingEvents;
 		
 		event OperationHandler completedEvent;
 		
@@ -313,5 +314,18 @@ namespace MonoDevelop.Ide.ProgressMonitoring
 		protected virtual void OnProgressChanged ()
 		{
 		}
+		
+		protected void RunPendingEvents ()
+		{
+			if (!runningPendingEvents) {
+				try {
+					runningPendingEvents = true;
+					DispatchService.RunPendingEvents ();
+				} finally {
+					runningPendingEvents = false;
+				}
+			}
+		}
+		
 	}
 }
