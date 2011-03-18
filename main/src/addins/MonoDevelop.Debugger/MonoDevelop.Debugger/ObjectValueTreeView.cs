@@ -508,9 +508,6 @@ namespace MonoDevelop.Debugger
 			
 			SetValues (parent, it, val.Name, val);
 			RegisterValue (val, it);
-			
-			if (val.HasChildren && !ShowExpanders)
-				ShowExpanders = true;
 		}
 		
 		void RemoveChildren (TreeIter it)
@@ -709,6 +706,8 @@ namespace MonoDevelop.Debugger
 			if (val.HasChildren) {
 				// Add dummy node
 				it = store.AppendValues (it, "", "", "", null, true);
+				if (!ShowExpanders)
+					ShowExpanders = true;
 			}
 		}
 		
