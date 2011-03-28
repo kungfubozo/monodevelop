@@ -7,6 +7,8 @@ DIR=$(cd "$(dirname "$0")"; pwd)
 FINAL_INSTALL_DIR="$DIR/../Frameworks/Mono.framework"
 MONO_FRAMEWORK_PATH="$FINAL_INSTALL_DIR/Versions/Current"
 
+MONODEVELOP_MAJOR_VERSION=2.6
+
 # Seeing some corrupted/missing symlinks in 3.2beta installs...
 ln -sf 2.6 "${MONO_FRAMEWORK_PATH}"
 
@@ -88,7 +90,7 @@ if [ -d "$DIR/lib/moonlight" ]; then
         export MOONLIGHT_SDK_PATH="$DIR/lib/moonlight"
 fi
 
-_MD_LOG_FILE="${MD_LOG_FILE:-$HOME/Library/Logs/MonoDevelop/MonoDevelop.log}"
+_MD_LOG_FILE="${MD_LOG_FILE:-$HOME/Library/Logs/MonoDevelop-$MONODEVELOP_MAJOR_VERSION/MonoDevelop.log}"
 
 # NOTE: remove this for stable releases
 if [ -z "$MD_NO_DEBUG" ]; then
