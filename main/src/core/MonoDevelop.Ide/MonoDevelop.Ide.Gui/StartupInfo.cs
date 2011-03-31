@@ -79,7 +79,7 @@ namespace MonoDevelop.Ide.Gui
 							int.TryParse (fileMatch.Groups["column"].Value, out column);
 						line = Math.Max (1, line);
 						column = Math.Max (1, column);
-						var file = new FileOpenInformation (filename, line, column, true);
+						var file = new FileOpenInformation (filename, line, column, OpenDocumentOptions.Default | OpenDocumentOptions.BringToFront);
 						requestedFileList.Add (file);
 					}
 				} else if (a[0] == '-' || a[0] == '/') {

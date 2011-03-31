@@ -355,7 +355,7 @@ namespace MonoDevelop.Ide
 			if (fileMatch.Groups["column"].Success)
 				int.TryParse(fileMatch.Groups["column"].Value, out column);
 			
-			return new FileOpenInformation (file, line, column, true);
+			return new FileOpenInformation (file, line, column, OpenDocumentOptions.Default | OpenDocumentOptions.BringToFront);
 		}
 		
 		bool CheckQtCurve ()
