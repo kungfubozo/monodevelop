@@ -610,6 +610,7 @@
 		<Word>WheelFrictionCurve</Word>
 		<Word>WheelHit</Word>
 		<Word>iPhoneAccelerationEvent</Word>
+		<Word>ScreenOrientation</Word>
 	</Keywords>
 
 </SyntaxMode>
