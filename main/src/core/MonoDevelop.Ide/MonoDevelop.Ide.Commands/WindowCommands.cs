@@ -222,7 +222,7 @@ namespace MonoDevelop.Ide.Commands
 		protected static void Switch (bool next)
 		{
 			//FIXME: does this option need to exist? YES, broken on windows!
-			if (!PropertyService.Get ("MonoDevelop.Core.Gui.EnableDocumentSwitchDialog", !PropertyService.IsWindows)) {
+			if (PropertyService.IsWindows || !PropertyService.Get ("MonoDevelop.Core.Gui.EnableDocumentSwitchDialog", !PropertyService.IsWindows)) {
 				IdeApp.CommandService.DispatchCommand (next? WindowCommands.NextWindow : WindowCommands.PrevWindow);
 				return;
 			}
