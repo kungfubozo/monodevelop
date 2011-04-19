@@ -8,7 +8,7 @@ use File::Path;
 
 my $GTK_VERSION = "2.12";
 my $GTK_INSTALLER = "gtk-sharp-2.12.9-2.win32.msi";
-my $MONO_LIBRARIES_VERSION = "2.2";
+my $MONO_LIBRARIES_VERSION = "2.6";
 my $MONO_LIBRARIES_INSTALLER = "mono-libraries-r135450.msi";
 
 my $root = "";
