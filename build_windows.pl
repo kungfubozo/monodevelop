@@ -102,7 +102,7 @@ system("xcopy /s \"$gtkPath/lib/Mono.Cairo\" \"$mdRoot/bin\"");
 copy "$root/monodevelop/dependencies/gdk-pixbuf.loaders", "$mdRoot/etc/gtk-2.0";
 
 # Mono Libraries dependency files
-system("xcopy /s \"$monolibPath/lib/mono/2.0\" \"$mdRoot/bin\"");
+system("xcopy /s \"$monolibPath\" \"$mdRoot/bin\"");
 
 chdir "$root/boo";
 system("$nant rebuild") && die ("Failed to build Boo");
