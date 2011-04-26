@@ -170,6 +170,7 @@ mono-bundle: MonoDevelop.app
 	cp monodevelop $(MACOS)/monodevelop
 	cp mdtool $(MACOS)/mdtool
 	cp replacePath.sh $(MACOS)/replacePath.sh
+	cp replacePathQuoted.sh $(MACOS)/replacePathQuoted.sh
 	chmod +x $(MACOS)/monodevelop $(MACOS)/mdtool
 
 # Relocate .exe.config, .dll.config, pixbuf loaders, and .pc files
