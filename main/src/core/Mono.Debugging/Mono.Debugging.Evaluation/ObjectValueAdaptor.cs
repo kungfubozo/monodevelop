@@ -1038,7 +1038,9 @@ namespace Mono.Debugging.Evaluation
 			get { return ProxyType != null; }
 		}
 
-		public static readonly TypeDisplayData Default = new TypeDisplayData ();
+		public static TypeDisplayData Default {
+			get { return new TypeDisplayData (); }
+		}
 
 		public Dictionary<string, DebuggerBrowsableState> MemberData { get; set; }
 
