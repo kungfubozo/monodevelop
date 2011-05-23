@@ -567,9 +567,9 @@ namespace MonoDevelop.Ide.FindInFiles
 			DispatchService.BackgroundDispatch (delegate {
 				DateTime timer = DateTime.Now;
 				string errorMessage = null;
-				List<SearchResult> results = new List<SearchResult> ();
 				
 				try {
+					List<SearchResult> results = new List<SearchResult> ();
 					foreach (SearchResult result in find.FindAll (scope, searchMonitor, pattern, replacePattern, options)) {
 						if (searchMonitor.IsCancelRequested)
 							return;
@@ -581,14 +581,13 @@ namespace MonoDevelop.Ide.FindInFiles
 							});
 						}
 					}
-				} catch (Exception ex) {
-					errorMessage = ex.Message;
-					LoggingService.LogError ("Error while search", ex);
-				} finally {
 					Application.Invoke (delegate {
 						results.ForEach (r => searchMonitor.ReportResult (r));
 						results.Clear ();
 					});
+				} catch (Exception ex) {
+					errorMessage = ex.Message;
+					LoggingService.LogError ("Error while search", ex);
 				}
 				
 				string message;
