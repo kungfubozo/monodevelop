@@ -48,7 +48,7 @@ namespace MonoDevelop.Startup
 
 		static void EnableFileLogging ( )
 		{
-			if (Path.DirectorySeparatorChar != '\\')
+			if (PropertyService.IsMac)
 				return;
 
 			// On Windows log all output to a log file
