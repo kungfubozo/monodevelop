@@ -58,7 +58,6 @@ namespace MonoDevelop.Ide.FindInFiles
 			outputPad.BasePath = path;
 		}
 		
-		[AsyncDispatch]
 		public void ReportResult (SearchResult result)
 		{
 			try {
@@ -69,7 +68,6 @@ namespace MonoDevelop.Ide.FindInFiles
 			}
 		}
 		
-		[AsyncDispatch]
 		public void ReportStatus (string resultMessage)
 		{
 			outputPad.ReportStatus (resultMessage);
