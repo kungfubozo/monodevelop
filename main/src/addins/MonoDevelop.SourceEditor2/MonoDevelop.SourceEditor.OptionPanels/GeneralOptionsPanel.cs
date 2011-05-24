@@ -43,7 +43,8 @@ namespace MonoDevelop.SourceEditor.OptionPanels
 			this.enableParameterInsightCheckbutton.Sensitive = 
 				this.autoCodeCompletionCheckbutton.Sensitive = 
 					this.spaceOrPunctiuationCheckbutton.Sensitive = 
-						this.codeCompletioncheckbutton.Active;
+						this.hideObsoleteItemsCheckbutton.Sensitive = 
+							this.codeCompletioncheckbutton.Active;
 		}
 		
 		void CheckFontSelection (object sender, EventArgs args)
@@ -61,6 +62,7 @@ namespace MonoDevelop.SourceEditor.OptionPanels
 			this.enableParameterInsightCheckbutton.Active = DefaultSourceEditorOptions.Instance.EnableAutoCodeCompletion;
 			this.spaceOrPunctiuationCheckbutton.Active = DefaultSourceEditorOptions.Instance.CompleteWithSpaceOrPunctuation;
 			this.enableParameterInsightCheckbutton.Active = DefaultSourceEditorOptions.Instance.EnableParameterInsight;
+			this.hideObsoleteItemsCheckbutton.Active = DefaultSourceEditorOptions.Instance.HideObsoleteItems;
 			this.autoCodeCompletionCheckbutton.Active = DefaultSourceEditorOptions.Instance.EnableAutoCodeCompletion;
 			
 			this.radiobutton1.Active              = DefaultSourceEditorOptions.Instance.EditorFontType == EditorFontType.DefaultMonospace;
@@ -83,6 +85,7 @@ namespace MonoDevelop.SourceEditor.OptionPanels
 			DefaultSourceEditorOptions.Instance.EnableAutoCodeCompletion = this.autoCodeCompletionCheckbutton.Active;
 			DefaultSourceEditorOptions.Instance.CompleteWithSpaceOrPunctuation = this.spaceOrPunctiuationCheckbutton.Active;
 			DefaultSourceEditorOptions.Instance.EnableParameterInsight = this.enableParameterInsightCheckbutton.Active;
+			DefaultSourceEditorOptions.Instance.HideObsoleteItems = this.hideObsoleteItemsCheckbutton.Active;
 		}
 
 		public void Initialize (OptionsDialog dialog, object dataObject)
