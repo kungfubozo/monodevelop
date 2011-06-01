@@ -819,10 +819,10 @@
 			_label = "I_nsert Template..."/>
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.LineEnd"
 			_label = "Go to end of line" 
-			macShortcut = "Meta|Up" />
+			macShortcut = "Meta|Down" />
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.LineStart"
 			_label = "Go to beginning of line"
-			macShortcut = "Meta|Down" />
+			macShortcut = "Meta|Up" />
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.DeleteLeftChar"
 			_label = "Delete left character" />
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.DeleteRightChar"
