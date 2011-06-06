@@ -818,11 +818,9 @@
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.ShowCodeTemplateWindow"
 			_label = "I_nsert Template..."/>
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.LineEnd"
-			_label = "Go to end of line" 
-			macShortcut = "Meta|Down" />
+			_label = "Go to end of line"/>
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.LineStart"
-			_label = "Go to beginning of line"
-			macShortcut = "Meta|Up" />
+			_label = "Go to beginning of line"/>
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.DeleteLeftChar"
 			_label = "Delete left character" />
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.DeleteRightChar"
@@ -836,9 +834,11 @@
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.LineDown"
 			_label = "Go to next line" />
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.DocumentStart"
-			_label = "Go to beginning of document" />
+			_label = "Go to beginning of document" 
+			macShortcut = "Meta|Up" />
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.DocumentEnd"
-			_label = "Go to end of document" />
+			_label = "Go to end of document"
+			macShortcut = "Meta|Down" />
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.PageUp"
 			_label = "Go up one page" />
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.PageDown"
