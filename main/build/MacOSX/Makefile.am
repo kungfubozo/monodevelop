@@ -124,8 +124,7 @@ MonoDevelop.app:
 	mkdir -p $(MACOS)/MonoDoc.app/
 	test ! -d $(ARTIFACTS)/MoonSDK ||  cp -pR $(ARTIFACTS)/MoonSDK/* $(MACOS)/lib/moonlight/
 	test ! -d $(ARTIFACTS)/MonoDoc.app ||  cp -pR $(ARTIFACTS)/MonoDoc.app/* $(MACOS)/MonoDoc.app/
-
-	cp -r MDMonitor.app $(MACOS)
+	test ! -d MDMonitor.app ||  cp -pR MDMonitor.app $(MACOS)
 
 # update revision in updateinfo
 	@echo ""
