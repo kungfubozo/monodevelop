@@ -19,7 +19,7 @@ fi
 
 export DYLD_FALLBACK_LIBRARY_PATH=$MONO_FRAMEWORK_PATH/lib:/lib:/usr/lib
 export MONO_GAC_PREFIX=$MONO_FRAMEWORK_PATH
-export MONO_PATH=$MONO_FRAMEWORK_PATH/lib/mono:$MONO_FRAMEWORK_PATH/lib/gtk-sharp-2.0:$MONO_FRAMEWORK_PATH/lib/mono/2.0:$MONO_FRAMEWORK_PATH/lib/mono/1.0
+export MONO_PATH=$MONO_FRAMEWORK_PATH/lib/mono:$MONO_FRAMEWORK_PATH/lib/gtk-sharp-2.0
 export MONO_CONFIG=$MONO_FRAMEWORK_PATH/etc/mono/config
 export MONO_CFG_DIR=$MONO_FRAMEWORK_PATH/etc
 export XDG_DATA_HOME=$MONO_FRAMEWORK_PATH/share
@@ -69,7 +69,7 @@ export DYLD_FALLBACK_LIBRARY_PATH="$DIR/lib:$DYLD_FALLBACK_LIBRARY_PATH"
 export PKG_CONFIG_PATH="$DIR/lib/pkgconfig:$DIR/share/pkgconfig:$PKG_CONFIG_PATH"
 
 #mono version check
-if ! "$DIR/mono-version-check" MonoDevelop 2 10 1 ; then exit 1; fi
+if ! "$DIR/mono-version-check" MonoDevelop 2 10 ; then exit 1; fi
 
 # The Mono "External" folder allows users (such as MonoDroid) to install
 # things without worrying that they'll be removed next time mono is upgraded
@@ -102,8 +102,8 @@ fi
 echo "Launching ${APPNAME}..."
 if [ -z "$MD_DONT_REDIRECT_OUTPUT" ]; then
 	mkdir -p "`dirname \"$_MD_LOG_FILE\"`"
-	exec "$DIR/bin/monodevelop" $_MONO_OPTIONS "$EXE_PATH" $* 2>&1 1> "$_MD_LOG_FILE"
+	exec "${MONO_FRAMEWORK_PATH}/bin/mono" $_MONO_OPTIONS "$EXE_PATH" $* 2>&1 1> "$_MD_LOG_FILE"
 else
-	exec "$DIR/bin/monodevelop" $_MONO_OPTIONS "$EXE_PATH" $*
+	exec "${MONO_FRAMEWORK_PATH}/bin/mono" $_MONO_OPTIONS "$EXE_PATH" $*
 fi
 
