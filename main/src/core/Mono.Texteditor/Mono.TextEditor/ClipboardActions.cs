@@ -28,6 +28,7 @@
 //
 
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
@@ -52,7 +53,7 @@ namespace Mono.TextEditor
 		
 		public static void Copy (TextEditorData data)
 		{
-			if (data.IsSomethingSelected) { // Case 407636
+			if (data.IsSomethingSelected || Path.DirectorySeparatorChar == '\\') { // Case 407636
 				CopyOperation operation = new CopyOperation ();
 			
 				Clipboard clipboard = Clipboard.Get (CopyOperation.CLIPBOARD_ATOM);
