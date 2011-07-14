@@ -8,7 +8,7 @@ use File::Path;
 
 my $root = File::Spec->rel2abs( dirname($0) );
 
-my $gtkFileName = "gtk-2.20-bundle-osx";
+my $gtkFileName = "gtk-2.24-bundle-osx";
 
 chdir $root or die ("Failed to chdir to root dir");
 
@@ -20,7 +20,7 @@ if (!$ENV{UNITY_THISISABUILDMACHINE})
 }
 rmtree "gtk";
 system("unzip dependencies/$gtkFileName.zip");
-system("mv gtk-2.20-bundle-osx gtk");
+system("mv gtk-2.24-bundle-osx gtk");
 
 print "Changing to $root/monodevelop/main/build/MacOSX\n";
 chdir "$root/monodevelop/main/build/MacOSX" || die ("Failed entering OSX build dir");
