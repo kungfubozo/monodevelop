@@ -51,8 +51,7 @@ namespace MonoDevelop.Core.Assemblies
 		object initLock = new object ();
 		object initEventLock = new object ();
 		bool initialized;
-		Dictionary<TargetFrameworkMoniker,TargetFrameworkBackend> frameworkBackends
-			= new Dictionary<TargetFrameworkMoniker, TargetFrameworkBackend> ();
+		Dictionary<TargetFrameworkMoniker,TargetFrameworkBackend> frameworkBackends;
 		
 		RuntimeAssemblyContext assemblyContext;
 		ComposedAssemblyContext composedAssemblyContext;
@@ -281,6 +280,8 @@ namespace MonoDevelop.Core.Assemblies
 		protected TargetFrameworkBackend GetBackend (TargetFramework fx)
 		{
 			lock (frameworkBackends) {
+				if (frameworkBackends == null)
+					frameworkBackends = new Dictionary<TargetFrameworkMoniker, TargetFrameworkBackend> ();
 				TargetFrameworkBackend backend;
 				if (frameworkBackends.TryGetValue (fx.Id, out backend))
 					return backend;
