@@ -72,8 +72,7 @@ namespace MonoDevelop.Core.Assemblies
 			
 			// Don't initialize until Current and Default Runtimes are set
 			foreach (TargetRuntime runtime in runtimes) {
-				runtime.Initialized += HandleRuntimeInitialized;
-				runtime.StartInitialization ();
+				InitializeRuntime (runtime);
 			}
 			
 			if (CurrentRuntime == null)
@@ -83,6 +82,12 @@ namespace MonoDevelop.Core.Assemblies
 			userAssemblyContext.Changed += delegate {
 				SaveUserAssemblyContext ();
 			};
+		}
+		
+		void InitializeRuntime (TargetRuntime runtime)
+		{
+			runtime.Initialized += HandleRuntimeInitialized;
+			runtime.StartInitialization ();
 		}
 		
 		void HandleRuntimeInitialized (object sender, EventArgs e)
@@ -97,6 +102,18 @@ namespace MonoDevelop.Core.Assemblies
 				}
 				BuildFrameworkRelations (newFxList);
 				frameworks = newFxList;
+			}
+		}
+		
+		//we initialize runtimes in threads, but consumers of this service aren't aware that runtimes
+		//can be in an uninialized state, so we consider the initialization as purely an opportunistic
+		//attempt at startup parallization, and block as soon as anything actually tries to access the
+		//runtime objects
+		void CheckRuntimesInitialized ()
+		{
+			foreach (var r in runtimes) {
+				if (!r.IsInitialized)
+					r.Initialize ();
 			}
 		}
 		
@@ -122,8 +139,7 @@ namespace MonoDevelop.Core.Assemblies
 		
 		public void RegisterRuntime (TargetRuntime runtime)
 		{
-			runtime.Initialized += HandleRuntimeInitialized;
-			runtime.StartInitialization ();
+			InitializeRuntime (runtime);
 			runtimes.Add (runtime);
 			if (RuntimesChanged != null)
 				RuntimesChanged (this, EventArgs.Empty);
@@ -147,6 +163,7 @@ namespace MonoDevelop.Core.Assemblies
 		
 		public IEnumerable<TargetFramework> GetTargetFrameworks ()
 		{
+			CheckRuntimesInitialized ();
 			return frameworks.Values;
 		}
 		
@@ -177,6 +194,7 @@ namespace MonoDevelop.Core.Assemblies
 		
 		public TargetFramework GetTargetFramework (TargetFrameworkMoniker id)
 		{
+			CheckRuntimesInitialized ();
 			return GetTargetFramework (id, frameworks);
 		}
 		
