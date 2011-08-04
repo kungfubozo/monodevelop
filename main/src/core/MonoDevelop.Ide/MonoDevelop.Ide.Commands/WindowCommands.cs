@@ -111,7 +111,7 @@ namespace MonoDevelop.Ide.Commands
 
 				//Add AccelKey
 				if (i < 10) {
-					commandInfo.AccelKey = ((PropertyService.IsMac) ? "Meta" : "Alt") + "|" + ((i + 1) % 10).ToString ();
+					commandInfo.AccelKey = ((Platform.IsMac) ? "Meta" : "Alt") + "|" + ((i + 1) % 10).ToString ();
 				}
 
 
@@ -222,7 +222,7 @@ namespace MonoDevelop.Ide.Commands
 		protected static void Switch (bool next)
 		{
 			//FIXME: does this option need to exist? YES, broken on windows!
-			if (PropertyService.IsWindows || !PropertyService.Get ("MonoDevelop.Core.Gui.EnableDocumentSwitchDialog", !PropertyService.IsWindows)) {
+			if (Platform.IsWindows || !PropertyService.Get ("MonoDevelop.Core.Gui.EnableDocumentSwitchDialog", !Platform.IsWindows)) {
 				IdeApp.CommandService.DispatchCommand (next? WindowCommands.NextWindow : WindowCommands.PrevWindow);
 				return;
 			}

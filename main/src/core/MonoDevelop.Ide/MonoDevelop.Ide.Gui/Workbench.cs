@@ -193,7 +193,7 @@ namespace MonoDevelop.Ide.Gui
 		public void Present ()
 		{
 			//FIXME: Present is broken on Mac GTK+. It maximises the window.
-			if (!PropertyService.IsMac)
+			if (!Platform.IsMac)
 				RootWindow.Present ();
 		}
 				

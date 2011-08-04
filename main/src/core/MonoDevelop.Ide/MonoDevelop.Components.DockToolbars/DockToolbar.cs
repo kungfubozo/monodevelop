@@ -274,7 +274,7 @@ namespace MonoDevelop.Components.DockToolbars
 			// but only if horizontal, else the gradient usually looks really ugly
 			if (this.Orientation == Orientation.Horizontal){
 				//the WIMP theme engine's rendering is a bit off, need to force it to render wider
-				int widen = MonoDevelop.Core.PropertyService.IsWindows? 1 : 0;
+				int widen = MonoDevelop.Core.Platform.IsWindows? 1 : 0;
 				
 				var shadowType = (ShadowType)StyleGetProperty ("shadow-type");
 				Style.PaintBox (Style, evnt.Window, State, shadowType, evnt.Area, this, "toolbar", 
@@ -373,7 +373,7 @@ namespace MonoDevelop.Components.DockToolbars
 			w.Shown += OnItemChange;
 			w.Hidden += OnItemChange;
 			w.SizeAllocated += OnItemSizeChange;
-			if (Core.PropertyService.IsMac) {
+			if (Core.Platform.IsMac) {
 				var tb = w as MonoDevelop.Components.Commands.CommandToolButton;
 				if (null != tb) tb.Clicked += HandleChildClicked;
 			}

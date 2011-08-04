@@ -347,6 +347,8 @@ namespace MonoDevelop.Debugger
 			set { pinCol.Visible = value; }
 		}
 		
+		public bool RootPinAlwaysVisible { get; set; }
+		
 		public bool AllowExpanding {
 			get { return this.allowExpanding; }
 			set { this.allowExpanding = value; }
@@ -702,6 +704,8 @@ namespace MonoDevelop.Debugger
 				else
 					store.SetValue (it, LiveUpdateIconCol, noLiveIcon);
 			}
+			if (RootPinAlwaysVisible && (!hasParent && PinnedWatch ==null && AllowPinning))
+				store.SetValue (it, PinIconCol, "md-pin-up");
 			
 			if (val.HasChildren) {
 				// Add dummy node
@@ -901,12 +905,12 @@ namespace MonoDevelop.Debugger
 		[GLib.ConnectBeforeAttribute]
 		void OnEditKeyPress (object s, Gtk.KeyPressEventArgs args)
 		{
-			Gtk.Entry entry = (Gtk.Entry) s;
+			Gtk.Entry entry = (Gtk.Entry)s;
 			
 			if (currentCompletionData != null) {
 				KeyActions ka;
 				bool ret = CompletionWindowManager.PreProcessKeyEvent (args.Event.Key, (char)args.Event.Key, args.Event.State, out ka);
-				CompletionWindowManager.PostProcessKeyEvent (ka);
+				CompletionWindowManager.PostProcessKeyEvent (ka, args.Event.Key, (char)args.Event.Key, args.Event.State);
 				args.RetVal = ret;
 			}
 			
@@ -937,7 +941,8 @@ namespace MonoDevelop.Debugger
 					if (!it.Equals (lastPinIter)) {
 						store.SetValue (it, PinIconCol, "md-pin-up");
 						CleanPinIcon ();
-						lastPinIter = it;
+						if (path.Depth > 1 || !RootPinAlwaysVisible)
+							lastPinIter = it;
 					}
 				}
 			}

@@ -48,16 +48,16 @@ namespace MonoDevelop.Startup
 
 		static void EnableFileLogging ( )
 		{
-			if (PropertyService.IsMac)
+			if (Platform.IsMac)
 				return;
 
 			// On Windows log all output to a log file
 
-			string configPath = PropertyService.Locations.Config;
-			if (!Directory.Exists (configPath))
-				Directory.CreateDirectory (configPath);
+			FilePath logDir = UserProfile.Current.LogDir;
+			if (!Directory.Exists (logDir))
+				Directory.CreateDirectory (logDir);
 
-			string file = Path.Combine (configPath, "log.txt");
+			string file = logDir.Combine ("log.txt");
 			try {
 				logFile = new StreamWriter (file);
 				logFile.AutoFlush = true;

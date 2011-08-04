@@ -487,7 +487,10 @@ namespace MonoDevelop.SourceEditor
 			get { return defaultEolMarker; }
 		}
 
-		ControlLeftRightMode controlLeftRightMode = ControlLeftRightMode.MonoDevelop;
+		ControlLeftRightMode controlLeftRightMode = Platform.IsWindows
+			? ControlLeftRightMode.SharpDevelop
+			: ControlLeftRightMode.MonoDevelop;
+		
 		public ControlLeftRightMode ControlLeftRightMode {
 			get {
 				return controlLeftRightMode;

@@ -144,7 +144,7 @@ namespace MonoDevelop.Autotools
 		}
 
 		public bool SupportsIntegration {
-			get { return IntegrationEnabled && !PropertyService.IsWindows; }
+			get { return IntegrationEnabled && !Platform.IsWindows; }
 		}
 		
 		[ItemProperty (DefaultValue = "make")]
@@ -808,9 +808,12 @@ namespace MonoDevelop.Autotools
 					//Required when UpdateProject gets called by ui
 					if (ownerProject.ParentSolution != null)
 						ResolveProjectReferences (ownerProject.ParentSolution.RootFolder, monitor);
-
-					foreach (ProjectReference pr in existingGacRefs.Values)
-						dotnetProject.References.Remove (pr);
+					
+					//only remove unmatched existing refs if everything resolved without errors
+					if (SaveReferences) {
+						foreach (ProjectReference pr in existingGacRefs.Values)
+							dotnetProject.References.Remove (pr);
+					}
 
 					existingGacRefs.Clear ();
 					newGacRefs.Clear ();
@@ -1026,6 +1029,7 @@ namespace MonoDevelop.Autotools
 					 LoggingService.LogWarning  ("Package named '{0}' not found in configure.in. Ignoring reference to '{1}'.",
 						pkgVarName, rname);
 					refVar.Extra.Add (reference);
+					SaveReferences = false;
 					return;
 				}
 
@@ -1134,6 +1138,8 @@ namespace MonoDevelop.Autotools
 			
 			if (pkg == null) {
 				LoggingService.LogWarning ("No package named '{0}' found. Ignoring.", pkgName);
+				//don't sync the unresolved refs from the project back to the makefile or things go horribly wrong
+				SaveReferences = false;
 				return false;
 			}
 

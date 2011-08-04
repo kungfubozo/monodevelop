@@ -160,9 +160,7 @@ namespace MonoDevelop.Debugger
 					(!DebuggingService.IsDebuggingSupported && IdeApp.ProjectOperations.CanExecute (sol))
 				);
 
-				info.Enabled = (IdeApp.ProjectOperations.CurrentRunOperation.IsCompleted || !DebuggingService.IsDebuggingSupported) &&
-					canExecute &&
-					!(IdeApp.ProjectOperations.CurrentSelectedItem is Workspace);
+				info.Enabled = canExecute && (IdeApp.ProjectOperations.CurrentRunOperation.IsCompleted || !DebuggingService.IsDebuggingSupported);
 			} else {
 				Document doc = IdeApp.Workbench.ActiveDocument;
 				info.Enabled = (doc != null && doc.IsBuildTarget) && (doc.CanRun () || doc.CanDebug ());
