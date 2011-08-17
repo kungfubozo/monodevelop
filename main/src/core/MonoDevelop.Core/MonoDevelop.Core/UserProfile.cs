@@ -30,7 +30,7 @@ namespace MonoDevelop.Core
 	public class UserProfile
 	{
 		const string PROFILE_ENV_VAR = "MONODEVELOP_PROFILE";
-		const string APP_ID = "MonoDevelop";
+		const string APP_ID = "MonoDevelop-Unity";
 		const string CURRENT_PROFILE_VERSION = "2.6";
 		
 		static readonly UserProfile currentProfile = GetCurrentProfile ();
@@ -194,7 +194,7 @@ namespace MonoDevelop.Core
 		internal static UserProfile ForMD24 ()
 		{
 			FilePath appdata = Environment.GetFolderPath (Environment.SpecialFolder.ApplicationData);
-			var mdConfig = appdata.Combine ("MonoDevelop");
+			var mdConfig = appdata.Combine ("MonoDevelop-Unity");
 			return new UserProfile () {
 				UserDataRoot = mdConfig,
 				ConfigDir = mdConfig,
