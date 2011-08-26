@@ -35,7 +35,7 @@ MonoDevelop.app:
 	@echo ""
 	@echo "Copying install prefix into app bundle"
 	@echo ""
-	@if [[ "$(prefix)" == /Library* ]] || [[ "$(prefix)" == /usr* ]]; then \
+	@if [[ "$(prefix)" == /Library* ]] || [[ "$(prefix)" == /usr* ]] || [[ "$(prefix)" == "" ]] ; then \
 		echo "WARNING: cannot merge system prefix $(prefix)"; \
 	else \
 		echo "cp -pR $(prefix)/* $(MAC_APP_DIR)/Contents/MacOS/"; \
