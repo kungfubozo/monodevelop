@@ -195,7 +195,7 @@ namespace MonoDevelop.CSharp.Resolver
 		public MonoDevelop.Projects.Dom.ResolveResult GetLanguageItem (ProjectDom dom, Mono.TextEditor.TextEditorData data, int offset, string expression)
 		{
 			string fileName = data.Document.FileName;
-			MonoDevelop.Ide.Gui.Document doc = IdeApp.Workbench.ActiveDocument;
+			MonoDevelop.Ide.Gui.Document doc = IdeApp.Workbench.GetDocument (fileName);
 			if (doc == null)
 				return null;
 			
