@@ -427,7 +427,7 @@ namespace MonoDevelop.Core.Assemblies
 			timer.Trace ("Registering support packages");
 			
 			// Get assemblies registered using the extension point
-			mainContext.Send (delegate {
+			mainContext.Post (delegate {
 				AddinManager.AddExtensionNodeHandler ("/MonoDevelop/Core/SupportPackages", OnPackagesChanged);
 			}, null);
 		}
