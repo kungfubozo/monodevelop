@@ -1254,10 +1254,10 @@ namespace Mono.TextEditor
 					textEditorData.HAdjustment.Value = 0;
 				} else if (caretX <= textEditorData.HAdjustment.Value) {
 					// Caret is offscreen left
-					textEditorData.HAdjustment.Value = Math.Min (caretX, textEditorData.HAdjustment.Upper) - halfTextWidth;
+					textEditorData.HAdjustment.Value = System.Math.Min (caretX, textEditorData.HAdjustment.Upper) - halfTextWidth;
 				} else if (caretX + TextViewMargin.CharWidth >= textEditorData.HAdjustment.Value + textWidth) {
 					// Caret is offscreen right
-					textEditorData.HAdjustment.Value = Math.Min (caretX + halfTextWidth, textEditorData.HAdjustment.Upper - halfTextWidth);
+					textEditorData.HAdjustment.Value = System.Math.Min (caretX + halfTextWidth, textEditorData.HAdjustment.Upper - halfTextWidth);
 				} else {
 					// Caret is already onscreen
 					// Do nothing
