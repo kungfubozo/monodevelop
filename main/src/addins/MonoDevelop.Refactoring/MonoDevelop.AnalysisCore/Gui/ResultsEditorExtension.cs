@@ -98,7 +98,7 @@ namespace MonoDevelop.AnalysisCore.Gui
 			try
 			{
 				var doc = this.Document;
-				if (doc == null) return;
+				if (doc == null || string.IsNullOrEmpty (Path.GetExtension (doc.FileName))) return;
 				
 				var treeType = new RuleTreeType("Document", Path.GetExtension(doc.FileName));
 				AnalysisService.QueueAnalysis(doc, treeType, UpdateResults);
