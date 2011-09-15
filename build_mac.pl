@@ -82,7 +82,7 @@ sub finalize_monodevelop {
 	rmtree "tmp";
 	mkpath "tmp";
 
-	# TODO: First, we assembled the final monodevelop product in tmp/monodevelop, but now, currently (maybe temporarily) we need to build monodevelop, send the build folder to a mac and package it there, so the monodevelop dir needs all the bits in place before sending (can't be assembled in another folder)
+	# TODO: First, we assembled the final monodevelop product in tmp/monodevelop, but now we need to build monodevelop, send the build folder to a mac and package it there, so the monodevelop dir needs all the bits in place before sending (can't be assembled in another folder)
 	system("ln -s ../monodevelop/main/build tmp/monodevelop");
 
 	# Unity soft debugger
