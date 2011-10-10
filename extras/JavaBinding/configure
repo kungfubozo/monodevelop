@@ -1,10 +1,10 @@
 #!/bin/bash
-VERSION=2.6
+VERSION=2.8
 PACKAGE=monodevelop-java
 prefix=/usr/local
 config=DEBUG
 configurations=" RELEASE DEBUG"
-required_packages="mono-addins;0.3 gtk-sharp-2.0;2.12.8 glade-sharp-2.0;2.12.8 monodevelop;2.6"
+required_packages="mono-addins;0.3 gtk-sharp-2.0;2.12.8 glade-sharp-2.0;2.12.8 monodevelop;2.7"
 
 usage ()
 {
@@ -85,6 +85,8 @@ done
 
 check_required_packages
 [ $? -eq 1 ] && exit 1
+
+sed -e "s,@VERSION@,$VERSION," < monodevelop-java.spec.in > monodevelop-java.spec
 
 echo "prefix=$prefix" > config.make
 echo "RUNTIME=mono" >> config.make

@@ -399,7 +399,7 @@ namespace MonoDevelop.CSharp.Completion
 						IType insideClass = NRefactoryResolver.GetTypeAtCursor (currentParsedDocument.CompilationUnit, Document.FileName, location);
 						if (insideClass != null) {
 							string indent = textEditorData.Document.GetLineIndent (completionContext.TriggerLine);
-							if (insideClass.ClassType == ClassType.Delegate) {
+							if (insideClass.ClassType == MonoDevelop.Projects.Dom.ClassType.Delegate) {
 								AppendSummary (generatedComment, indent, out newCursorOffset);
 								IMethod m = null;
 								foreach (IMethod method in insideClass.Methods)
@@ -491,7 +491,7 @@ namespace MonoDevelop.CSharp.Completion
 							resolvedType = dom.GetType (resolveResult.ResolvedType);
 							if (resolvedType == null) 
 								return null;
-							if (resolvedType.ClassType == ClassType.Enum) {
+							if (resolvedType.ClassType == MonoDevelop.Projects.Dom.ClassType.Enum) {
 								CompletionDataList completionList = new ProjectDomCompletionDataList ();
 								CompletionDataCollector cdc = new CompletionDataCollector (this, dom, completionList, Document.CompilationUnit, resolver.CallingType, location);
 								IReturnType returnType = new DomReturnType (resolvedType);
@@ -556,7 +556,7 @@ namespace MonoDevelop.CSharp.Completion
 								resolver.AddAccessibleCodeCompletionData (result.ExpressionContext, cdc);
 								return completionList;
 							}
-							if (resolvedType.ClassType == ClassType.Delegate && token == "=") {
+							if (resolvedType.ClassType == MonoDevelop.Projects.Dom.ClassType.Delegate && token == "=") {
 								CompletionDataList completionList = new ProjectDomCompletionDataList ();
 								string parameterDefinition = AddDelegateHandlers (completionList, resolvedType);
 								string varName = GetPreviousMemberReferenceExpression (tokenIndex);
@@ -586,7 +586,7 @@ namespace MonoDevelop.CSharp.Completion
 							if (evt == null)
 								return null;
 							IType delegateType = resolver.SearchType (evt.ReturnType);
-							if (delegateType == null || delegateType.ClassType != ClassType.Delegate)
+							if (delegateType == null || delegateType.ClassType != MonoDevelop.Projects.Dom.ClassType.Delegate)
 								return null;
 							CompletionDataList completionList = new ProjectDomCompletionDataList ();
 							CompletionDataCollector cdc = new CompletionDataCollector (this, dom, completionList, Document.CompilationUnit, resolver.CallingType, location);
@@ -660,12 +660,14 @@ namespace MonoDevelop.CSharp.Completion
 										foreach (var method in dataProvider.Methods) {
 											if (i < method.Parameters.Count) {
 												returnType = dom.GetType (method.Parameters [i].ReturnType);
-												autoSelect = returnType == null || returnType.ClassType != ClassType.Delegate;
+												autoSelect = returnType == null || returnType.ClassType != MonoDevelop.Projects.Dom.ClassType.Delegate;
 												break;
 											}
 										}
 									}
 								}
+								if (result.ExpressionContext == ExpressionContext.TypeName)
+									autoSelect = false;
 								// Bug 677531 - Auto-complete doesn't always highlight generic parameter in method signature
 								//if (result.ExpressionContext == ExpressionContext.TypeName)
 								//	autoSelect = false;
@@ -801,7 +803,7 @@ namespace MonoDevelop.CSharp.Completion
 		
 		public void AddEnumMembers (CompletionDataList completionList, IType resolvedType)
 		{
-			if (resolvedType == null || resolvedType.ClassType != ClassType.Enum)
+			if (resolvedType == null || resolvedType.ClassType != MonoDevelop.Projects.Dom.ClassType.Enum)
 				return;
 			string typeString = Document.CompilationUnit.ShortenTypeName (new DomReturnType (resolvedType), new DomLocation (Document.Editor.Caret.Line, Document.Editor.Caret.Column)).ToInvariantString ();
 			if (typeString.Contains ("."))
@@ -826,13 +828,13 @@ namespace MonoDevelop.CSharp.Completion
 				if (resolvedType == null)
 					continue;
 				switch (resolvedType.ClassType) {
-				case ClassType.Enum:
+				case MonoDevelop.Projects.Dom.ClassType.Enum:
 					if (addedEnums.Contains (resolvedType.DecoratedFullName))
 						continue;
 					addedEnums.Add (resolvedType.DecoratedFullName);
 					AddEnumMembers (completionList, resolvedType);
 					break;
-				case ClassType.Delegate:
+				case MonoDevelop.Projects.Dom.ClassType.Delegate:
 					if (addedDelegates.Contains (resolvedType.DecoratedFullName))
 						continue;
 					addedDelegates.Add (resolvedType.DecoratedFullName);
@@ -1033,7 +1035,7 @@ namespace MonoDevelop.CSharp.Completion
 							return new NRefactoryParameterDataProvider (textEditorData, resolver, resolveResult as BaseResolveResult);
 					}
 					IType resolvedType = resolver.SearchType (resolveResult.ResolvedType);
-					if (resolvedType != null && resolvedType.ClassType == ClassType.Delegate) {
+					if (resolvedType != null && resolvedType.ClassType == MonoDevelop.Projects.Dom.ClassType.Delegate) {
 						return new NRefactoryParameterDataProvider (textEditorData, result.Expression, resolvedType);
 					}
 				}
@@ -1119,7 +1121,7 @@ namespace MonoDevelop.CSharp.Completion
 					HashSet<string > baseTypeNames = new HashSet<string> ();
 					if (cls != null) {
 						baseTypeNames.Add (cls.Name);
-						if (cls.ClassType == ClassType.Struct)
+						if (cls.ClassType == MonoDevelop.Projects.Dom.ClassType.Struct)
 							isInterface = true;
 					}
 					int tokenIndex = completionContext.TriggerOffset;
@@ -1134,7 +1136,7 @@ namespace MonoDevelop.CSharp.Completion
 						if (Char.IsLetterOrDigit (token [0]) || token [0] == '_') {
 							IType baseType = dom.SearchType (Document.CompilationUnit, cls, result.Region.Start, token);
 							if (baseType != null) {
-								if (baseType.ClassType != ClassType.Interface)
+								if (baseType.ClassType != MonoDevelop.Projects.Dom.ClassType.Interface)
 									isInterface = true;
 								baseTypeNames.Add (baseType.Name);
 							}
@@ -1142,7 +1144,7 @@ namespace MonoDevelop.CSharp.Completion
 					} while (token != ":");
 					foreach (object o in dom.GetNamespaceContents (namespaceList, true, true)) {
 						IType type = o as IType;
-						if (type != null && (type.IsStatic || type.IsSealed || baseTypeNames.Contains (type.Name) || isInterface && type.ClassType != ClassType.Interface)) {
+						if (type != null && (type.IsStatic || type.IsSealed || baseTypeNames.Contains (type.Name) || isInterface && type.ClassType != MonoDevelop.Projects.Dom.ClassType.Interface)) {
 							continue;
 						}
 						if (o is Namespace && !namespaceList.Any (ns => ns.StartsWith (((Namespace)o).FullName)))
@@ -1190,7 +1192,7 @@ namespace MonoDevelop.CSharp.Completion
 							foundType = resolver.SearchType (resolveResult.ResolvedType);
 					
 						if (foundType != null) {
-							if (foundType.ClassType == ClassType.Interface)
+							if (foundType.ClassType == MonoDevelop.Projects.Dom.ClassType.Interface)
 								foundType = resolver.SearchType (DomReturnType.Object);
 						
 							foreach (IType type in dom.GetSubclasses (foundType)) {
@@ -1203,7 +1205,7 @@ namespace MonoDevelop.CSharp.Completion
 						foreach (object o in dom.GetNamespaceContents (namespaceList, true, true)) {
 							if (o is IType) {
 								IType type = (IType)o;
-								if (type.ClassType != ClassType.Interface || type.IsSpecialName || type.Name.StartsWith ("<"))
+								if (type.ClassType != MonoDevelop.Projects.Dom.ClassType.Interface || type.IsSpecialName || type.Name.StartsWith ("<"))
 									continue;
 //								if (foundType != null && !dom.GetInheritanceTree (foundType).Any (x => x.FullName == type.FullName))
 //									continue;
@@ -1240,7 +1242,7 @@ namespace MonoDevelop.CSharp.Completion
 				if (overrideCls == null)
 					overrideCls = NRefactoryResolver.GetTypeAtCursor (Document.CompilationUnit, Document.FileName, new DomLocation (completionContext.TriggerLine - 1, 1));
 				Console.WriteLine ("type: " + overrideCls);
-				if (overrideCls != null && (overrideCls.ClassType == ClassType.Class || overrideCls.ClassType == ClassType.Struct)) {
+				if (overrideCls != null && (overrideCls.ClassType == MonoDevelop.Projects.Dom.ClassType.Class || overrideCls.ClassType == MonoDevelop.Projects.Dom.ClassType.Struct)) {
 					string modifiers = textEditorData.GetTextBetween (firstMod, wordStart);
 					return GetOverrideCompletionData (completionContext, overrideCls, modifiers);
 				}
@@ -1263,7 +1265,7 @@ namespace MonoDevelop.CSharp.Completion
 					return null;
 				
 				overrideCls = NRefactoryResolver.GetTypeAtCursor (Document.CompilationUnit, Document.FileName, new DomLocation (completionContext.TriggerLine, completionContext.TriggerLineOffset));
-				if (overrideCls != null && (overrideCls.ClassType == ClassType.Class || overrideCls.ClassType == ClassType.Struct)) {
+				if (overrideCls != null && (overrideCls.ClassType == MonoDevelop.Projects.Dom.ClassType.Class || overrideCls.ClassType == MonoDevelop.Projects.Dom.ClassType.Struct)) {
 					string modifiers = textEditorData.GetTextBetween (firstMod, wordStart);
 					return GetPartialCompletionData (completionContext, overrideCls, modifiers);
 				}
@@ -1711,7 +1713,7 @@ namespace MonoDevelop.CSharp.Completion
 			//System.Console.WriteLine("Add Virtuals for:" + searchType + " / " + curType);
 			if (searchType == null)
 				return;
-			bool isInterface      = type.ClassType == ClassType.Interface;
+			bool isInterface      = type.ClassType == MonoDevelop.Projects.Dom.ClassType.Interface;
 			bool includeOverriden = false;
 		
 			int declarationBegin = ctx.TriggerOffset;
@@ -1732,14 +1734,14 @@ namespace MonoDevelop.CSharp.Completion
 			}
 			CompletionDataCollector col = new CompletionDataCollector (this, dom, completionList, Document.CompilationUnit, searchType, DomLocation.Empty);
 			var inheritanceTree = new List<IType> (this.dom.GetInheritanceTree (searchType));
-			var sortedTree = inheritanceTree.Where (c => c.ClassType != ClassType.Interface).Concat (inheritanceTree.Where (c => c.ClassType == ClassType.Interface));
+			var sortedTree = inheritanceTree.Where (c => c.ClassType != MonoDevelop.Projects.Dom.ClassType.Interface).Concat (inheritanceTree.Where (c => c.ClassType == MonoDevelop.Projects.Dom.ClassType.Interface));
 			foreach (IType t in sortedTree) {
 				foreach (IMember m in t.Members) {
 					if (/*!m.IsAccessibleFrom (dom, type, type, true) ||*/ m.IsSpecialName)
 						continue;
 					//if (m.IsSpecialName || (m.IsInternal && !m.IsProtectedOrInternal) || && searchType.SourceProject != Document.Project)
 					//	continue;
-					if (t.ClassType == ClassType.Interface || (isInterface || m.IsVirtual || m.IsAbstract) && !m.IsSealed && (includeOverriden || !type.HasOverriden (m))) {
+					if (t.ClassType == MonoDevelop.Projects.Dom.ClassType.Interface || (isInterface || m.IsVirtual || m.IsAbstract) && !m.IsSealed && (includeOverriden || !type.HasOverriden (m))) {
 						// filter out the "Finalize" methods, because finalizers should be done with destructors.
 						if (m is IMethod && m.Name == "Finalize")
 							continue;
@@ -1797,7 +1799,7 @@ namespace MonoDevelop.CSharp.Completion
 				type = dom.SearchType (Document.CompilationUnit, callingType, location, genericParameter);
 			}
 			
-			if (type == null || !(type.IsAbstract || type.ClassType == ClassType.Interface)) {
+			if (type == null || !(type.IsAbstract || type.ClassType == MonoDevelop.Projects.Dom.ClassType.Interface)) {
 				if (type == null || type.ConstructorCount == 0 || type.Methods.Any (c => c.IsConstructor && c.IsAccessibleFrom (dom, callingType, type, callingType != null && dom.GetInheritanceTree (callingType).Any (x => x.FullName == type.FullName)))) {
 					if (returnTypeUnresolved != null) {
 						col.FullyQualify = true;
@@ -1820,8 +1822,10 @@ namespace MonoDevelop.CSharp.Completion
 			//				} 
 			//			else {
 			//			}
-			if (type == null)
+			if (type == null) {
+				result.AutoCompleteEmptyMatch = true;
 				return result;
+			}
 			HashSet<string > usedNamespaces = new HashSet<string> (GetUsedNamespaces ());
 			if (type.FullName == DomReturnType.Object.FullName) 
 				AddPrimitiveTypes (col);
@@ -2173,7 +2177,7 @@ namespace MonoDevelop.CSharp.Completion
 				return result;
 			ResolveResult resolveResult = resolver.ResolveExpression (switchFinder.SwitchStatement.SwitchExpression, location);
 			IType type = dom.GetType (resolveResult.ResolvedType);
-			if (type != null && type.ClassType == ClassType.Enum) {
+			if (type != null && type.ClassType == MonoDevelop.Projects.Dom.ClassType.Enum) {
 				OutputFlags flags = OutputFlags.None;
 				var declaringType = resolver.CallingType;
 				if (declaringType != null && dom != null) {
@@ -2560,9 +2564,17 @@ namespace MonoDevelop.CSharp.Completion
 			PathEntry[] path = CurrentPath;
 			if (path == null || index < 0 || index >= path.Length)
 				return null;
-			var tag = path[index].Tag;
-			DropDownBoxListWindow window = new DropDownBoxListWindow (tag is ICompilationUnit ? (DropDownBoxListWindow.IListDataProvider)new CompilationUnitDataProvider (Document) : new DataProvider (Document, tag, GetAmbience ()));
-			window.SelectItem (path[index].Tag);
+			var tag = path [index].Tag;
+			DropDownBoxListWindow.IListDataProvider provider;
+			if (tag is ICompilationUnit) {
+				provider = new CompilationUnitDataProvider (Document);
+				tag = Document.ParsedDocument.GetUserRegion (document.Editor.Caret.Line, document.Editor.Caret.Column);
+			} else {
+				provider = new DataProvider (Document, tag, GetAmbience ());
+			}
+			
+			DropDownBoxListWindow window = new DropDownBoxListWindow (provider);
+			window.SelectItem (tag);
 			return window;
 		}
 		
@@ -2587,7 +2599,7 @@ namespace MonoDevelop.CSharp.Completion
 			
 			var loc = textEditorData.Caret.Location;
 			IType type = unit.GetTypeAt (loc.Line, loc.Column);
-			IMember member = type != null && type.ClassType != ClassType.Delegate ? type.GetMemberAt (loc.Line, loc.Column) : null;
+			IMember member = type != null && type.ClassType != MonoDevelop.Projects.Dom.ClassType.Delegate ? type.GetMemberAt (loc.Line, loc.Column) : null;
 			
 			List<PathEntry> result = new List<PathEntry> ();
 			var amb = GetAmbience ();
@@ -2597,7 +2609,7 @@ namespace MonoDevelop.CSharp.Completion
 				if (node is ICompilationUnit) {
 					if (!Document.ParsedDocument.UserRegions.Any ())
 						break;
-					FoldingRegion reg = Document.ParsedDocument.UserRegions.Where (r => r.Region.Contains (loc.Line, loc.Column)).LastOrDefault ();
+					FoldingRegion reg = Document.ParsedDocument.GetUserRegion (loc.Line, loc.Column);
 					if (reg == null) {
 						entry = new PathEntry (GettextCatalog.GetString ("No region"));
 					} else {
@@ -2617,13 +2629,13 @@ namespace MonoDevelop.CSharp.Completion
 			PathEntry noSelection = null;
 			if (type == null) {
 				noSelection = new PathEntry (GettextCatalog.GetString ("No selection")) { Tag = new CustomNode (Document.CompilationUnit) };
-			} else if (member == null && type.ClassType != ClassType.Delegate) 
+			} else if (member == null && type.ClassType != MonoDevelop.Projects.Dom.ClassType.Delegate) 
 				noSelection = new PathEntry (GettextCatalog.GetString ("No selection")) { Tag = new CustomNode (type) };
 			if (noSelection != null) {
 /*				if (result.Count > 0 && result[result.Count - 1].Tag is ICompilationUnit) {
 					result.Insert (result.Count - 1, noSelection);
 				} else {*/
-					result.Add (noSelection);
+				result.Add (noSelection);
 //				}
 			}
 			var prev = CurrentPath;

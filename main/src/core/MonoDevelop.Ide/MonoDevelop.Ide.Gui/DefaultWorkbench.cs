@@ -205,7 +205,7 @@ namespace MonoDevelop.Ide.Gui
 		
 		public DefaultWorkbench()
 		{
-			Title = appName;
+			Title = BrandingService.ApplicationName;
 			LoggingService.LogInfo ("Creating DefaultWorkbench");
 			
 			WidthRequest = normalBounds.Width;
@@ -497,9 +497,9 @@ namespace MonoDevelop.Ide.Gui
 							post = "*";
 						}
 						if (window.ViewContent.Project != null) {
-							Title = string.Format("{0} - {1}{2} - {3}", window.ViewContent.Project.Name, window.ViewContent.PathRelativeToProject, post, appName);
+							Title = window.ViewContent.Project.Name + " - " + window.ViewContent.PathRelativeToProject + post + " - " + BrandingService.ApplicationName;
 						} else {
-							Title = string.Format("{0}{1} - {2}", window.ViewContent.ContentName, post, appName);
+							Title = window.ViewContent.ContentName + post + " - " + BrandingService.ApplicationName;
 						}
 					}
 				} else {
@@ -515,9 +515,9 @@ namespace MonoDevelop.Ide.Gui
 		void SetDefaultTitle ()
 		{
 			if (IdeApp.ProjectOperations.CurrentSelectedProject != null) {
-				Title = string.Format("{0} - {1}", IdeApp.ProjectOperations.CurrentSelectedProject.Name, appName);
+				Title = IdeApp.ProjectOperations.CurrentSelectedProject.Name + " - " + BrandingService.ApplicationName;
 			} else {
-				Title = appName;
+				Title = BrandingService.ApplicationName;
 			}
 		}
 		

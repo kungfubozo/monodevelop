@@ -28,6 +28,7 @@
 //
 
 using System;
+using System.Drawing;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -64,10 +65,10 @@ namespace MonoDevelop.MacIntegration
 			
 			LoadMimeMapAsync ();
 			
-			CheckGtkVersion (2, 17, 9);
+			CheckGtkVersion (2, 24, 0);
 			
 			//make sure the menu app name is correct even when running Mono 2.6 preview, or not running from the .app
-			Carbon.SetProcessName ("MonoDevelop");
+			Carbon.SetProcessName (BrandingService.ApplicationName);
 			
 			MonoDevelop.MacInterop.Cocoa.InitMonoMac ();
 			
@@ -77,7 +78,7 @@ namespace MonoDevelop.MacIntegration
 			timer.EndTiming ();
 		}
 		
-		//Mac GTK+ is unstable, even between micro releases
+		//Mac GTK+ behaviour isn't completely stable even between micro releases
 		static void CheckGtkVersion (uint major, uint minor, uint micro)
 		{
 			string url = "http://www.go-mono.com/mono-downloads/download.html";
@@ -220,7 +221,7 @@ namespace MonoDevelop.MacIntegration
 			//mac-ify these command names
 			commandManager.GetCommand (EditCommands.MonodevelopPreferences).Text = GettextCatalog.GetString ("Preferences...");
 			commandManager.GetCommand (EditCommands.DefaultPolicies).Text = GettextCatalog.GetString ("Custom Policies...");
-			commandManager.GetCommand (HelpCommands.About).Text = GettextCatalog.GetString ("About MonoDevelop");
+			commandManager.GetCommand (HelpCommands.About).Text = string.Format (GettextCatalog.GetString ("About {0}"), BrandingService.ApplicationName);
 			commandManager.GetCommand (ToolCommands.AddinManager).Text = GettextCatalog.GetString ("Add-in Manager...");
 			
 			initedApp = true;
@@ -228,6 +229,7 @@ namespace MonoDevelop.MacIntegration
 			MacMainMenu.AddAppMenuItems (
 				commandManager,
 			    CommandManager.ToCommandId (HelpCommands.About),
+				CommandManager.ToCommandId (MonoDevelop.Ide.Updater.UpdateCommands.CheckForUpdates),
 				CommandManager.ToCommandId (Command.Separator),
 				CommandManager.ToCommandId (EditCommands.MonodevelopPreferences),
 				CommandManager.ToCommandId (EditCommands.DefaultPolicies),
@@ -300,48 +302,68 @@ namespace MonoDevelop.MacIntegration
 		{
 			NSImage icon = null;
 			
-			//FIXME: better handling of names of files that haven't been saved yet
-			if (Path.IsPathRooted (filename)) {
+			if (Path.IsPathRooted (filename) && File.Exists (filename)) {
 				icon = NSWorkspace.SharedWorkspace.IconForFile (filename);
 			} else {
-				icon = NSWorkspace.SharedWorkspace.IconForFile ("/tmp/" + filename);
+				string extension = Path.GetExtension (filename);
+				if (!string.IsNullOrEmpty (extension))
+					icon = NSWorkspace.SharedWorkspace.IconForFileType (extension);
 			}
 			
-			if (icon != null) {
-				int w, h;
-				if (!Gtk.Icon.SizeLookup (Gtk.IconSize.Menu, out w, out h))
-					w = h = 22;
-				var rect = new System.Drawing.RectangleF (0, 0, w, h);
-				var rep = icon.BestRepresentation (rect, null, null) as NSBitmapImageRep;
-				if (rep != null) {
-					var tiff = rep.TiffRepresentation;
-					byte[] arr = new byte[tiff.Length];
-					System.Runtime.InteropServices.Marshal.Copy (tiff.Bytes, arr, 0, arr.Length);
-					int pw = rep.PixelsWide, ph = rep.PixelsHigh;
-					var px = new Gdk.Pixbuf (arr, pw, ph);
-					
-					//if one dimension matches, and the other is same or smaller, use as-is
-					if ((pw == w && ph <= h) || (ph == h && pw <= w))
-						return px;
-					
-					//else scale proportionally such that the largest dimension matches the desired size
-					if (pw == ph) {
-						pw = w;
-						ph = h;
-					} else if (pw > ph) {
-						ph = (int) (w * ((float) ph / pw));
-						pw = w;
-					} else {
-						pw = (int) (h * ((float) pw / ph));
-						ph = h;
-					}
-					
-					var scaled = px.ScaleSimple (pw, ph, Gdk.InterpType.Bilinear);
-					px.Dispose ();
-					return scaled;
-				}
+			if (icon == null) {
+				return base.OnGetPixbufForFile (filename, size);
 			}
-			return base.OnGetPixbufForFile (filename, size);
+			
+			int w, h;
+			if (!Gtk.Icon.SizeLookup (Gtk.IconSize.Menu, out w, out h)) {
+				w = h = 22;
+			}
+			var rect = new System.Drawing.RectangleF (0, 0, w, h);
+			
+			var arep = icon.BestRepresentation (rect, null, null);
+			if (arep == null) {
+				return base.OnGetPixbufForFile (filename, size);
+			}
+			
+			var rep = arep as NSBitmapImageRep;
+			if (rep == null) {
+				using (var cgi = arep.AsCGImage (rect, null, null))
+					rep = new NSBitmapImageRep (cgi);
+				arep.Dispose ();
+			}
+			
+			try {
+				byte[] arr;
+				using (var tiff = rep.TiffRepresentation) {
+					arr = new byte[tiff.Length];
+					System.Runtime.InteropServices.Marshal.Copy (tiff.Bytes, arr, 0, arr.Length);
+				}
+				int pw = rep.PixelsWide, ph = rep.PixelsHigh;
+				var px = new Gdk.Pixbuf (arr, pw, ph);
+				
+				//if one dimension matches, and the other is same or smaller, use as-is
+				if ((pw == w && ph <= h) || (ph == h && pw <= w))
+					return px;
+				
+				//else scale proportionally such that the largest dimension matches the desired size
+				if (pw == ph) {
+					pw = w;
+					ph = h;
+				} else if (pw > ph) {
+					ph = (int) (w * ((float) ph / pw));
+					pw = w;
+				} else {
+					pw = (int) (h * ((float) pw / ph));
+					ph = h;
+				}
+				
+				var scaled = px.ScaleSimple (pw, ph, Gdk.InterpType.Bilinear);
+				px.Dispose ();
+				return scaled;
+			} finally {
+				if (rep != null)
+					rep.Dispose ();
+			}
 		}
 		
 		public override IProcessAsyncOperation StartConsoleProcess (string command, string arguments, string workingDirectory,
@@ -413,6 +435,27 @@ end tell", directory.ToString ().Replace ("\"", "\\\"")));
 				foreach (var file in files)
 					NSWorkspace.SharedWorkspace.OpenFile (file, Id);
 			}
+		}
+		
+		public override Gdk.Rectangle GetUsableMonitorGeometry (Gdk.Screen screen, int monitor_id)
+		{
+			NSScreen monitor = NSScreen.Screens[monitor_id];
+			RectangleF visible = monitor.VisibleFrame;
+			RectangleF frame = monitor.Frame;
+			
+			if (visible.Height > frame.Height || visible.Width > frame.Width)
+				return base.GetUsableMonitorGeometry (screen, monitor_id);
+			
+			// VisibleFrame.Y is the height of the Dock if it is at the bottom of the screen, so in order
+			// to get the menu height, we just figure out the difference between the visibleFrame height
+			// and the actual frame height, then subtract the Dock height.
+			//
+			// We need to swap the Y offset with the menu height because our callers expect the Y offset
+			// to be from the top of the screen, not from the bottom of the screen.
+			float menubar = (frame.Height - visible.Height) - visible.Y;
+			visible.Y = menubar;
+			
+			return new Gdk.Rectangle ((int) visible.X, (int) visible.Y, (int) visible.Width, (int) visible.Height);
 		}
 	}
 }

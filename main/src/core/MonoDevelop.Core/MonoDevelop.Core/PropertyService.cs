@@ -32,12 +32,16 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Xml;
 
 namespace MonoDevelop.Core
 {
 	public static class PropertyService
 	{
-		
+		//force the static class to intialize
+		internal static void Initialize ()
+		{
+		}
 		readonly static string FileName = "MonoDevelopProperties.xml";
 		static Properties properties;
 
@@ -113,8 +117,7 @@ namespace MonoDevelop.Core
 			profile = null;
 			version = null;
 			
-			//TODO: check 2.6 when 2.8 is released, etc
-			string[] migratableVersions = { };
+			string[] migratableVersions = UserProfile.GetMigratableVersions ();
 			
 			//try versioned profiles
 			for (int i = migratableVersions.Length -1; i >= 0; i--) {
@@ -165,6 +168,11 @@ namespace MonoDevelop.Core
 			var prefsPath = UserProfile.Current.ConfigDir.Combine (FileName);
 			FileService.EnsureDirectoryExists (prefsPath.ParentDirectory);
 			properties.Save (prefsPath);
+		}
+		
+		public static bool HasValue (string property)
+		{
+			return properties.HasValue (property);
 		}
 		
 		public static T Get<T> (string property, T defaultValue)

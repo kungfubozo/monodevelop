@@ -12,28 +12,42 @@ namespace MonoDevelop.Platform
 {
     class AddFileDialogHandler: IAddFileDialogHandler
     {
+        volatile Form rootForm;
+
         public bool Run (AddFileDialogData data)
         {
-			var parentWindow = data.TransientFor ?? MessageService.RootWindow;
+            var parentWindow = data.TransientFor ?? MessageService.RootWindow;
+            parentWindow.FocusInEvent += OnParentFocusIn;
+
+            bool result = SelectFileDialogHandler.RunWinUIMethod (RunDialog, data);
+
+            parentWindow.FocusInEvent -= OnParentFocusIn;
+            parentWindow.Present ();
+
+            return result;
+        }
+
+        void OnParentFocusIn (object o, EventArgs args)
+        {
+            if (rootForm != null)
+                rootForm.BeginInvoke (new Action (() => rootForm.Activate ()));
+        }
+
+        bool RunDialog (AddFileDialogData data)
+        {
+			Application.EnableVisualStyles ();
+			
             CustomAddFilesDialog adlg = new CustomAddFilesDialog();
             adlg.StartLocation = AddonWindowLocation.Bottom;
             adlg.BuildActions = data.BuildActions;
-            WinFormsRunner runner = new WinFormsRunner();
             bool result = false;
 			
 			SelectFileDialogHandler.SetCommonFormProperties (data, adlg.FileDialog);
 			
-            Timer t = new Timer();
-            t.Interval = 20;
             try
             {
-                t.Tick += delegate
-                {
-//                    MonoDevelop.Core.Gui.DispatchService.RunPendingEvents();
-                };
-                //t.Enabled = true;
-                WinFormsRoot root = new WinFormsRoot();
-                if (adlg.ShowDialog(root) == DialogResult.Cancel)
+                rootForm = new WinFormsRoot ();
+                if (adlg.ShowDialog (rootForm) == DialogResult.Cancel)
                     result = false;
                 else
                 {
@@ -47,11 +61,9 @@ namespace MonoDevelop.Platform
             }
             finally
             {
-                t.Enabled = false;
                 adlg.Dispose();
             }
 			
-			parentWindow.Present ();
             return result;
         }
     }

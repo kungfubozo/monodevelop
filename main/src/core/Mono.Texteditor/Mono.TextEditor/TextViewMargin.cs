@@ -1605,7 +1605,8 @@ namespace Mono.TextEditor
 			}
 
 			DocumentLocation docLocation = PointToLocation (args.X, args.Y);
-			if (args.Button == 2 && this.textEditor.CanEdit (docLocation.Line)) {
+			// disable middle click on windows.
+			if (!Platform.IsWindows && args.Button == 2 && this.textEditor.CanEdit (docLocation.Line)) {
 				ISegment selectionRange = null;
 				int offset = Document.LocationToOffset (docLocation);
 				if (selection != null)
@@ -1702,10 +1703,16 @@ namespace Mono.TextEditor
 			CancelCodeSegmentTooltip ();
 			HideCodeSegmentPreviewWindow ();
 			previewSegment = segment;
-			if (segment == null)
+			if (segment == null || segment.Length == 0)
 				return;
 			codeSegmentTooltipTimeoutId = GLib.Timeout.Add (650, delegate {
 				previewWindow = new CodeSegmentPreviewWindow (this.textEditor, false, segment);
+				if (previewWindow.IsEmptyText) {
+					previewWindow.Destroy ();
+					previewWindow = null;
+					return false;
+				}
+					
 				int ox = 0, oy = 0;
 				this.textEditor.GdkWindow.GetOrigin (out ox, out oy);
 
@@ -1715,7 +1722,7 @@ namespace Mono.TextEditor
 				int w = previewWindow.SizeRequest ().Width;
 				int h = previewWindow.SizeRequest ().Height;
 
-				Gdk.Rectangle geometry = this.textEditor.Screen.GetMonitorGeometry (this.textEditor.Screen.GetMonitorAtPoint (ox + x, oy + y));
+				Gdk.Rectangle geometry = this.textEditor.Screen.GetUsableMonitorGeometry (this.textEditor.Screen.GetMonitorAtPoint (ox + x, oy + y));
 
 				if (x + ox + w > geometry.Right)
 					x = hintRectangle.Left - w;

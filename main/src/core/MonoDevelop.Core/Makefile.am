@@ -93,7 +93,9 @@ FILES =  \
 	MonoDevelop.Core.ProgressMonitoring/AggregatedProgressMonitor.cs \
 	MonoDevelop.Core.ProgressMonitoring/AsyncOperation.cs \
 	MonoDevelop.Core.ProgressMonitoring/ConsoleProgressMonitor.cs \
+	MonoDevelop.Core.ProgressMonitoring/ConsoleProjectLoadProgressMonitor.cs \
 	MonoDevelop.Core.ProgressMonitoring/FilteredProgressMonitor.cs \
+	MonoDevelop.Core.ProgressMonitoring/IProjectLoadProgressMonitor.cs \
 	MonoDevelop.Core.ProgressMonitoring/LogTextWriter.cs \
 	MonoDevelop.Core.ProgressMonitoring/NullAsyncOperation.cs \
 	MonoDevelop.Core.ProgressMonitoring/NullProgressMonitor.cs \
@@ -101,6 +103,7 @@ FILES =  \
 	MonoDevelop.Core.ProgressMonitoring/ProgressTracker.cs \
 	MonoDevelop.Core.ProgressMonitoring/SimpleProgressMonitor.cs \
 	MonoDevelop.Core.ProgressMonitoring/SynchronizedProgressMonitor.cs \
+	MonoDevelop.Core.ProgressMonitoring/WrappedProgressMonitor.cs \
 	MonoDevelop.Core.Serialization/ArrayHandler.cs \
 	MonoDevelop.Core.Serialization/ArrayListHandler.cs \
 	MonoDevelop.Core.Serialization/BinaryDataSerializer.cs \
@@ -146,6 +149,7 @@ FILES =  \
 	MonoDevelop.Core.Text/LaneStringMatcher.cs \
 	MonoDevelop.Core.Text/StringMatcher.cs \
 	MonoDevelop.Core/ApplicationService.cs \
+	MonoDevelop.Core/BrandingService.cs \
 	MonoDevelop.Core/ClrVersion.cs \
 	MonoDevelop.Core/ComponentModelLocalization.cs \
 	MonoDevelop.Core/DefaultAddinLocalizer.cs \
@@ -374,6 +378,7 @@ FILES =  \
 	MonoDevelop.Projects/BuildEventHandler.cs \
 	MonoDevelop.Projects/BuildResult.cs \
 	MonoDevelop.Projects/BuildTool.cs \
+	MonoDevelop.Projects/CleanEventHandler.cs \
 	MonoDevelop.Projects/CombineEntryRenamedEventArgs.cs \
 	MonoDevelop.Projects/CompiledAssemblyProject.cs \
 	MonoDevelop.Projects/ConfigurationEventHandler.cs \
@@ -476,7 +481,8 @@ REFS =  \
 	-r:System.Configuration \
 	-r:System.Core \
 	-r:System.Runtime.Remoting \
-	-r:System.Xml
+	-r:System.Xml \
+	-r:System.Xml.Linq
 
 all: $(ASSEMBLY) $(ASSEMBLY).mdb
 

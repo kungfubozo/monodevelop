@@ -30,7 +30,7 @@
 		<Command id = "MonoDevelop.Ide.Commands.EditCommands.DeleteKey"
 				_label = "_Delete"
 				defaultHandler = "MonoDevelop.Ide.Commands.DefaultDeleteKeyHandler"
-				shortcut = "Delete"/>
+				shortcut = "Delete" macShortcut = "BackSpace" />
 	</Category>
 	
 	<!-- EditCommands -->
@@ -590,6 +590,10 @@
 			_label = "_Focus Document"
 			shortcut = "Alt|C"
 			_description = "Focus current document" />
+	<Command id = "MonoDevelop.Ide.Commands.ViewCommands.ShowWelcomePage"
+			defaultHandler = "MonoDevelop.Ide.WelcomePage.ShowWelcomePageHandler"
+			_label = "Welcome Page"
+			icon = "gtk-home"/>
 	</Category>
 	
 	<!-- ToolCommands -->
@@ -857,11 +861,9 @@
 			shortcut = "Control|Down"
 			macShortcut = "" />
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.ScrollPageUp"
-			_label = "Scroll page up"
-			macShortcut = "Page_Up" />
+			_label = "Scroll page up"/>
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.ScrollPageDown"
-			_label = "Scroll page down"
-			macShortcut = "Page_Down" />
+			_label = "Scroll page down"/>
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.DeleteLine"
 			_label = "Delete entire line" />
 	<Command id = "MonoDevelop.Ide.Commands.TextEditorCommands.DeleteToLineEnd"

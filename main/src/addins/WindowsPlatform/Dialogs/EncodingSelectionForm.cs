@@ -36,6 +36,8 @@ using System.Windows.Forms;
 using MonoDevelop.Core;
 using MonoDevelop.Projects.Text;
 
+using CustomControls.OS;
+
 namespace MonoDevelop.Platform
 {
     public partial class EncodingSelectionForm : Form
@@ -43,6 +45,7 @@ namespace MonoDevelop.Platform
         public EncodingSelectionForm ()
         {
             InitializeComponent ();
+			LoadStockItems ();
 			Populate ();
         }
 		
@@ -78,6 +81,23 @@ namespace MonoDevelop.Platform
 			availableListView.AutoResizeColumns (ColumnHeaderAutoResizeStyle.HeaderSize);
 			availableListView.EndUpdate ();
 		}
+
+		void LoadStockItems ()
+		{
+			SetStockImage (addButton, Gtk.Stock.GoForward);
+			SetStockImage (removeButton, Gtk.Stock.GoBack);
+			SetStockImage (upButton, Gtk.Stock.GoUp);
+			SetStockImage (downButton, Gtk.Stock.GoDown);
+		}
+
+		void SetStockImage (Button b, string stockId)
+		{
+			var pixbuf = MonoDevelop.Ide.ImageService.GetPixbuf (stockId, Gtk.IconSize.Button);
+			var stockImage = Image.FromStream (new System.IO.MemoryStream (pixbuf.SaveToBuffer ("png")));
+
+			b.Image = stockImage;
+			b.Text = String.Empty;
+		}
 		
 		public TextEncoding [] SelectedEncodings {
 			get {
@@ -109,6 +129,36 @@ namespace MonoDevelop.Platform
             MoveItem (shownListView, availableListView);
         }
 
+        void ShiftItem (ListView listView, int shift)
+        {
+            if (listView.SelectedIndices.Count == 0)
+                return;
+
+            int selectedIndex = listView.SelectedIndices[0];
+            int newIndex = selectedIndex + shift;
+            if (newIndex < 0 || newIndex >= listView.Items.Count)
+                return;
+
+            listView.BeginUpdate ();
+
+            var item = listView.Items[selectedIndex];
+            listView.Items.RemoveAt (selectedIndex);
+            listView.Items.Insert (newIndex, item);
+            item.Selected = true;
+
+            listView.EndUpdate ();
+        }
+
+        private void upButtonClick (object sender, EventArgs e)
+        {
+            ShiftItem (shownListView, -1);
+        }
+
+        private void downButtonClick (object sender, EventArgs e)
+        {
+            ShiftItem (shownListView, 1);
+        }
+
         private void okButtonClick (object sender, EventArgs e)
         {
             DialogResult = DialogResult.OK;
@@ -118,6 +168,19 @@ namespace MonoDevelop.Platform
         {
             DialogResult = DialogResult.Cancel;
         }
+		
+		protected override void WndProc (ref Message m)
+		{
+			base.WndProc (ref m);
+			
+			switch (m.Msg) {
+				// No need to take into account the idle event, as
+				// we are handling it already from WinFormsRoot
+				case (int) Msg.WM_WINDOWPOSCHANGED:
+					MonoDevelop.Ide.DispatchService.RunPendingEvents ();
+					break;
+			}
+		}
     }
 
     public class EncodingListView : ListView
@@ -129,6 +192,7 @@ namespace MonoDevelop.Platform
             View = View.Details;
             MultiSelect = false;
 			FullRowSelect = true;
+            HideSelection = false;
 
             Columns.Add ("Name");
             Columns.Add ("Encoding");

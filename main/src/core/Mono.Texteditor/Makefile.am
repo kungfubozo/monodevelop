@@ -69,6 +69,7 @@ FILES =  \
 	Mono.TextEditor.Vi/ViMode.cs \
 	Mono.TextEditor.Vi/ViWordFindStrategy.cs \
 	Mono.TextEditor/AbstractPartitioner.cs \
+	Mono.TextEditor/Annotatable.cs \
 	Mono.TextEditor/BookmarkActions.cs \
 	Mono.TextEditor/BookmarkMarker.cs \
 	Mono.TextEditor/BufferedTextReader.cs \
@@ -91,6 +92,7 @@ FILES =  \
 	Mono.TextEditor/FoldMarkerMargin.cs \
 	Mono.TextEditor/FoldSegment.cs \
 	Mono.TextEditor/GapBuffer.cs \
+	Mono.TextEditor/GtkWorkarounds.cs \
 	Mono.TextEditor/GutterMargin.cs \
 	Mono.TextEditor/HeightTree.cs \
 	Mono.TextEditor/HelperMethods.cs \
@@ -161,6 +163,7 @@ RES =  \
 	SyntaxModes/ActionScriptSyntaxMode.xml \
 	SyntaxModes/AspNetSyntaxMode.xml \
 	SyntaxModes/BooSyntaxMode.xml \
+	SyntaxModes/CGSyntaxMode.xml \
 	SyntaxModes/ChangeLogSyntaxMode.xml \
 	SyntaxModes/CPPSyntaxMode.xml \
 	SyntaxModes/CSharpSyntaxMode.xml \
@@ -175,6 +178,7 @@ RES =  \
 	SyntaxModes/MakefileSyntaxMode.xml \
 	SyntaxModes/PythonSyntaxMode.xml \
 	SyntaxModes/RubySyntaxMode.xml \
+	SyntaxModes/StringsSyntaxMode.xml \
 	SyntaxModes/ValaSyntaxMode.xml \
 	SyntaxModes/VBNetSyntaxMode.xml \
 	SyntaxModes/XmlSyntaxMode.xml

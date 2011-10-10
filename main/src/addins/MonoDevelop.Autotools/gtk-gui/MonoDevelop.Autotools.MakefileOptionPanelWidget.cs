@@ -60,10 +60,10 @@ namespace MonoDevelop.Autotools
 		private global::Gtk.Table table4;
 		private global::Gtk.CheckButton cbAutotoolsProject;
 		private global::Gtk.ComboBox comboAsmRefVar;
-		private global::Gtk.ComboBox comboGacRefVar;
+		private global::Gtk.ComboBox comboPackageRefVar;
 		private global::Gtk.ComboBox comboProjectRefVar;
 		private global::Gtk.Entry entryAsmRefPattern;
-		private global::Gtk.Entry entryGacRefPattern;
+		private global::Gtk.Entry entryPackageRefPattern;
 		private global::Gtk.Entry entryProjectRefPattern;
 		private global::MonoDevelop.Components.FolderEntry fileEntryConfigureInPath;
 		private global::Gtk.HSeparator hseparator1;
@@ -72,7 +72,7 @@ namespace MonoDevelop.Autotools
 		private global::Gtk.Label lblCol5;
 		private global::Gtk.Label lblCol6;
 		private global::Gtk.Label lblConfigureInPath;
-		private global::Gtk.Label lblGacRef;
+		private global::Gtk.Label lblPackageRef;
 		private global::Gtk.Label lblProjectRef;
 		private global::Gtk.Label label3;
 		private global::Gtk.VBox vbox3;
@@ -678,11 +678,11 @@ namespace MonoDevelop.Autotools
 			this.cbAutotoolsProject.Label = global::Mono.Unix.Catalog.GetString ("Look for packages in configure.in");
 			this.cbAutotoolsProject.DrawIndicator = true;
 			this.table4.Add (this.cbAutotoolsProject);
-			global::Gtk.Table.TableChild w50 = ((global::Gtk.Table.TableChild)(this.table4 [this.cbAutotoolsProject]));
-			w50.TopAttach = ((uint)(6));
-			w50.BottomAttach = ((uint)(7));
-			w50.RightAttach = ((uint)(3));
-			w50.YOptions = ((global::Gtk.AttachOptions)(4));
+			global::Gtk.Table.TableChild w150 = ((global::Gtk.Table.TableChild)(this.table4 [this.cbAutotoolsProject]));
+			w150.TopAttach = ((uint)(6));
+			w150.BottomAttach = ((uint)(7));
+			w150.RightAttach = ((uint)(3));
+			w150.YOptions = ((global::Gtk.AttachOptions)(4));
 			// Container child table4.Gtk.Table+TableChild
 			this.comboAsmRefVar = global::Gtk.ComboBox.NewText ();
 			this.comboAsmRefVar.WidthRequest = 200;
@@ -695,27 +695,27 @@ namespace MonoDevelop.Autotools
 			w51.RightAttach = ((uint)(2));
 			w51.YOptions = ((global::Gtk.AttachOptions)(4));
 			// Container child table4.Gtk.Table+TableChild
-			this.comboGacRefVar = global::Gtk.ComboBox.NewText ();
-			this.comboGacRefVar.WidthRequest = 200;
-			this.comboGacRefVar.Name = "comboGacRefVar";
-			this.table4.Add (this.comboGacRefVar);
-			global::Gtk.Table.TableChild w52 = ((global::Gtk.Table.TableChild)(this.table4 [this.comboGacRefVar]));
-			w52.TopAttach = ((uint)(2));
-			w52.BottomAttach = ((uint)(3));
-			w52.LeftAttach = ((uint)(1));
-			w52.RightAttach = ((uint)(2));
-			w52.YOptions = ((global::Gtk.AttachOptions)(4));
+			this.comboPackageRefVar = global::Gtk.ComboBox.NewText ();
+			this.comboPackageRefVar.WidthRequest = 200;
+			this.comboPackageRefVar.Name = "comboPackageRefVar";
+			this.table4.Add (this.comboPackageRefVar);
+			global::Gtk.Table.TableChild w50 = ((global::Gtk.Table.TableChild)(this.table4 [this.comboPackageRefVar]));
+			w50.TopAttach = ((uint)(2));
+			w50.BottomAttach = ((uint)(3));
+			w50.LeftAttach = ((uint)(1));
+			w50.RightAttach = ((uint)(2));
+			w50.YOptions = ((global::Gtk.AttachOptions)(4));
 			// Container child table4.Gtk.Table+TableChild
 			this.comboProjectRefVar = global::Gtk.ComboBox.NewText ();
 			this.comboProjectRefVar.WidthRequest = 200;
 			this.comboProjectRefVar.Name = "comboProjectRefVar";
 			this.table4.Add (this.comboProjectRefVar);
-			global::Gtk.Table.TableChild w53 = ((global::Gtk.Table.TableChild)(this.table4 [this.comboProjectRefVar]));
-			w53.TopAttach = ((uint)(4));
-			w53.BottomAttach = ((uint)(5));
-			w53.LeftAttach = ((uint)(1));
-			w53.RightAttach = ((uint)(2));
-			w53.YOptions = ((global::Gtk.AttachOptions)(4));
+			global::Gtk.Table.TableChild w153 = ((global::Gtk.Table.TableChild)(this.table4 [this.comboProjectRefVar]));
+			w153.TopAttach = ((uint)(4));
+			w153.BottomAttach = ((uint)(5));
+			w153.LeftAttach = ((uint)(1));
+			w153.RightAttach = ((uint)(2));
+			w153.YOptions = ((global::Gtk.AttachOptions)(4));
 			// Container child table4.Gtk.Table+TableChild
 			this.entryAsmRefPattern = new global::Gtk.Entry ();
 			this.entryAsmRefPattern.CanFocus = true;
@@ -731,19 +731,19 @@ namespace MonoDevelop.Autotools
 			w54.XOptions = ((global::Gtk.AttachOptions)(4));
 			w54.YOptions = ((global::Gtk.AttachOptions)(4));
 			// Container child table4.Gtk.Table+TableChild
-			this.entryGacRefPattern = new global::Gtk.Entry ();
-			this.entryGacRefPattern.CanFocus = true;
-			this.entryGacRefPattern.Name = "entryGacRefPattern";
-			this.entryGacRefPattern.IsEditable = true;
-			this.entryGacRefPattern.InvisibleChar = '●';
-			this.table4.Add (this.entryGacRefPattern);
-			global::Gtk.Table.TableChild w55 = ((global::Gtk.Table.TableChild)(this.table4 [this.entryGacRefPattern]));
-			w55.TopAttach = ((uint)(2));
-			w55.BottomAttach = ((uint)(3));
-			w55.LeftAttach = ((uint)(2));
-			w55.RightAttach = ((uint)(3));
-			w55.XOptions = ((global::Gtk.AttachOptions)(4));
-			w55.YOptions = ((global::Gtk.AttachOptions)(4));
+			this.entryPackageRefPattern = new global::Gtk.Entry ();
+			this.entryPackageRefPattern.CanFocus = true;
+			this.entryPackageRefPattern.Name = "entryPackageRefPattern";
+			this.entryPackageRefPattern.IsEditable = true;
+			this.entryPackageRefPattern.InvisibleChar = '●';
+			this.table4.Add (this.entryPackageRefPattern);
+			global::Gtk.Table.TableChild w53 = ((global::Gtk.Table.TableChild)(this.table4 [this.entryPackageRefPattern]));
+			w53.TopAttach = ((uint)(2));
+			w53.BottomAttach = ((uint)(3));
+			w53.LeftAttach = ((uint)(2));
+			w53.RightAttach = ((uint)(3));
+			w53.XOptions = ((global::Gtk.AttachOptions)(4));
+			w53.YOptions = ((global::Gtk.AttachOptions)(4));
 			// Container child table4.Gtk.Table+TableChild
 			this.entryProjectRefPattern = new global::Gtk.Entry ();
 			this.entryProjectRefPattern.CanFocus = true;
@@ -822,13 +822,13 @@ namespace MonoDevelop.Autotools
 			this.lblCol6.Xalign = 0F;
 			this.lblCol6.LabelProp = global::Mono.Unix.Catalog.GetString ("Prefix:");
 			this.table4.Add (this.lblCol6);
-			global::Gtk.Table.TableChild w62 = ((global::Gtk.Table.TableChild)(this.table4 [this.lblCol6]));
-			w62.TopAttach = ((uint)(1));
-			w62.BottomAttach = ((uint)(2));
-			w62.LeftAttach = ((uint)(2));
-			w62.RightAttach = ((uint)(3));
-			w62.XOptions = ((global::Gtk.AttachOptions)(4));
-			w62.YOptions = ((global::Gtk.AttachOptions)(4));
+			global::Gtk.Table.TableChild w162 = ((global::Gtk.Table.TableChild)(this.table4 [this.lblCol6]));
+			w162.TopAttach = ((uint)(1));
+			w162.BottomAttach = ((uint)(2));
+			w162.LeftAttach = ((uint)(2));
+			w162.RightAttach = ((uint)(3));
+			w162.XOptions = ((global::Gtk.AttachOptions)(4));
+			w162.YOptions = ((global::Gtk.AttachOptions)(4));
 			// Container child table4.Gtk.Table+TableChild
 			this.lblConfigureInPath = new global::Gtk.Label ();
 			this.lblConfigureInPath.Name = "lblConfigureInPath";
@@ -841,16 +841,16 @@ namespace MonoDevelop.Autotools
 			w63.XOptions = ((global::Gtk.AttachOptions)(4));
 			w63.YOptions = ((global::Gtk.AttachOptions)(4));
 			// Container child table4.Gtk.Table+TableChild
-			this.lblGacRef = new global::Gtk.Label ();
-			this.lblGacRef.Name = "lblGacRef";
-			this.lblGacRef.Xalign = 0F;
-			this.lblGacRef.LabelProp = global::Mono.Unix.Catalog.GetString ("Package References");
-			this.table4.Add (this.lblGacRef);
-			global::Gtk.Table.TableChild w64 = ((global::Gtk.Table.TableChild)(this.table4 [this.lblGacRef]));
-			w64.TopAttach = ((uint)(2));
-			w64.BottomAttach = ((uint)(3));
-			w64.XOptions = ((global::Gtk.AttachOptions)(4));
-			w64.YOptions = ((global::Gtk.AttachOptions)(4));
+			this.lblPackageRef = new global::Gtk.Label ();
+			this.lblPackageRef.Name = "lblPackageRef";
+			this.lblPackageRef.Xalign = 0F;
+			this.lblPackageRef.LabelProp = global::Mono.Unix.Catalog.GetString ("Package References");
+			this.table4.Add (this.lblPackageRef);
+			global::Gtk.Table.TableChild w62 = ((global::Gtk.Table.TableChild)(this.table4 [this.lblPackageRef]));
+			w62.TopAttach = ((uint)(2));
+			w62.BottomAttach = ((uint)(3));
+			w62.XOptions = ((global::Gtk.AttachOptions)(4));
+			w62.YOptions = ((global::Gtk.AttachOptions)(4));
 			// Container child table4.Gtk.Table+TableChild
 			this.lblProjectRef = new global::Gtk.Label ();
 			this.lblProjectRef.Name = "lblProjectRef";
@@ -1012,7 +1012,7 @@ namespace MonoDevelop.Autotools
 			this.cbKeepDeployFilesSync.Clicked += new global::System.EventHandler (this.OnCbKeepDeployFilesSyncClicked);
 			this.cbKeepRefSync.Clicked += new global::System.EventHandler (this.OnCbKeepRefSyncClicked);
 			this.comboProjectRefVar.Changed += new global::System.EventHandler (this.OnComboProjectRefVarChanged);
-			this.comboGacRefVar.Changed += new global::System.EventHandler (this.OnComboGacRefVarChanged);
+			this.comboPackageRefVar.Changed += new global::System.EventHandler (this.OnComboPackageRefVarChanged);
 			this.comboAsmRefVar.Changed += new global::System.EventHandler (this.OnComboAsmRefVarChanged);
 			this.cbAutotoolsProject.Clicked += new global::System.EventHandler (this.OnCbAutotoolsProjectClicked);
 			this.comboMessageType.Changed += new global::System.EventHandler (this.OnComboMessageTypeChanged);

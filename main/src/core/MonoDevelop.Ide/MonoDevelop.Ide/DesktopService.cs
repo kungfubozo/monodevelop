@@ -33,7 +33,7 @@ using System.IO;
 
 namespace MonoDevelop.Ide
 {
-	public class DesktopService
+	public static class DesktopService
 	{
 		static PlatformService platformService;
 		
@@ -128,7 +128,7 @@ namespace MonoDevelop.Ide
 		{
 			return platformService.GetPixbufForType (mimeType, size);
 		}
-		
+
 		public static bool SetGlobalMenu (MonoDevelop.Components.Commands.CommandManager commandManager, string commandMenuAddinPath)
 		{
 			return platformService.SetGlobalMenu (commandManager, commandMenuAddinPath);
@@ -144,6 +144,11 @@ namespace MonoDevelop.Ide
 		public static void SetFileAttributes (string fileName, object attributes)
 		{
 			platformService.SetFileAttributes (fileName, attributes);
+		}
+		
+		public static Gdk.Rectangle GetUsableMonitorGeometry (Gdk.Screen screen, int monitor)
+		{
+			return platformService.GetUsableMonitorGeometry (screen, monitor);
 		}
 		
 		public static bool CanOpenTerminal {

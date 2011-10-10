@@ -57,8 +57,7 @@ namespace MonoDevelop.SourceEditor.OptionPanels
 			this.enableParameterInsightCheckbutton.Active = DefaultSourceEditorOptions.Instance.EnableParameterInsight;
 			this.hideObsoleteItemsCheckbutton.Active = DefaultSourceEditorOptions.Instance.HideObsoleteItems;
 			this.autoCodeCompletionCheckbutton.Active = DefaultSourceEditorOptions.Instance.EnableAutoCodeCompletion;
-			this.fontselection.SetFontName (DefaultSourceEditorOptions.Instance.FontName);
-			radiobutton2.Active = !(radiobutton1.Active = this.fontselection.FontName == MonoDevelop.Ide.DesktopService.DefaultMonospaceFont);
+			this.antiAliasingCheckbutton.Active = DefaultSourceEditorOptions.Instance.UseAntiAliasing;
 			
 			HandleCodeCompletioncheckbuttonToggled (this, EventArgs.Empty);
 			return this;
@@ -74,9 +73,7 @@ namespace MonoDevelop.SourceEditor.OptionPanels
 			DefaultSourceEditorOptions.Instance.CompleteWithSpaceOrPunctuation = this.spaceOrPunctiuationCheckbutton.Active;
 			DefaultSourceEditorOptions.Instance.EnableParameterInsight = this.enableParameterInsightCheckbutton.Active;
 			DefaultSourceEditorOptions.Instance.HideObsoleteItems = this.hideObsoleteItemsCheckbutton.Active;
-			if (this.radiobutton1.Active)
-				MonoDevelop.Ide.Fonts.FontService.SetFont("Editor", MonoDevelop.Ide.DesktopService.DefaultMonospaceFont);
-			else MonoDevelop.Ide.Fonts.FontService.SetFont ("Editor", this.fontselection.FontName);
+			DefaultSourceEditorOptions.Instance.UseAntiAliasing = this.antiAliasingCheckbutton.Active;
 		}
 
 		public void Initialize (OptionsDialog dialog, object dataObject)

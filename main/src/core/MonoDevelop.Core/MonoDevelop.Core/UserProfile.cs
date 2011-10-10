@@ -30,8 +30,14 @@ namespace MonoDevelop.Core
 	public class UserProfile
 	{
 		const string PROFILE_ENV_VAR = "MONODEVELOP_PROFILE";
-		const string APP_ID = "MonoDevelop-Unity";
-		const string CURRENT_PROFILE_VERSION = "2.6";
+		const string CURRENT_PROFILE_VERSION = "2.8";
+
+		internal static string[] GetMigratableVersions ()
+		{
+			return new[] {
+				"2.6", "2.7"
+			};
+		}
 		
 		static readonly UserProfile currentProfile = GetCurrentProfile ();
 		
@@ -106,7 +112,7 @@ namespace MonoDevelop.Core
 		/// </summary>
 		internal static UserProfile ForTest (string version, FilePath profileLocation)
 		{
-			string appId = APP_ID + "-" + version;
+			string appId = BrandingService.ApplicationName + "-" + version;
 			return new UserProfile () {
 				CacheDir = profileLocation.Combine (appId, "Cache"),
 				UserDataRoot = profileLocation.Combine (appId, "UserData"),
@@ -120,7 +126,7 @@ namespace MonoDevelop.Core
 		
 		internal static UserProfile ForWindows (string version)
 		{
-			string appId = APP_ID + "-" + version;
+			string appId = BrandingService.ApplicationName + "-" + version;
 			FilePath local = Environment.GetFolderPath (Environment.SpecialFolder.LocalApplicationData);
 			FilePath roaming = Environment.GetFolderPath (Environment.SpecialFolder.ApplicationData);
 			//FilePath localLow = GetKnownFolderPath (new Guid ("A520A1A4-1780-4FF6-BD18-167343C5AF16"));
@@ -141,7 +147,7 @@ namespace MonoDevelop.Core
 		
 		internal static UserProfile ForMac (string version)
 		{
-			string appId = APP_ID + "-" + version;
+			string appId = BrandingService.ApplicationName + "-" + version;
 			FilePath home = Environment.GetFolderPath (Environment.SpecialFolder.Personal);
 			FilePath library = home.Combine ("Library");
 			
@@ -175,7 +181,7 @@ namespace MonoDevelop.Core
 			if (xdgCacheHome.IsNullOrEmpty)
 				xdgCacheHome = home.Combine (".cache");
 			
-			string appId = APP_ID + "-" + version;
+			string appId = BrandingService.ApplicationName + "-" + version;
 			FilePath data = xdgDataHome.Combine (appId);
 			FilePath config = xdgConfigHome.Combine (appId);
 			FilePath cache = xdgCacheHome.Combine (appId);
@@ -194,7 +200,7 @@ namespace MonoDevelop.Core
 		internal static UserProfile ForMD24 ()
 		{
 			FilePath appdata = Environment.GetFolderPath (Environment.SpecialFolder.ApplicationData);
-			var mdConfig = appdata.Combine ("MonoDevelop-Unity");
+			var mdConfig = appdata.Combine (BrandingService.ApplicationName); 
 			return new UserProfile () {
 				UserDataRoot = mdConfig,
 				ConfigDir = mdConfig,

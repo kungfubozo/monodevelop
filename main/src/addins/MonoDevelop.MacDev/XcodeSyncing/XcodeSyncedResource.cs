@@ -50,7 +50,7 @@ namespace MonoDevelop.MacDev.XcodeSyncing
 		public override bool NeedsSyncOut (XcodeSyncContext context)
 		{
 			string target = context.ProjectDir.Combine (targetRelative);
-			return !File.Exists (target) || context.GetSyncTime (targetRelative) < File.GetLastWriteTime (source);
+			return !File.Exists (target) || context.GetSyncTime (targetRelative) != File.GetLastWriteTime (source);
 		}
 		
 		public override void SyncOut (XcodeSyncContext context)
@@ -99,12 +99,12 @@ namespace MonoDevelop.MacDev.XcodeSyncing
 		
 		public override void AddToProject (XcodeProject project, FilePath syncProjectDir)
 		{
-			PBXGroup grp = project.RootGroup;
+			PBXGroup grp = project.ProjectGroup;
 			
 			foreach (var groupName in GetGroups ())
 				grp = project.GetGroup (grp, groupName) ?? project.AddGroup (grp, groupName);
 			
-			project.AddResource (targetRelative.FileName, targetRelative, grp);
+			project.AddResource (targetRelative, grp);
 		}
 		
 		public override string[] GetTargetRelativeFileNames ()

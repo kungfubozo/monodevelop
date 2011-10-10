@@ -32,15 +32,15 @@ MonoDevelop.app:
 	mkdir -p $(MAC_APP_DIR)/Contents/MacOS/{lib,share}
 	mkdir -p $(MAC_APP_LIB_DIR)
 
-	@echo ""
-	@echo "Copying install prefix into app bundle"
-	@echo ""
-	@if [[ "$(prefix)" == /Library* ]] || [[ "$(prefix)" == /usr* ]] || [[ "$(prefix)" == "" ]] ; then \
-		echo "WARNING: cannot merge system prefix $(prefix)"; \
-	else \
-		echo "cp -pR $(prefix)/* $(MAC_APP_DIR)/Contents/MacOS/"; \
-		cp -pR $(prefix)/* $(MAC_APP_DIR)/Contents/MacOS/; \
-	fi
+#	@echo ""
+#	@echo "Copying install prefix into app bundle"
+#	@echo ""
+#	@if [[ "$(prefix)" == /Library* ]] || [[ "$(prefix)" == /usr* ]]; then \
+#		echo "WARNING: cannot merge system prefix $(prefix)"; \
+#	else \
+#		echo "cp -pR $(prefix)/* $(MAC_APP_DIR)/Contents/MacOS/"; \
+#		cp -pR $(prefix)/* $(MAC_APP_DIR)/Contents/MacOS/; \
+#	fi
 
 	@echo ""
 	@echo "Copying MonoDevelop into app bundle"
@@ -108,7 +108,7 @@ MonoDevelop.app:
 	@echo "Copying supported extras into app bundle"
 	@echo ""
 
-	@for ADDIN in MonoDevelop.Database; do \
+	@for ADDIN in MonoDevelop.Database MonoDevelop.MonoMac; do \
 		(ls $(EXTRAS)/$${ADDIN}/build/* > /dev/null 2>&1 && \
 			echo "Copying $${ADDIN}" && \
 			mkdir -p $(MAC_APP_LIB_DIR)/AddIns/$${ADDIN} && \

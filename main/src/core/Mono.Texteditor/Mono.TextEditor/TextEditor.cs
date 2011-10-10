@@ -1506,6 +1506,11 @@ namespace Mono.TextEditor
 			var cairoArea = new Cairo.Rectangle (area.X, area.Y, area.Width, area.Height);
 			using (Cairo.Context cr = Gdk.CairoHelper.Create (e.Window))
 			using (Cairo.Context textViewCr = Gdk.CairoHelper.Create (e.Window)) {
+				if (!Options.UseAntiAliasing) {
+					textViewCr.Antialias = Cairo.Antialias.None;
+					cr.Antialias = Cairo.Antialias.None;
+				}
+				
 				UpdateMarginXOffsets ();
 				
 				cr.LineWidth = Options.Zoom;
@@ -2401,7 +2406,7 @@ namespace Mono.TextEditor
 			w += 10;
 			
 			int x = xloc + ox + (int)textViewMargin.XOffset - (int) ((double)w * xalign);
-			Gdk.Rectangle geometry = Screen.GetMonitorGeometry (Screen.GetMonitorAtPoint (ox + xloc, oy + yloc));
+			Gdk.Rectangle geometry = Screen.GetUsableMonitorGeometry (Screen.GetMonitorAtPoint (ox + xloc, oy + yloc));
 			
 			if (x + w >= geometry.Right)
 				x = geometry.Right - w;

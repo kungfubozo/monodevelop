@@ -51,21 +51,11 @@ namespace MonoDevelop.SourceEditor.OptionPanels
 		private global::Gtk.CheckButton foldregionsCheckbutton;
 
 		private global::Gtk.CheckButton foldCommentsCheckbutton;
-
 		private global::Gtk.Label GtkLabel15;
-
-		private global::Gtk.Alignment GtkAlignment1;
-
-		private global::Gtk.VBox vbox3;
-
-		private global::Gtk.RadioButton radiobutton1;
-
-		private global::Gtk.HBox hbox1;
-
-		private global::Gtk.RadioButton radiobutton2;
-
-		private global::Gtk.FontButton fontselection;
-
+		private global::Gtk.Alignment alignment4;
+		private global::Gtk.VBox vbox6;
+		private global::Gtk.CheckButton antiAliasingCheckbutton;
+		
 		protected virtual void Build ()
 		{
 			global::Stetic.Gui.Initialize (this);
@@ -294,76 +284,47 @@ namespace MonoDevelop.SourceEditor.OptionPanels
 			w21.Fill = false;
 			this.alignment3.Add (this.vbox5);
 			this.vbox1.Add (this.alignment3);
-			global::Gtk.Box.BoxChild w23 = ((global::Gtk.Box.BoxChild)(this.vbox1[this.alignment3]));
-			w23.Position = 3;
-			w23.Expand = false;
-			w23.Fill = false;
+			global::Gtk.Box.BoxChild w120 = ((global::Gtk.Box.BoxChild)(this.vbox1 [this.alignment3]));
+			w120.Position = 3;
+			w120.Expand = false;
+			w120.Fill = false;
 			// Container child vbox1.Gtk.Box+BoxChild
 			this.GtkLabel15 = new global::Gtk.Label ();
 			this.GtkLabel15.Name = "GtkLabel15";
-			this.GtkLabel15.Xalign = 0f;
-			this.GtkLabel15.LabelProp = global::Mono.Unix.Catalog.GetString ("<b>Font</b>");
+			this.GtkLabel15.Xalign = 0F;
+			this.GtkLabel15.LabelProp = global::Mono.Unix.Catalog.GetString ("<b>Appearance</b>");
 			this.GtkLabel15.UseMarkup = true;
 			this.vbox1.Add (this.GtkLabel15);
-			global::Gtk.Box.BoxChild w24 = ((global::Gtk.Box.BoxChild)(this.vbox1[this.GtkLabel15]));
-			w24.Position = 4;
-			w24.Expand = false;
-			w24.Fill = false;
+			global::Gtk.Box.BoxChild w119 = ((global::Gtk.Box.BoxChild)(this.vbox1 [this.GtkLabel15]));
+			w119.Position = 4;
+			w119.Expand = false;
+			w119.Fill = false;
 			// Container child vbox1.Gtk.Box+BoxChild
-			this.GtkAlignment1 = new global::Gtk.Alignment (0f, 0f, 1f, 1f);
-			this.GtkAlignment1.Name = "GtkAlignment1";
-			this.GtkAlignment1.LeftPadding = ((uint)(12));
-			// Container child GtkAlignment1.Gtk.Container+ContainerChild
-			this.vbox3 = new global::Gtk.VBox ();
-			this.vbox3.Name = "vbox3";
-			this.vbox3.Spacing = 6;
-			// Container child vbox3.Gtk.Box+BoxChild
-			this.radiobutton1 = new global::Gtk.RadioButton (global::Mono.Unix.Catalog.GetString ("_Default monospace"));
-			this.radiobutton1.CanFocus = true;
-			this.radiobutton1.Name = "radiobutton1";
-			this.radiobutton1.Active = true;
-			this.radiobutton1.DrawIndicator = true;
-			this.radiobutton1.UseUnderline = true;
-			this.radiobutton1.Group = new global::GLib.SList (global::System.IntPtr.Zero);
-			this.vbox3.Add (this.radiobutton1);
-			global::Gtk.Box.BoxChild w25 = ((global::Gtk.Box.BoxChild)(this.vbox3[this.radiobutton1]));
-			w25.Position = 0;
-			w25.Expand = false;
-			w25.Fill = false;
-			// Container child vbox3.Gtk.Box+BoxChild
-			this.hbox1 = new global::Gtk.HBox ();
-			this.hbox1.Name = "hbox1";
-			this.hbox1.Spacing = 12;
-			// Container child hbox1.Gtk.Box+BoxChild
-			this.radiobutton2 = new global::Gtk.RadioButton (global::Mono.Unix.Catalog.GetString ("_Custom"));
-			this.radiobutton2.CanFocus = true;
-			this.radiobutton2.Name = "radiobutton2";
-			this.radiobutton2.DrawIndicator = true;
-			this.radiobutton2.UseUnderline = true;
-			this.radiobutton2.Group = this.radiobutton1.Group;
-			this.hbox1.Add (this.radiobutton2);
-			global::Gtk.Box.BoxChild w26 = ((global::Gtk.Box.BoxChild)(this.hbox1[this.radiobutton2]));
-			w26.Position = 0;
-			w26.Expand = false;
-			w26.Fill = false;
-			// Container child hbox1.Gtk.Box+BoxChild
-			this.fontselection = new global::Gtk.FontButton ();
-			this.fontselection.CanFocus = true;
-			this.fontselection.Name = "fontselection";
-			this.hbox1.Add (this.fontselection);
-			global::Gtk.Box.BoxChild w27 = ((global::Gtk.Box.BoxChild)(this.hbox1[this.fontselection]));
-			w27.Position = 1;
-			this.vbox3.Add (this.hbox1);
-			global::Gtk.Box.BoxChild w28 = ((global::Gtk.Box.BoxChild)(this.vbox3[this.hbox1]));
-			w28.Position = 1;
-			w28.Expand = false;
-			w28.Fill = false;
-			this.GtkAlignment1.Add (this.vbox3);
-			this.vbox1.Add (this.GtkAlignment1);
-			global::Gtk.Box.BoxChild w30 = ((global::Gtk.Box.BoxChild)(this.vbox1[this.GtkAlignment1]));
-			w30.Position = 5;
-			w30.Expand = false;
-			w30.Fill = false;
+			this.alignment4 = new global::Gtk.Alignment (0.5F, 0.5F, 1F, 1F);
+			this.alignment4.Name = "alignment4";
+			this.alignment4.LeftPadding = ((uint)(12));
+			// Container child alignment4.Gtk.Container+ContainerChild
+			this.vbox6 = new global::Gtk.VBox ();
+			this.vbox6.Name = "vbox6";
+			this.vbox6.Spacing = 6;
+			// Container child vbox6.Gtk.Box+BoxChild
+			this.antiAliasingCheckbutton = new global::Gtk.CheckButton ();
+			this.antiAliasingCheckbutton.CanFocus = true;
+			this.antiAliasingCheckbutton.Name = "antiAliasingCheckbutton";
+			this.antiAliasingCheckbutton.Label = global::Mono.Unix.Catalog.GetString ("_Use anti aliasing");
+			this.antiAliasingCheckbutton.DrawIndicator = true;
+			this.antiAliasingCheckbutton.UseUnderline = true;
+			this.vbox6.Add (this.antiAliasingCheckbutton);
+			global::Gtk.Box.BoxChild w121 = ((global::Gtk.Box.BoxChild)(this.vbox6 [this.antiAliasingCheckbutton]));
+			w121.Position = 0;
+			w121.Expand = false;
+			w121.Fill = false;
+			this.alignment4.Add (this.vbox6);
+			this.vbox1.Add (this.alignment4);
+			global::Gtk.Box.BoxChild w23 = ((global::Gtk.Box.BoxChild)(this.vbox1 [this.alignment4]));
+			w23.Position = 5;
+			w23.Expand = false;
+			w23.Fill = false;
 			this.Add (this.vbox1);
 			if ((this.Child != null)) {
 				this.Child.ShowAll ();

@@ -83,7 +83,7 @@ namespace MonoDevelop.Autotools
 			//References
 			this.cbKeepRefSync.Active = data.SyncReferences;
 
-			this.entryGacRefPattern.Text = data.GacRefVar.Prefix;
+			this.entryPackageRefPattern.Text = data.PackageRefVar.Prefix;
 			this.entryAsmRefPattern.Text = data.AsmRefVar.Prefix;
 			this.entryProjectRefPattern.Text = data.ProjectRefVar.Prefix;
 			
@@ -140,7 +140,7 @@ namespace MonoDevelop.Autotools
 			this.Build();
 			combos = new ComboBox [7] {
 				comboFilesVar, comboDeployFilesVar, comboResourcesVar, comboOthersVar, 
-				comboGacRefVar, comboAsmRefVar, comboProjectRefVar}; 
+				comboPackageRefVar, comboAsmRefVar, comboProjectRefVar}; 
 				//comboAssemblyName, comboOutputDir};
 		}
 		
@@ -176,9 +176,9 @@ namespace MonoDevelop.Autotools
 
 			// References
 			data.SyncReferences = this.cbKeepRefSync.Active;
-			data.GacRefVar.Sync = this.cbKeepRefSync.Active;
-			data.GacRefVar.Name = GetActiveVar (comboGacRefVar);
-			data.GacRefVar.Prefix = this.entryGacRefPattern.Text.Trim ();
+			data.PackageRefVar.Sync = this.cbKeepRefSync.Active;
+			data.PackageRefVar.Name = GetActiveVar (comboPackageRefVar);
+			data.PackageRefVar.Prefix = this.entryPackageRefPattern.Text.Trim ();
 
 			data.AsmRefVar.Sync = this.cbKeepRefSync.Active;
 			data.AsmRefVar.Name = GetActiveVar (comboAsmRefVar);
@@ -231,7 +231,7 @@ namespace MonoDevelop.Autotools
 				}
 
 				if (tmpData.SyncReferences &&
-					(String.IsNullOrEmpty (tmpData.GacRefVar.Name) ||
+					(String.IsNullOrEmpty (tmpData.PackageRefVar.Name) ||
 					String.IsNullOrEmpty (tmpData.AsmRefVar.Name) ||
 					String.IsNullOrEmpty (tmpData.ProjectRefVar.Name))) {
 
@@ -342,7 +342,7 @@ namespace MonoDevelop.Autotools
 			SetActiveVar (comboResourcesVar, data.ResourcesVar.Name);
 			SetActiveVar (comboOthersVar, data.OthersVar.Name);
 
-			SetActiveVar (comboGacRefVar, data.GacRefVar.Name);
+			SetActiveVar (comboPackageRefVar, data.PackageRefVar.Name);
 			SetActiveVar (comboAsmRefVar, data.AsmRefVar.Name);
 			SetActiveVar (comboProjectRefVar, data.ProjectRefVar.Name);
 
@@ -452,7 +452,7 @@ namespace MonoDevelop.Autotools
 
 			string files_var = GetActiveVar (comboFilesVar);
 			string res_var = GetActiveVar (comboResourcesVar);
-			string ref_var = GetActiveVar (comboGacRefVar);
+			string ref_var = GetActiveVar (comboPackageRefVar);
 
 			string prefix;
 			foreach (string var in vars) {
@@ -541,7 +541,7 @@ namespace MonoDevelop.Autotools
 
 			cbKeepRefSync.Active = false;
 
-			entryGacRefPattern.Text = String.Empty;
+			entryPackageRefPattern.Text = String.Empty;
 			entryAsmRefPattern.Text = String.Empty;
 			entryProjectRefPattern.Text = String.Empty;
 
@@ -583,11 +583,11 @@ namespace MonoDevelop.Autotools
 			cbKeepRefSync.Active = true;
 			HandleKeepRefSyncClicked (cbKeepRefSync);
 
-			SetActiveVar (comboGacRefVar, ref_var);
+			SetActiveVar (comboPackageRefVar, ref_var);
 			SetActiveVar (comboAsmRefVar, ref_var);
 			SetActiveVar (comboProjectRefVar, ref_var);
 
-			entryGacRefPattern.Text = prefix;
+			entryPackageRefPattern.Text = prefix;
 			entryAsmRefPattern.Text = prefix;
 			entryProjectRefPattern.Text = prefix;
 		}
@@ -671,9 +671,9 @@ namespace MonoDevelop.Autotools
 			this.lblCol5.Sensitive = state;
 			this.lblCol6.Sensitive = state;
 			
-			this.lblGacRef.Sensitive = state;
-			this.comboGacRefVar.Sensitive = state;
-			this.entryGacRefPattern.Sensitive = state;
+			this.lblPackageRef.Sensitive = state;
+			this.comboPackageRefVar.Sensitive = state;
+			this.entryPackageRefPattern.Sensitive = state;
 
 			this.lblAsmRef.Sensitive = state;
 			this.comboAsmRefVar.Sensitive = state;
@@ -895,15 +895,15 @@ namespace MonoDevelop.Autotools
 			}
 		}
 
-		protected virtual void OnComboGacRefVarChanged (object sender, System.EventArgs e)
+		protected virtual void OnComboPackageRefVarChanged (object sender, System.EventArgs e)
 		{
-			HandleComboGacRefVarChanged ((ComboBox) sender);
+			HandleComboPackageRefVarChanged ((ComboBox) sender);
 		}
 
-		void HandleComboGacRefVarChanged (ComboBox cb)
+		void HandleComboPackageRefVarChanged (ComboBox cb)
 		{
 			string active = GetActiveVar (cb);
-			entryGacRefPattern.Text = GuessRefPrefix (data.Makefile.GetListVariable (active));
+			entryPackageRefPattern.Text = GuessRefPrefix (data.Makefile.GetListVariable (active));
 		}
 
 		protected virtual void OnComboAsmRefVarChanged (object sender, System.EventArgs e)

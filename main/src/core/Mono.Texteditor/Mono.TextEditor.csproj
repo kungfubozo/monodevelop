@@ -9,7 +9,6 @@
     <OutputType>Library</OutputType>
     <AssemblyName>Mono.TextEditor</AssemblyName>
     <RootNamespace>Mono.TextEditor</RootNamespace>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -181,6 +180,8 @@
     <Compile Include="Mono.TextEditor.Utils\RedBlackTree.cs" />
     <Compile Include="Mono.TextEditor\HeightTree.cs" />
     <Compile Include="Mono.TextEditor.Highlighting\ColorSheme.cs" />
+    <Compile Include="Mono.TextEditor\GtkWorkarounds.cs" />
+    <Compile Include="Mono.TextEditor\Annotatable.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="ChangeLog" />
@@ -278,6 +279,12 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Styles\GeditStyle.xml">
       <LogicalName>GeditStyle.xml</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="SyntaxModes\CGSyntaxMode.xml">
+      <LogicalName>CGSyntaxMode.xml</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="SyntaxModes\StringsSyntaxMode.xml">
+      <LogicalName>StringsSyntaxMode.xml</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />

@@ -352,32 +352,35 @@ namespace MonoDevelop.AssemblyBrowser
 		
 		ITreeNavigator SearchMember (ITreeNavigator nav, string helpUrl)
 		{
-			do {
-				if (IsMatch (nav, helpUrl))
-					return nav;
-				if (!SkipChildren (nav, helpUrl) && nav.HasChildren ()) {
-					DispatchService.RunPendingEvents ();
-					nav.MoveToFirstChild ();
-					ITreeNavigator result = SearchMember (nav, helpUrl);
-					if (result != null)
-						return result;
-					
-					if (!nav.MoveToParent ())
-						return null;
-					try {
-						if (nav.DataItem is DomCecilType && nav.Options["PublicApiOnly"]) {
-							nav.Options["PublicApiOnly"] = false;
-							nav.MoveToFirstChild ();
-							result = SearchMember (nav, helpUrl);
-							if (result != null)
-								return result;
-							nav.MoveToParent ();
+			try {
+				do {
+					if (IsMatch (nav, helpUrl))
+						return nav;
+					if (!SkipChildren (nav, helpUrl) && nav.HasChildren ()) {
+						DispatchService.RunPendingEvents ();
+						nav.MoveToFirstChild ();
+						ITreeNavigator result = SearchMember (nav, helpUrl);
+						if (result != null)
+							return result;
+						
+						if (!nav.MoveToParent ())
+							return null;
+						try {
+							if (nav.DataItem is DomCecilType && nav.Options["PublicApiOnly"]) {
+								nav.Options["PublicApiOnly"] = false;
+								nav.MoveToFirstChild ();
+								result = SearchMember (nav, helpUrl);
+								if (result != null)
+									return result;
+								nav.MoveToParent ();
+							}
+						} catch (Exception) {
+							return null;
 						}
-					} catch (Exception) {
-						return null;
 					}
-				}
-			} while (nav.MoveNext());
+				} while (nav.MoveNext());
+			} catch (Exception) {
+			}
 			return null;
 		}
 		
@@ -907,16 +910,19 @@ namespace MonoDevelop.AssemblyBrowser
 				IMember member = nav.DataItem as IMember;
 				string documentation = GettextCatalog.GetString ("No documentation available.");
 				if (member != null) {
-					XmlNode node = member.GetMonodocDocumentation ();
-					if (node != null) {
-						documentation = TransformDocumentation (node) ?? documentation;
-						/*
-						StringWriter writer = new StringWriter ();
-						XmlTextWriter w = new XmlTextWriter (writer);
-						node.WriteTo (w);
-						System.Console.WriteLine ("---------------------------");
-						System.Console.WriteLine (writer);*/
-						
+					try {
+						XmlNode node = member.GetMonodocDocumentation ();
+						if (node != null) {
+							documentation = TransformDocumentation (node) ?? documentation;
+							/*
+							StringWriter writer = new StringWriter ();
+							XmlTextWriter w = new XmlTextWriter (writer);
+							node.WriteTo (w);
+							System.Console.WriteLine ("---------------------------");
+							System.Console.WriteLine (writer);*/
+							
+						}
+					} catch (Exception) {
 					}
 				}
 				this.documentationLabel.Markup = documentation;

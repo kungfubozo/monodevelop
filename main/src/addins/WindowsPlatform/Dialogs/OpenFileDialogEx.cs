@@ -557,9 +557,6 @@ namespace CustomControls.Controls
 
             protected override void WndProc(ref Message m)
             {
-                if (m.Msg == (int) Msg.WM_ENTERIDLE)
-                    MonoDevelop.Ide.DispatchService.RunPendingEvents();
-
                 if (mWatchForActivate && m.Msg == (int) Msg.WM_ACTIVATE)
                 {
                     mWatchForActivate   = false;

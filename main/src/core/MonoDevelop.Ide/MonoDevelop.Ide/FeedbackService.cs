@@ -39,12 +39,23 @@ namespace MonoDevelop.Ide
 	{
 		static bool sending;
 		static object sendingLock = new object ();
+		static FeedbackDialog currentFeedbackDialog;
+		
+		public static bool IsFeedbackWindowVisible {
+			get { return currentFeedbackDialog != null && currentFeedbackDialog.Visible; }
+		}
 		
 		public static void ShowFeedbackWidnow ()
 		{
-			var p = FeedbackPositionGetter ();
-			FeedbackDialog d = new FeedbackDialog (p.X, p.Y);
-			d.Show ();
+			if (currentFeedbackDialog == null) {
+				var p = FeedbackPositionGetter ();
+				currentFeedbackDialog = new FeedbackDialog (p.X, p.Y);
+				currentFeedbackDialog.Show ();
+				currentFeedbackDialog.Destroyed += delegate {
+					currentFeedbackDialog = null;
+				};
+			} else
+				currentFeedbackDialog.Show ();
 		}
 		
 		internal static Func<Gdk.Point> FeedbackPositionGetter { get; set; }
@@ -114,13 +125,14 @@ namespace MonoDevelop.Ide
 				if (sending)
 					return;
 				
-				sending = true;
 				XmlDocument doc = LoadFeedbackDoc ();
 				if (doc.DocumentElement == null)
 					return;
 				XmlElement fe = doc.DocumentElement.FirstChild as XmlElement;
-				if (fe != null)
+				if (fe != null) {
+					sending = true;
 					InternalSendFeedback (fe);
+				}
 			}
 		}
 		

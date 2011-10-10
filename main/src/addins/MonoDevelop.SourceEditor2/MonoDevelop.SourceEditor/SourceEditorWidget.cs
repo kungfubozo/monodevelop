@@ -209,7 +209,7 @@ namespace MonoDevelop.SourceEditor
 //				}
 //				parent.quickTaskProvider.ForEach (p => AddQuickTaskStrip (p));
 			}
-
+			
 			public void AddQuickTaskStrip (IQuickTaskProvider p)
 			{
 //				if (!strip.Visible) {
@@ -349,12 +349,10 @@ namespace MonoDevelop.SourceEditor
 		{
 			Document document = textEditorData.Document;
 			if (document == null || region.Start.Line <= 0 || region.End.Line <= 0 || region.Start.Line > document.LineCount || region.End.Line > document.LineCount)
-			{
 				return null;
-			}
-			
 			int startOffset = document.LocationToOffset (region.Start.Line, region.Start.Column);
-			int endOffset   = document.LocationToOffset (region.End.Line, region.End.Column );
+			// end doesn't include the char at that position.
+			int endOffset   = document.LocationToOffset (region.End.Line, region.End.Column) - 1;
 			FoldSegment result = new FoldSegment (document, text, startOffset, endOffset - startOffset, type);
 			
 			foldSegments.Add (result);
@@ -515,6 +513,11 @@ namespace MonoDevelop.SourceEditor
 				Thread.Sleep (20);
 		}
 		
+		internal void SetLastActiveEditor (ExtensibleTextEditor editor)
+		{
+			this.lastActiveEditor = editor;
+		}
+			
 		#region Error underlining
 		List<ErrorMarker> errors = new List<ErrorMarker> ();
 		uint resetTimerId;

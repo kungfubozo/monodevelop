@@ -26,6 +26,7 @@
 
 using System;
 using System.Collections.Generic;
+using MonoDevelop.Ide;
 using Gtk;
 
 namespace MonoDevelop.Components
@@ -47,7 +48,7 @@ namespace MonoDevelop.Components
 			this.TransientFor = MonoDevelop.Ide.IdeApp.Workbench.RootWindow;
 			this.TypeHint = Gdk.WindowTypeHint.Menu;
 			this.BorderWidth = 1;
-			
+			this.Events |= Gdk.EventMask.KeyPressMask;
 			hBox = new HBox ();
 			list = new ListWidget (this);
 			list.SelectItem += delegate {
@@ -200,6 +201,12 @@ namespace MonoDevelop.Components
 			return base.OnButtonPressEvent (evnt);
 		}
 
+		protected override bool OnKeyPressEvent (Gdk.EventKey evnt)
+		{
+			ProcessKey (evnt.Key, evnt.State);
+			return base.OnKeyPressEvent (evnt);
+		}
+		
 		internal class ListWidget: Gtk.DrawingArea
 		{
 			int margin = 0;
@@ -220,7 +227,7 @@ namespace MonoDevelop.Components
 			public ListWidget (DropDownBoxListWindow win)
 			{
 				this.win = win;
-				this.Events = Gdk.EventMask.ButtonPressMask | Gdk.EventMask.ButtonReleaseMask | Gdk.EventMask.PointerMotionMask | Gdk.EventMask.LeaveNotifyMask | Gdk.EventMask.KeyPressMask;
+				this.Events = Gdk.EventMask.ButtonPressMask | Gdk.EventMask.ButtonReleaseMask | Gdk.EventMask.PointerMotionMask | Gdk.EventMask.LeaveNotifyMask;
 				layout = new Pango.Layout (this.PangoContext);
 				CalcRowHeight ();
 			}
@@ -231,13 +238,6 @@ namespace MonoDevelop.Components
 				int rowWidth;
 				layout.GetPixelSize (out rowWidth, out rowHeight);
 				rowHeight += padding;
-			}
-			
-			protected override bool OnKeyPressEvent (Gdk.EventKey evnt)
-			{
-				if (win.ProcessKey (evnt.Key, evnt.State))
-					return true;
-				return base.OnKeyPressEvent (evnt);
 			}
 			
 			protected override bool OnLeaveNotifyEvent (Gdk.EventCrossing evnt)
@@ -482,7 +482,7 @@ namespace MonoDevelop.Components
 			
 			void CalcVisibleRows ()
 			{
-				Gdk.Rectangle geometry = Screen.GetMonitorGeometry (Screen.GetMonitorAtWindow (GdkWindow));
+				Gdk.Rectangle geometry = DesktopService.GetUsableMonitorGeometry (Screen, Screen.GetMonitorAtWindow (GdkWindow));
 				int winHeight = geometry.Height / 2;
 				int lvWidth, lvHeight;
 				this.GetSizeRequest (out lvWidth, out lvHeight);
