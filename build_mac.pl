@@ -70,6 +70,8 @@ sub build_monodevelop {
 	chdir "$root/monodevelop";
 	system("./configure --profile=mac");
 	system("make");
+	mkpath("main/build/bin/branding");
+	copy("branding/Branding.xml", "main/build/bin/branding/Branding.xml");
 }
 
 sub build_debugger {
