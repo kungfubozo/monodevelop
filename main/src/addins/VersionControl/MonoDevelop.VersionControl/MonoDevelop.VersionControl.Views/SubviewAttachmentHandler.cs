@@ -33,22 +33,34 @@ namespace MonoDevelop.VersionControl.Views
 		protected override void Run ()
 		{
 			Ide.IdeApp.Workbench.DocumentOpened += HandleDocumentOpened;
+			Core.FileService.FileChanged += HandleCoreFileServiceFileChanged;
+		}
+		
+		static void AttachViewContents (MonoDevelop.Ide.Gui.Document document)
+		{
+			if (document == null || document.Project == null)
+				return;
+			var repo = VersionControlService.GetRepository (document.Project);
+			if (repo == null)
+				return;
+			if (!document.IsFile || !repo.GetVersionInfo (document.FileName).IsVersioned)
+				return;
+			if (document.Editor == null)
+				return;
+			
+			DiffView.AttachViewContents (document, new VersionControlItem (repo, document.Project, document.FileName, false, null));
+		}
+
+		void HandleCoreFileServiceFileChanged (object sender, Core.FileEventArgs e)
+		{
+			foreach (Core.FileEventInfo info in e) {
+				AttachViewContents (Ide.IdeApp.Workbench.GetDocument (info.FileName.FullPath));
+			}
 		}
 
 		void HandleDocumentOpened (object sender, Ide.Gui.DocumentEventArgs e)
 		{
-			if (e.Document.Project == null)
-				return;
-			var repo = VersionControlService.GetRepository (e.Document.Project);
-			if (repo == null)
-				return;
-			if (!e.Document.IsFile || !repo.GetVersionInfo (e.Document.FileName).IsVersioned)
-				return;
-			if (e.Document.Editor == null)
-				return;
-			var item = new VersionControlItem (repo, e.Document.Project, e.Document.FileName, false, null);
-			
-			DiffView.AttachViewContents (e.Document, item);
+			AttachViewContents (e.Document);
 		}
 	}
 }
