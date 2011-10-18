@@ -100,6 +100,15 @@ namespace MonoDevelop.Ide
 			
 			//OSXFIXME
 			Gtk.Application.Init ("monodevelop", ref args);
+			
+			//default to Windows IME on Windows
+			if (Platform.IsWindows && Mono.TextEditor.GtkWorkarounds.GtkMinorVersion >= 16) {
+				var settings = Gtk.Settings.Default;
+				var val = Mono.TextEditor.GtkWorkarounds.GetProperty (settings, "gtk-im-module");
+				if (string.IsNullOrEmpty (val.Val as string))
+					Mono.TextEditor.GtkWorkarounds.SetProperty (settings, "gtk-im-module", new GLib.Value ("ime"));
+			}
+			
 			InternalLog.Initialize ();
 			string socket_filename = null;
 			EndPoint ep = null;
@@ -245,6 +254,7 @@ namespace MonoDevelop.Ide
 			}
 			
 			if (error != null) {
+				LoggingService.LogFatalError (null, error);
 				MessageService.ShowException (error,
 				                              GettextCatalog.GetString ("MonoDevelop failed to start. The following error has been reported: ") + error.Message);
 				return 1;
@@ -276,9 +286,8 @@ namespace MonoDevelop.Ide
 			AddinManager.AddExtensionNodeHandler("/MonoDevelop/Ide/InitCompleteHandlers", OnExtensionChanged);
 			
 			string logAgentEnabled = Environment.GetEnvironmentVariable ("MONODEVELOP_LOG_AGENT_ENABLED");
-			if (string.Equals (logAgentEnabled, "true", StringComparison.OrdinalIgnoreCase)) {
+			if (string.Equals (logAgentEnabled, "true", StringComparison.OrdinalIgnoreCase))
 				LaunchCrashMonitoringService ();
-			}
 			
 			IdeApp.Run ();
 			
@@ -331,9 +340,10 @@ namespace MonoDevelop.Ide
 				var fileInfo = new FileInfo (Path.Combine (logPath, "crashlogs.xml"));
 				if (!PropertyService.HasValue (enabledKey) && fileInfo.Exists && fileInfo.Length > 0) {
 					var result = MessageService.AskQuestion ("A crash has been detected",
-						"MonoDevelop has crashed recently. Details of this crash can be uploaded" +
-						" to Xamarin to help diagnose the issue. Do you wish to take part in annonymous" +
-						" crash report logging. Yeah, you know you want to! ;)",
+						"MonoDevelop has crashed recently. Details of this crash along with your configured " +
+						"email address can be uploaded to Xamarin to help diagnose the issue. This information " +
+						"will be used to help diagnose the crash and notify you of potential workarounds " +
+						"or fixes. Do you wish to upload this information?",
 						AlertButton.Yes, AlertButton.No);
 					PropertyService.Set (enabledKey, result == AlertButton.Yes);
 				}
@@ -349,9 +359,10 @@ namespace MonoDevelop.Ide
 					UseShellExecute = false,
 				};
 				Process.Start (psi);
-			} else {
-				LoggingService.LogError ("Could not launch crash reporter process. MonoDevelop will not be able to automatically report any crash information.");
 			}
+			//else {
+			//	LoggingService.LogError ("Could not launch crash reporter process. MonoDevelop will not be able to automatically report any crash information.");
+			//}
 		}
 
 		void ListenCallback (IAsyncResult state)

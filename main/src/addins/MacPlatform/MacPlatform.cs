@@ -58,10 +58,16 @@ namespace MonoDevelop.MacIntegration
 		static bool setupFail, initedApp, initedGlobal;
 		
 		static Dictionary<string, string> mimemap;
+		
+		//this is a BCD value of the form "xxyz", where x = major, y = minor, z = bugfix
+		//eg. 0x1071 = 10.7.1
+		static int systemVersion;
 
 		static MacPlatformService ()
 		{
 			timer.BeginTiming ();
+			
+			systemVersion = Carbon.Gestalt ("sysv");
 			
 			LoadMimeMapAsync ();
 			
@@ -247,6 +253,17 @@ namespace MonoDevelop.MacIntegration
 			//FIXME: should we remove these when finalizing?
 			try {
 				ApplicationEvents.Quit += delegate (object sender, ApplicationQuitEventArgs e) {
+					//FIXME: can we avoid replying to the message until the app quits?
+					//There's NSTerminateLate but I'm not sure how to access it from carbon, maybe
+					//we need to swizzle methods into the app's NSApplicationDelegate.
+					//Also, it stops the main CFRunLoop, hopefully GTK dialogs use a child runloop.
+					//For now, just bounce.
+					var topDialog = MessageService.GetDefaultModalParent () as Gtk.Dialog;
+					if (topDialog != null && topDialog.Modal) {
+						NSApplication.SharedApplication.RequestUserAttention (
+							NSRequestUserAttentionType.CriticalRequest);
+					}
+					//FIXME: delay this until all existing modal dialogs were closed
 					if (!IdeApp.Exit ())
 						e.UserCancelled = true;
 					e.Handled = true;
@@ -300,6 +317,10 @@ namespace MonoDevelop.MacIntegration
 		
 		protected override Gdk.Pixbuf OnGetPixbufForFile (string filename, Gtk.IconSize size)
 		{
+			//this only works on MacOS 10.6.0 and greater
+			if (systemVersion < 0x1060)
+				return base.OnGetPixbufForFile (filename, size);
+			
 			NSImage icon = null;
 			
 			if (Path.IsPathRooted (filename) && File.Exists (filename)) {
@@ -443,19 +464,36 @@ end tell", directory.ToString ().Replace ("\"", "\\\"")));
 			RectangleF visible = monitor.VisibleFrame;
 			RectangleF frame = monitor.Frame;
 			
-			if (visible.Height > frame.Height || visible.Width > frame.Width)
-				return base.GetUsableMonitorGeometry (screen, monitor_id);
-			
 			// VisibleFrame.Y is the height of the Dock if it is at the bottom of the screen, so in order
 			// to get the menu height, we just figure out the difference between the visibleFrame height
 			// and the actual frame height, then subtract the Dock height.
 			//
 			// We need to swap the Y offset with the menu height because our callers expect the Y offset
 			// to be from the top of the screen, not from the bottom of the screen.
-			float menubar = (frame.Height - visible.Height) - visible.Y;
-			visible.Y = menubar;
+			float x, y, width, height;
 			
-			return new Gdk.Rectangle ((int) visible.X, (int) visible.Y, (int) visible.Width, (int) visible.Height);
+			if (visible.Height <= frame.Height) {
+				float dockHeight = visible.Y;
+				float menubarHeight = (frame.Height - visible.Height) - dockHeight;
+				
+				height = frame.Height - menubarHeight - dockHeight;
+				y = menubarHeight;
+			} else {
+				height = frame.Height;
+				y = frame.Y;
+			}
+			
+			// Takes care of the possibility of the Dock being positioned on the left or right edge of the screen.
+			width = Math.Min (visible.Width, frame.Width);
+			x = Math.Max (visible.X, frame.X);
+			
+			return new Gdk.Rectangle ((int) x, (int) y, (int) width, (int) height);
+		}
+		
+		public override void GrabDesktopFocus (Gtk.Window window)
+		{
+			window.Present ();
+			NSApplication.SharedApplication.ActivateIgnoringOtherApps (true);
 		}
 	}
 }

@@ -68,7 +68,7 @@ namespace Mono.TextEditor
 		Gdk.Key lastIMEventMappedKey;
 		uint lastIMEventMappedChar;
 		Gdk.ModifierType lastIMEventMappedModifier;
-		bool imContextActive;
+		bool imContextNeedsReset;
 		string currentStyleName;
 		bool awaitingCenter = false;
 		
@@ -110,11 +110,36 @@ namespace Mono.TextEditor
 		
 		public MenuItem CreateInputMethodMenuItem (string label)
 		{
+			if (GtkWorkarounds.GtkMinorVersion >= 16) {
+				bool showMenu = (bool) GtkWorkarounds.GetProperty (Settings, "gtk-show-input-method-menu").Val;
+				if (!showMenu)
+					return null;
+			}
 			MenuItem imContextMenuItem = new MenuItem (label);
 			Menu imContextMenu = new Menu ();
 			imContextMenuItem.Submenu = imContextMenu;
 			IMContext.AppendMenuitems (imContextMenu);
 			return imContextMenuItem;
+		}
+		
+		[DllImport (PangoUtil.LIBGTK)]
+		static extern void gtk_im_multicontext_set_context_id (IntPtr context, string context_id);
+		
+		[DllImport (PangoUtil.LIBGTK)]
+		static extern string gtk_im_multicontext_get_context_id (IntPtr context);
+		
+		[GLib.Property ("im-module")]
+		public string IMModule {
+			get {
+				if (GtkWorkarounds.GtkMinorVersion < 16 || imContext == null)
+					return null;
+				return gtk_im_multicontext_get_context_id (imContext.Handle);
+			}
+			set {
+				if (GtkWorkarounds.GtkMinorVersion < 16 || imContext == null)
+					return;
+				gtk_im_multicontext_set_context_id (imContext.Handle, value);
+			}
 		}
 		
 		public ITextEditorOptions Options {
@@ -294,24 +319,7 @@ namespace Mono.TextEditor
 			imContext.Commit += IMCommit;
 			
 			imContext.UsePreedit = true;
-			imContext.PreeditStart += delegate {
-				preeditOffset = Caret.Offset;
-				this.textViewMargin.ForceInvalidateLine (Caret.Line);
-				this.textEditorData.Document.CommitLineUpdate (Caret.Line);
-			};
-			imContext.PreeditEnd += delegate {
-				preeditOffset = -1;
-				this.textViewMargin.ForceInvalidateLine (Caret.Line);
-				this.textEditorData.Document.CommitLineUpdate (Caret.Line);
-			};
-			
-			imContext.PreeditChanged += delegate(object sender, EventArgs e) {
-				if (preeditOffset >= 0) {
-					imContext.GetPreeditString (out preeditString, out preeditAttrs, out preeditCursorPos);
-					this.textViewMargin.ForceInvalidateLine (Caret.Line);
-					this.textEditorData.Document.CommitLineUpdate (Caret.Line);
-				}
-			};
+			imContext.PreeditChanged += PreeditStringChanged;
 			
 			imContext.RetrieveSurrounding += delegate (object o, RetrieveSurroundingArgs args) {
 				//use a single line of context, whole document would be very expensive
@@ -363,20 +371,36 @@ namespace Mono.TextEditor
 			window.ShowAll ();
 		}
 		
-		internal int preeditCursorPos = -1, preeditOffset = -1;
+		internal int preeditOffset, preeditLine, preeditCursorPos;
 		internal string preeditString;
 		internal Pango.AttrList preeditAttrs;
-		
-		public int PreeditOffset {
-			get {
-				return this.preeditOffset;
-			}
-		}
 
-		public string PreeditString {
-			get {
-				return this.preeditString;
+		internal bool ContainsPreedit (int line, int length)
+		{
+			if (string.IsNullOrEmpty (preeditString))
+				return false;
+			
+			return line <= preeditOffset && preeditOffset <= line + length;
+		}
+		
+		void PreeditStringChanged (object sender, EventArgs e)
+		{
+			imContext.GetPreeditString (out preeditString, out preeditAttrs, out preeditCursorPos);
+			if (!string.IsNullOrEmpty (preeditString)) {
+				//FIXME: respect UTF16 surrogates in cursor pos
+				//argh, mcs explodes if you use (System.)Math in a Mono namespace
+				preeditCursorPos = System.Math.Max (0, System.Math.Min (preeditString.Length, preeditCursorPos));
+				if (preeditOffset < 0) {
+					preeditOffset = Caret.Offset;
+					preeditLine = Caret.Line;
+				}
+			} else {
+				preeditOffset = -1;
+				preeditString = null;
+				preeditAttrs = null;
 			}
+			this.textViewMargin.ForceInvalidateLine (preeditLine);
+			this.textEditorData.Document.CommitLineUpdate (preeditLine);
 		}
 
 		void CaretPositionChanged (object sender, DocumentLocationEventArgs args) 
@@ -472,42 +496,46 @@ namespace Mono.TextEditor
 		
 		internal void ResetIMContext ()
 		{
-			if (imContextActive) {
+			if (imContextNeedsReset) {
 				imContext.Reset ();
-				imContextActive = false;
+				imContextNeedsReset = false;
 			}
 		}
 		
 		void IMCommit (object sender, Gtk.CommitArgs ca)
 		{
-			try {
-				if (IsRealized && IsFocus) {
-					//this, if anywhere, is where we should handle UCS4 conversions
-					for (int i = 0; i < ca.Str.Length; i++) {
-						int utf32Char;
-						if (char.IsHighSurrogate (ca.Str, i)) {
-							utf32Char = char.ConvertToUtf32 (ca.Str, i);
-							i++;
-						} else {
-							utf32Char = (int)ca.Str [i];
-						}
-						
-						//include the other pre-IM state *if* the post-IM char matches the pre-IM (key-mapped) one
-						 if (lastIMEventMappedChar == utf32Char && lastIMEventMappedChar == (uint)lastIMEventMappedKey) {
-							OnIMProcessedKeyPressEvent (lastIMEventMappedKey, lastIMEventMappedChar, lastIMEventMappedModifier);
-						} else {
-							OnIMProcessedKeyPressEvent ((Gdk.Key)0, (uint)utf32Char, Gdk.ModifierType.None);
-						}
-					}
+			if (!IsRealized || !IsFocus)
+				return;
+			
+			//this, if anywhere, is where we should handle UCS4 conversions
+			for (int i = 0; i < ca.Str.Length; i++) {
+				int utf32Char;
+				if (char.IsHighSurrogate (ca.Str, i)) {
+					utf32Char = char.ConvertToUtf32 (ca.Str, i);
+					i++;
+				} else {
+					utf32Char = (int)ca.Str [i];
 				}
-			} finally {
-				ResetIMContext ();
+				
+				//include the other pre-IM state *if* the post-IM char matches the pre-IM (key-mapped) one
+				 if (lastIMEventMappedChar == utf32Char && lastIMEventMappedChar == (uint)lastIMEventMappedKey) {
+					OnIMProcessedKeyPressEvent (lastIMEventMappedKey, lastIMEventMappedChar, lastIMEventMappedModifier);
+				} else {
+					OnIMProcessedKeyPressEvent ((Gdk.Key)0, (uint)utf32Char, Gdk.ModifierType.None);
+				}
+			}
+			
+			//the IME can commit while there's still a pre-edit string
+			//since we cached the pre-edit offset when it started, need to update it
+			if (preeditOffset > -1) {
+				preeditOffset = Caret.Offset;
 			}
 		}
 		
 		protected override bool OnFocusInEvent (EventFocus evnt)
 		{
 			var result = base.OnFocusInEvent (evnt);
+			imContextNeedsReset = true;
 			IMContext.FocusIn ();
 			RequestResetCaretBlink ();
 			Document.CommitLineUpdate (Caret.Line);
@@ -517,6 +545,7 @@ namespace Mono.TextEditor
 		protected override bool OnFocusOutEvent (EventFocus evnt)
 		{
 			var result = base.OnFocusOutEvent (evnt);
+			imContextNeedsReset = true;
 			imContext.FocusOut ();
 			GLib.Timeout.Add (10, delegate {
 				// Don't immediately hide the tooltip. Wait a bit and check if the tooltip has the focus.
@@ -655,8 +684,11 @@ namespace Mono.TextEditor
 			Document.DocumentUpdated -= DocumentUpdatedHandler;
 			if (textEditorData.Options != null)
 				textEditorData.Options.Changed -= OptionsChanged;
-
-			imContext = imContext.Kill (x => x.Commit -= IMCommit);
+			
+			if (imContext != null){
+				ResetIMContext ();
+				imContext = imContext.Kill (x => x.Commit -= IMCommit);
+			}
 
 			if (this.textEditorData.HAdjustment != null)
 				this.textEditorData.HAdjustment.ValueChanged -= HAdjustmentValueChanged;
@@ -811,7 +843,7 @@ namespace Mono.TextEditor
 			}
 			
 			if (imContext.FilterKeypress (evt)) {
-				imContextActive = true;
+				imContextNeedsReset = true;
 				return true;
 			} else {
 				return false;
@@ -868,8 +900,9 @@ namespace Mono.TextEditor
 		
 		protected override bool OnKeyReleaseEvent (EventKey evnt)
 		{
-			if (IMFilterKeyPress (evnt, 0, 0, ModifierType.None))
-				imContextActive = true;
+			if (IMFilterKeyPress (evnt, 0, 0, ModifierType.None)) {
+				imContextNeedsReset = true;
+			}
 			return true;
 		}
 		
@@ -2406,12 +2439,20 @@ namespace Mono.TextEditor
 			w += 10;
 			
 			int x = xloc + ox + (int)textViewMargin.XOffset - (int) ((double)w * xalign);
-			Gdk.Rectangle geometry = Screen.GetUsableMonitorGeometry (Screen.GetMonitorAtPoint (ox + xloc, oy + yloc));
+			int rightMonitor = Screen.GetMonitorAtPoint (ox + xloc + w, oy + yloc);
+			int leftMonitor = Screen.GetMonitorAtPoint (ox + xloc, oy + yloc);
+			Gdk.Rectangle rightGeometry = Screen.GetUsableMonitorGeometry (rightMonitor);
+			Gdk.Rectangle leftGeometry;
 			
-			if (x + w >= geometry.Right)
-				x = geometry.Right - w;
-			if (x < geometry.Left)
-				x = geometry.Left;
+			if (leftMonitor != rightMonitor)
+				leftGeometry = Screen.GetUsableMonitorGeometry (leftMonitor);
+			else
+				leftGeometry = rightGeometry;
+			
+			if (x + w > rightGeometry.Right)
+				x = rightGeometry.Right - w;
+			if (x < leftGeometry.Left)
+				x = leftGeometry.Left;
 			
 			tipWindow.Move (x, yloc + oy + 10);
 			tipWindow.ShowAll ();

@@ -193,8 +193,15 @@ namespace MonoDevelop.Ide.Gui
 		
 		public void Present ()
 		{
-			//FIXME: this probably needs to do a "request for attention" dock bounce on MacOS
+			//FIXME: this should do a "request for attention" dock bounce on MacOS but only in some cases.
+			//Doing it for all Present calls is excessive and annoying. Maybe we have too many Present calls...
+			//Mono.TextEditor.GtkWorkarounds.PresentWindowWithNotification (RootWindow);
 			RootWindow.Present ();
+		}
+
+		public void GrabDesktopFocus ()
+		{
+			DesktopService.GrabDesktopFocus (RootWindow);
 		}
 				
 		public bool FullScreen {
@@ -353,19 +360,18 @@ namespace MonoDevelop.Ide.Gui
 					
 					//if found, select window and jump to line
 					if (vcFound != null) {
-						if (options.HasFlag (OpenDocumentOptions.BringToFront)) {
-							doc.Select ();
-							doc.Window.SwitchView (vcIndex);
-							Present ();
-						}
-						
 						IEditableTextBuffer ipos = vcFound.GetContent<IEditableTextBuffer> ();
 						if (line >= 1 && ipos != null) {
 							ipos.SetCaretTo (line, column >= 1 ? column : 1, options.HasFlag (OpenDocumentOptions.HighlightCaretLine));
 						}
 						
-						NavigationHistoryService.LogActiveDocument ();
-						doc.Window.SelectWindow ();
+						if (options.HasFlag (OpenDocumentOptions.BringToFront)) {
+							doc.Select ();
+							doc.Window.SwitchView (vcIndex);
+							doc.Window.SelectWindow ();
+							NavigationHistoryService.LogActiveDocument ();
+							Present ();
+						}
 						return doc;
 					}
 				}
@@ -710,8 +716,8 @@ namespace MonoDevelop.Ide.Gui
 							doc.Select ();
 							doc.RunWhenLoaded (delegate {
 								IEditableTextBuffer ipos = doc.GetContent <IEditableTextBuffer> ();
-								if (openFileInfo.Line != -1 && ipos != null) {
-									ipos.SetCaretTo (openFileInfo.Line, openFileInfo.Column != -1 ? openFileInfo.Column : 0, openFileInfo.Options.HasFlag (OpenDocumentOptions.HighlightCaretLine));
+								if (openFileInfo.Line > 0 && ipos != null) {
+									ipos.SetCaretTo (openFileInfo.Line, Math.Max (1, openFileInfo.Column), openFileInfo.Options.HasFlag (OpenDocumentOptions.HighlightCaretLine));
 								}
 							});
 						}
@@ -1074,7 +1080,7 @@ namespace MonoDevelop.Ide.Gui
 			newContent.WorkbenchWindow.DocumentType = binding.Name;
 			
 			IEditableTextBuffer ipos = newContent.GetContent<IEditableTextBuffer> ();
-			if (fileInfo.Line != -1 && ipos != null) {
+			if (fileInfo.Line > 0 && ipos != null) {
 				newContent.Control.Realized += HandleNewContentControlRealized;
 			}
 			fileInfo.NewContent = newContent;

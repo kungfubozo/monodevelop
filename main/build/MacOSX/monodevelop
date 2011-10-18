@@ -6,7 +6,6 @@
 DIR=$(cd "$(dirname "$0")"; pwd)
 FINAL_INSTALL_DIR="$DIR/../Frameworks/Mono.framework"
 MONO_FRAMEWORK_PATH="$FINAL_INSTALL_DIR/Versions/Current"
-
 MONODEVELOP_MAJOR_VERSION=2.8
 
 # Seeing some corrupted/missing symlinks in 3.2beta installs...
