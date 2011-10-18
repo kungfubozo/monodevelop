@@ -1081,7 +1081,11 @@ namespace MonoDevelop.Ide.Gui
 			
 			IEditableTextBuffer ipos = newContent.GetContent<IEditableTextBuffer> ();
 			if (fileInfo.Line > 0 && ipos != null) {
-				newContent.Control.Realized += HandleNewContentControlRealized;
+				if (newContent.Control.IsRealized) {
+					JumpToLine ();
+				} else {
+					newContent.Control.Realized += HandleNewContentControlRealized;
+				}
 			}
 			fileInfo.NewContent = newContent;
 		}
