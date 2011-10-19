@@ -8,8 +8,8 @@ use File::Path;
 
 my $GTK_VERSION = "2.12";
 my $GTK_INSTALLER = "gtk-sharp-2.12.9-2.win32.msi";
-my $MONO_LIBRARIES_VERSION = "2.2";
-my $MONO_LIBRARIES_INSTALLER = "mono-libraries-r135450.msi";
+my $MONO_LIBRARIES_VERSION = "2.6";
+my $MONO_LIBRARIES_INSTALLER = "MonoLibraries.msi";
 
 my $root = "";
 
@@ -22,22 +22,20 @@ sub get_root {
 }
 
 get_root ();
-my $nant = "\"C:/nant-0.90/bin/NAnt.exe\"";
+my $nant = "\"C:/nant-0.91-nightly-2011-05-08/bin/NAnt.exe\"";
 
 my $gtkPath = "$ENV{ProgramFiles}/GtkSharp/$GTK_VERSION";
 my $monolibPath = "$ENV{ProgramFiles}/MonoLibraries/$MONO_LIBRARIES_VERSION";
 if (defined($ENV{'ProgramFiles(x86)'}))
 {
 	$gtkPath = "$ENV{'ProgramFiles(x86)'}/GtkSharp/$GTK_VERSION";
-	#$gtkPath = "$root/dependencies/GtkSharp/$GTK_VERSION";
 	$monolibPath = "$ENV{'ProgramFiles(x86)'}/MonoLibraries/$MONO_LIBRARIES_VERSION";
-	#$monolibPath = "$root/dependencies/MonoLibraries/$MONO_LIBRARIES_VERSION";
 }
 
 if (!-d $monolibPath)
 {
 	print "== Installing Mono Libraries $MONO_LIBRARIES_VERSION\n";
-	system("msiexec /i $root\\monodevelop\\dependencies\\$MONO_LIBRARIES_INSTALLER /passive") && die("Failed to install GTK");
+	system("msiexec /i $root\\monodevelop\\dependencies\\$MONO_LIBRARIES_INSTALLER /passive") && die("Failed to install mono libraries");
 }
 else
 {
@@ -62,9 +60,9 @@ die ("Must grab Boo extensions implementation") if !-d "$root/boo-extensions";
 die ("Must grab Unityscript implementation") if !-d "$root/unityscript";
 die ("Must grab Boo MD Addins implementation") if !-d "$root/boo-md-addins";
 
-system("\"$ENV{VS90COMNTOOLS}/vsvars32.bat\" && msbuild $root\\monodevelop\\main\\Main.sln /p:Configuration=DebugWin32 /p:Platform=x86 $incremental") && die ("Failed to compile MonoDevelop");
+system("\"$ENV{VS100COMNTOOLS}/vsvars32.bat\" && msbuild $root\\monodevelop\\main\\Main.sln /p:Configuration=DebugWin32 /p:Platform=x86 $incremental") && die ("Failed to compile MonoDevelop");
 
-system("\"$ENV{VS90COMNTOOLS}/vsvars32.bat\" && msbuild $root\\MonoDevelop.Debugger.Soft.Unity\\MonoDevelop.Debugger.Soft.Unity.sln /p:Configuration=Release $incremental") && die ("Failed to compile MonoDevelop");
+system("\"$ENV{VS100COMNTOOLS}/vsvars32.bat\" && msbuild $root\\MonoDevelop.Debugger.Soft.Unity\\MonoDevelop.Debugger.Soft.Unity.sln /p:Configuration=Release $incremental") && die ("Failed to compile MonoDevelop");
 
 my $mdRoot = "$root/tmp/MonoDevelop";
 my $mdSource = "$root/monodevelop/main/build";
@@ -75,6 +73,8 @@ rmtree "$mdRoot";
 mkpath "$mdRoot/bin";
 mkpath "$mdRoot/Addins";
 mkpath "$mdRoot/data/options";
+mkpath("$mdRoot/bin/branding");
+system("xcopy /s \"$root/monodevelop/branding\" \"$mdRoot/bin/branding\"");
 system("xcopy /s \"$mdSource/bin\" \"$mdRoot/bin\"");
 system("xcopy /s \"$mdSource/Addins\" \"$mdRoot/Addins\"");
 system("xcopy /s \"$mdSource/data\" \"$mdRoot/data\"");
@@ -102,41 +102,44 @@ system("xcopy /s \"$gtkPath/lib/Mono.Cairo\" \"$mdRoot/bin\"");
 copy "$root/monodevelop/dependencies/gdk-pixbuf.loaders", "$mdRoot/etc/gtk-2.0";
 
 # Mono Libraries dependency files
-system("xcopy /s \"$monolibPath/lib/mono/2.0\" \"$mdRoot/bin\"");
+system("xcopy /s \"$monolibPath\" \"$mdRoot/bin\"");
 
 chdir "$root/boo";
-system("$nant rebuild") && die ("Failed to build Boo");
+system("$nant -t:net-4.0 rebuild") && die ("Failed to build Boo");
 mkpath "$mdRoot/Addins/BackendBindings/Boo/boo";
 system("xcopy /s /y \"$root/boo/build\" \"$mdRoot/Addins/BackendBindings/Boo/boo\"");
 unlink glob "$mdRoot/Addins/BackendBindings/Boo/boo/*.pdb" or die ("unlink fail");
 
 chdir "$root/boo-extensions";
 copy "$root/monodevelop/dependencies/build.properties", "$root/boo-extensions/build.properties";
-system("$nant rebuild") && die ("Failed to build Boo extensions monodevelop");
+system("$nant -t:net-4.0 rebuild") && die ("Failed to build Boo extensions monodevelop");
 
 chdir "$root/unityscript";
 copy "$root/monodevelop/dependencies/build.properties", "$root/unityscript/build.properties";
 my $javascriptFiles =  "$mdRoot/Addins/BackendBindings/UnityScript/bin";
 mkpath $javascriptFiles;
-system("$nant rebuild") && die ("Failed to build UnityScript");
+system("$nant -t:net-4.0 rebuild") && die ("Failed to build UnityScript");
 system("xcopy /s /y \"$root/unityscript/bin\" \"$javascriptFiles\"");
 unlink glob "$javascriptFiles/*.pdb" or die ("unlink fail");
-unlink glob "$javascriptFiles/*Tests*" or die ("unlink fail");
+# unlink glob "$javascriptFiles/*Tests*" or die ("unlink fail");
 unlink "$javascriptFiles/nunit.framework.dll" or die ("unlink fail");
 
 chdir "$root/boo-md-addins";
 copy "$root/monodevelop/dependencies/build.properties", "$root/boo-md-addins/build.properties";
-system("$nant rebuild") && die ("Failed to build Boo MD Addins");
+system("$nant -t:net-4.0 rebuild") && die ("Failed to build Boo MD Addins");
+mkpath "$mdRoot/AddIns/BackendBindings/Boo";
 copy "$root/boo-md-addins/build/Boo.MonoDevelop.dll", "$mdRoot/AddIns/BackendBindings/Boo";
 copy "$root/boo-md-addins/build/Boo.Ide.dll", "$mdRoot/AddIns/BackendBindings/Boo";
 copy "$root/boo-md-addins/build/UnityScript.Ide.dll", "$mdRoot/AddIns/BackendBindings/Boo";
 copy "$root/boo-md-addins/build/Boo.MonoDevelop.Util.dll", "$mdRoot/AddIns/BackendBindings/Boo";
 
+mkpath "$mdRoot/AddIns/BackendBindings/UnityScript";
 copy "$root/boo-md-addins/build/UnityScript.MonoDevelop.dll", "$mdRoot/AddIns/BackendBindings/UnityScript";
 copy "$root/boo-md-addins/build/UnityScript.Ide.dll", "$mdRoot/AddIns/BackendBindings/UnityScript";
 copy "$root/boo-md-addins/build/Boo.Ide.dll", "$mdRoot/AddIns/BackendBindings/UnityScript";
 copy "$root/boo-md-addins/build/Boo.MonoDevelop.Util.dll", "$mdRoot/AddIns/BackendBindings/UnityScript";
 
+mkpath "$root/tmp";
 chdir "$root/tmp";
 unlink "$root/MonoDevelop.zip";
 system("\"C:\\Program\ Files\ \(x86\)\\7-Zip\\7z\" a -r \"$root/MonoDevelop.zip\" *.*");
