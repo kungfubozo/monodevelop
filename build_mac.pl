@@ -7,7 +7,7 @@ use File::Copy;
 use File::Path;
 
 my $root = "";
-my $nant = "nant";
+my $nant = "mono --runtime=v4.0.30319 /usr/lib/NAnt/NAnt.exe";
 my $mdSource = "";
 my $mdRoot = "";
 
