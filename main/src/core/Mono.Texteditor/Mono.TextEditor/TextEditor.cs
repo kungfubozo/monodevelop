@@ -70,7 +70,6 @@ namespace Mono.TextEditor
 		Gdk.ModifierType lastIMEventMappedModifier;
 		bool imContextNeedsReset;
 		string currentStyleName;
-		bool awaitingCenter = false;
 		
 		double mx, my;
 		
@@ -341,7 +340,6 @@ namespace Mono.TextEditor
 			
 			InitAnimations ();
 			this.Document.EndUndo += HandleDocumenthandleEndUndo;
-			awaitingCenter = true;
 #if ATK
 			TextEditorAccessible.Factory.Init (this);
 #endif
@@ -1254,9 +1252,7 @@ namespace Mono.TextEditor
 		
 		public void CenterTo (DocumentLocation p)
 		{
-			if (!IsRealized)
-				awaitingCenter = true;
-			if (isDisposed || awaitingCenter || p.Line < 0 || p.Line > Document.LineCount)
+			if (isDisposed || p.Line < 0 || p.Line > Document.LineCount)
 				return;
 			SetAdjustments (this.Allocation);
 
@@ -1370,10 +1366,7 @@ namespace Mono.TextEditor
 				this.GdkWindow.MoveResize (allocation);
 			SetAdjustments (Allocation);
 			QueueDraw ();
-			if (awaitingCenter) {
-				awaitingCenter = false;
-				CenterToCaret();
-			}
+			CenterToCaret();
 		}
 		
 		protected override bool OnScrollEvent (EventScroll evnt)
