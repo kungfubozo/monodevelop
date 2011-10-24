@@ -10,6 +10,7 @@ my $GTK_VERSION = "2.12";
 my $GTK_INSTALLER = "gtk-sharp-2.12.9-2.win32.msi";
 my $MONO_LIBRARIES_VERSION = "2.6";
 my $MONO_LIBRARIES_INSTALLER = "MonoLibraries.msi";
+my $SevenZip = '"C:\Program Files (x86)\7-Zip\7z"';
 
 my $root = "";
 
@@ -22,7 +23,9 @@ sub get_root {
 }
 
 get_root ();
-my $nant = "\"C:/nant-0.91-nightly-2011-05-08/bin/NAnt.exe\"";
+system("$SevenZip x -y -o\"$root/monodevelop/dependencies\" \"$root/monodevelop/dependencies/nant-0.91-nightly-2011-05-08.zip\"");
+my $nant = "\"$root/monodevelop/dependencies/nant-0.91-nightly-2011-05-08/bin/NAnt.exe\"";
+# my $nant = "\"C:/nant-0.91-nightly-2011-05-08/bin/NAnt.exe\"";
 
 my $gtkPath = "$ENV{ProgramFiles}/GtkSharp/$GTK_VERSION";
 my $monolibPath = "$ENV{ProgramFiles}/MonoLibraries/$MONO_LIBRARIES_VERSION";
@@ -142,5 +145,5 @@ copy "$root/boo-md-addins/build/Boo.MonoDevelop.Util.dll", "$mdRoot/AddIns/Backe
 mkpath "$root/tmp";
 chdir "$root/tmp";
 unlink "$root/MonoDevelop.zip";
-system("\"C:\\Program\ Files\ \(x86\)\\7-Zip\\7z\" a -r \"$root/MonoDevelop.zip\" *.*");
+system("$SevenZip a -r \"$root/MonoDevelop.zip\" *.*");
 chdir "$root";
