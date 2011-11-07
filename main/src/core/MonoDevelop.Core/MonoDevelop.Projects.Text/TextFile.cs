@@ -159,7 +159,7 @@ namespace MonoDevelop.Projects.Text
 							text = new StringBuilder (s);
 							return;
 						}
-					} catch (Exception ex) {
+					} catch (InvalidEncodingException ex) {
 						LoggingService.LogDebug (string.Format ("Skipping encoding {0}", co), ex);
 					}
 				} 
