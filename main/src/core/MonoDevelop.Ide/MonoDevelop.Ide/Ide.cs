@@ -296,11 +296,28 @@ namespace MonoDevelop.Ide
 				return;
 			}
 			
-			var filteredFiles = new List<FileOpenInformation> ();
+			var filteredFiles = files.Where (f => !(Services.ProjectService.IsWorkspaceItemFile (f.FileName) || Services.ProjectService.IsSolutionItemFile (f.FileName)));
+			EventHandler<WorkspaceItemEventArgs> loadFilteredFiles =  null;
+			loadFilteredFiles = delegate {
+				foreach (var afile in filteredFiles)
+				{
+					try
+					{
+						Workbench.OpenDocument(afile.FileName, afile.Line, afile.Column, afile.Options);
+					}
+					catch (Exception ex)
+					{
+						LoggingService.LogError("Unhandled error opening file \"" + afile.FileName + "\"", ex);
+						MessageService.ShowException(ex, "Could not open file: " + afile.FileName);
+					}
+					Workspace.WorkspaceItemLoaded -= loadFilteredFiles;
+				}
+			};
 			
 			//open the firsts sln/workspace file, and remove the others from the list
 		 	//FIXME: can we handle multiple slns?
 			bool foundSln = false;
+
 			foreach (var file in files) {
 				if (Services.ProjectService.IsWorkspaceItemFile (file.FileName) ||
 				    Services.ProjectService.IsSolutionItemFile (file.FileName)) {
@@ -310,6 +327,7 @@ namespace MonoDevelop.Ide
 					
 					if (!foundSln) {
 						try {
+							Workspace.WorkspaceItemLoaded += loadFilteredFiles;
 							Workspace.OpenWorkspaceItem (file.FileName);
 							foundSln = true;
 						} catch (Exception ex) {
@@ -317,19 +335,12 @@ namespace MonoDevelop.Ide
 							MessageService.ShowException (ex, "Could not load solution: " + file.FileName);
 						}
 					}
-				} else {
-					filteredFiles.Add (file);
+				//} else {
+				//    filteredFiles.Add (file);
 				}
 			}
 			
-			foreach (var file in filteredFiles) {
-				try {
-					Workbench.OpenDocument (file.FileName, file.Line, file.Column, file.Options);
-				} catch (Exception ex) {
-					LoggingService.LogError ("Unhandled error opening file \"" + file.FileName + "\"", ex);
-					MessageService.ShowException (ex, "Could not open file: " + file.FileName);
-				}
-			}
+
 			
 			Workbench.Present ();
 		}
