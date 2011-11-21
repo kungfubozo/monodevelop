@@ -313,6 +313,8 @@ namespace MonoDevelop.Ide
 					Workspace.WorkspaceItemLoaded -= loadFilteredFiles;
 				}
 			};
+
+			Workspace.WorkspaceItemLoaded += loadFilteredFiles;
 			
 			//open the firsts sln/workspace file, and remove the others from the list
 		 	//FIXME: can we handle multiple slns?
@@ -322,12 +324,14 @@ namespace MonoDevelop.Ide
 				if (Services.ProjectService.IsWorkspaceItemFile (file.FileName) ||
 				    Services.ProjectService.IsSolutionItemFile (file.FileName)) {
 					// Don't reload the currently open solution
-					foundSln = foundSln || (null != Workspace.Items.FirstOrDefault (x =>
-					    (x.FileName.FullPath.ToString ().Equals(file.FileName, StringComparison.OrdinalIgnoreCase))));
+					if (null != Workspace.Items.FirstOrDefault (x =>
+					    (x.FileName.FullPath.ToString ().Equals(file.FileName, StringComparison.OrdinalIgnoreCase)))) {
+						loadFilteredFiles (null, null);
+						foundSln = true;
+					}
 					
 					if (!foundSln) {
 						try {
-							Workspace.WorkspaceItemLoaded += loadFilteredFiles;
 							Workspace.OpenWorkspaceItem (file.FileName);
 							foundSln = true;
 						} catch (Exception ex) {
@@ -335,10 +339,11 @@ namespace MonoDevelop.Ide
 							MessageService.ShowException (ex, "Could not load solution: " + file.FileName);
 						}
 					}
-				//} else {
-				//    filteredFiles.Add (file);
 				}
 			}
+
+			if (!foundSln)
+				loadFilteredFiles (null, null);
 			
 
 			
