@@ -916,7 +916,7 @@ namespace MonoDevelop.Ide
 					hasUnsaved = true;
 				if (!doc.IsFile)
 					hasNoFiles = true;
-				ISupportsProjectReload pr = doc.GetContent<ISupportsProjectReload> ();
+				ISupportsProjectReload pr = null; // Don't reload projects in place
 				if (pr != null) {
 					ProjectReloadCapability c = pr.ProjectReloadCapability;
 					if ((int) c < (int) prc)
@@ -936,10 +936,9 @@ namespace MonoDevelop.Ide
 						msg = GettextCatalog.GetString ("WARNING: Some documents may need to be reloaded or closed, and unsaved data will be lost. You will be asked to save the unsaved documents.");
 					else if (hasUnsaved)
 						msg = GettextCatalog.GetString ("WARNING: Some files may need to be reloaded, and unsaved data will be lost. You will be asked to save the unsaved files.");
-					else
-						goto case ProjectReloadCapability.UnsavedData;
+					// Don't force reload confirmation
 					break;
-					
+
 				case ProjectReloadCapability.UnsavedData:
 					msg = GettextCatalog.GetString ("Some files may need to be reloaded, and editing status for those files (such as the undo queue) will be lost.");
 					break;
@@ -954,7 +953,7 @@ namespace MonoDevelop.Ide
 			foreach (Document doc in docs) {
 				if (doc.IsDirty)
 					hasUnsaved = true;
-				ISupportsProjectReload pr = doc.GetContent<ISupportsProjectReload> ();
+				ISupportsProjectReload pr = null; // Don't reload projects in place
 				if (pr != null)
 					doc.SetProject (null);
 				else {
