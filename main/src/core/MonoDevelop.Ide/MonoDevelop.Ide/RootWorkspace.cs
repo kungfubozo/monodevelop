@@ -88,6 +88,7 @@ namespace MonoDevelop.Ide
 			
 			// Set the initial active runtime
 			UseDefaultRuntime = true;
+			IsLoading = false;
 			IdeApp.Preferences.DefaultTargetRuntimeChanged += delegate {
 				// If the default runtime changes and current active is default, update it
 				if (UseDefaultRuntime) {
@@ -158,6 +159,13 @@ namespace MonoDevelop.Ide
 		
 		public bool IsOpen {
 			get { return Items.Count > 0; }
+		}
+		
+		// Hackish way of detecting whether a workspace item
+		// is currently being loaded
+		public bool IsLoading {
+			get;
+			protected set;
 		}
 		
 		public CodeRefactorer GetCodeRefactorer (Solution solution) 
@@ -504,6 +512,8 @@ namespace MonoDevelop.Ide
 		
 		public IAsyncOperation OpenWorkspaceItem (string filename, bool closeCurrent, bool loadPreferences)
 		{
+			IsLoading = true;
+			
 			if (closeCurrent) {
 				if (!Close ())
 					return MonoDevelop.Core.ProgressMonitoring.NullAsyncOperation.Failure;
@@ -1206,6 +1216,7 @@ namespace MonoDevelop.Ide
 		
 		void OnItemLoaded (WorkspaceItem item)
 		{
+			IsLoading = false;
 			try {
 				if (WorkspaceItemLoaded != null)
 					WorkspaceItemLoaded (this, new WorkspaceItemEventArgs (item));
