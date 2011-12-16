@@ -263,7 +263,7 @@ namespace MonoDevelop.Ide
 			if ((bool)PropertyService.Get("SharpDevelop.LoadPrevProjectOnStartup", true)) {
 				var proj = DesktopService.RecentFiles.GetProjects ().FirstOrDefault ();
 				if (proj != null) { 
-					IdeApp.Workspace.OpenWorkspaceItem (proj.FileName).WaitForCompleted ();
+					IdeApp.Workspace.OpenWorkspaceItem (proj.FileName);
 				}
 			}
 			
