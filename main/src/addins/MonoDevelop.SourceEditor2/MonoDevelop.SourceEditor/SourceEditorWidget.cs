@@ -887,6 +887,8 @@ namespace MonoDevelop.SourceEditor
 						view.IsDirty = true;
 					} catch (Exception ex) {
 						MessageService.ShowException (ex, "Could not remove the autosave file.");
+						view.Load(fileName);
+						view.WorkbenchWindow.Document.UpdateParseDocument();
 					} finally {
 						RemoveMessageBar ();
 					}
