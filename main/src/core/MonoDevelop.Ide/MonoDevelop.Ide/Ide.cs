@@ -310,6 +310,7 @@ namespace MonoDevelop.Ide
 
 			IAsyncOperation workspaceLoading = null;
 			var filteredFiles = files.Where(f => !(Services.ProjectService.IsWorkspaceItemFile(f.FileName) || Services.ProjectService.IsSolutionItemFile(f.FileName)));
+			
 			EventHandler<WorkspaceItemEventArgs> loadFilteredFiles =  null;
 			loadFilteredFiles = delegate {
 				if (workspaceLoading != null && filteredFiles.Any (f => f.Options.HasFlag (OpenDocumentOptions.BringToFront)))
