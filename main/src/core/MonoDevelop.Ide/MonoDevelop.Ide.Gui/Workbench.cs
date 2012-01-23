@@ -598,6 +598,13 @@ namespace MonoDevelop.Ide.Gui
 		{
 			IWorkbenchWindow window = (IWorkbenchWindow) sender;
 			if (!args.Forced && window.ViewContent != null && window.ViewContent.IsDirty) {
+				// This path can be reentered if something else tries to close the window
+				// before the user responds to the "Save changes?" dialog.
+				// This results in a stack of "Save changes?" dialogs, and unpredictable behavior 
+				// when responding to all but the first.
+				// The Right Fix would be to make it impossible for this to happen.
+				// For now, we work around by replacing the OnClosing handler 
+				// until we get an answer back from the user.
 				WorkbenchWindowEventHandler dummyClosing = (aSender,someArgs) => { someArgs.Cancel = true; };
 				window.Closing -= OnWindowClosing;
 				window.Closing += dummyClosing;
