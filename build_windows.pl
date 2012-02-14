@@ -58,6 +58,7 @@ else
 # Check sources
 die ("Must grab Unity MonoDevelop source from github first") if !-d "$root/monodevelop";
 die ("Must grab Unity MonoDevelop Soft Debugger source from github first") if !-d "$root/MonoDevelop.Debugger.Soft.Unity";
+die ("Must grab monodevelop-hg source from bitbucket first") if !-d "monodevelop-hg";
 die ("Must grab Boo implementation") if !-d "$root/boo";
 die ("Must grab Boo extensions implementation") if !-d "$root/boo-extensions";
 die ("Must grab Unityscript implementation") if !-d "$root/unityscript";
@@ -66,6 +67,8 @@ die ("Must grab Boo MD Addins implementation") if !-d "$root/boo-md-addins";
 system("\"$ENV{VS100COMNTOOLS}/vsvars32.bat\" && msbuild $root\\monodevelop\\main\\Main.sln /p:Configuration=DebugWin32 /p:Platform=x86 $incremental") && die ("Failed to compile MonoDevelop");
 
 system("\"$ENV{VS100COMNTOOLS}/vsvars32.bat\" && msbuild $root\\MonoDevelop.Debugger.Soft.Unity\\MonoDevelop.Debugger.Soft.Unity.sln /p:Configuration=Release $incremental") && die ("Failed to compile MonoDevelop");
+
+system("\"$ENV{VS100COMNTOOLS}/vsvars32.bat\" && msbuild $root\\monodevelop-hg\\monodevelop-hg.sln /p:Configuration=ReleaseWin32 $incremental") && die ("Failed to compile monodevelop-hg");
 
 my $mdRoot = "$root/tmp/MonoDevelop";
 my $mdSource = "$root/monodevelop/main/build";
@@ -90,6 +93,10 @@ copy "$mdSource/MacOSX/MonoDevelopProperties.xml", "$mdRoot/data/options/MonoDev
 mkpath "$mdRoot/Addins/MonoDevelop.Debugger.Soft.Unity";
 copy "$root/MonoDevelop.Debugger.Soft.Unity/obj/Release/MonoDevelop.Debugger.Soft.Unity.dll", "$mdRoot/Addins/MonoDevelop.Debugger.Soft.Unity";
 copy "$root/MonoDevelop.Debugger.Soft.Unity/obj/Release/UnityUtilities.dll", "$mdRoot/Addins";
+
+# monodevelop-hg
+mkpath "$mdRoot/Addins/monodevelop-hg";
+copy "$root/monodevelop-hg/monodevelop-hg/bin/ReleaseWin32/monodevelop-hg.dll", "$mdRoot/Addins/VersionControl";
 
 # GTK Sharp dependency files
 mkpath "$mdRoot/lib";
