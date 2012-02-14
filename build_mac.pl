@@ -90,6 +90,8 @@ sub finalize_monodevelop {
 	# Unity soft debugger
 	mkpath "$mdRoot/AddIns/MonoDevelop.Debugger.Soft.Unity";
 	copy "$root/MonoDevelop.Debugger.Soft.Unity/obj/Release/MonoDevelop.Debugger.Soft.Unity.dll", "$mdRoot/AddIns/MonoDevelop.Debugger.Soft.Unity" or die ("Failed to copy MonoDevelop.Debugger.Soft.Unity");	
+	# Unity utilities
+	copy "$root/MonoDevelop.Debugger.Soft.Unity/obj/Release/UnityUtilities.dll", "$mdRoot/AddIns" or die ("Failed to copy UnityUtilities");	
 }
 
 sub build_boo {

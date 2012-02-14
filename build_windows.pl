@@ -89,6 +89,7 @@ copy "$mdSource/MacOSX/MonoDevelopProperties.xml", "$mdRoot/data/options/MonoDev
 # Unity soft debugger
 mkpath "$mdRoot/Addins/MonoDevelop.Debugger.Soft.Unity";
 copy "$root/MonoDevelop.Debugger.Soft.Unity/obj/Release/MonoDevelop.Debugger.Soft.Unity.dll", "$mdRoot/Addins/MonoDevelop.Debugger.Soft.Unity";
+copy "$root/MonoDevelop.Debugger.Soft.Unity/obj/Release/UnityUtilities.dll", "$mdRoot/Addins";
 
 # GTK Sharp dependency files
 mkpath "$mdRoot/lib";
