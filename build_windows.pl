@@ -95,8 +95,9 @@ copy "$root/MonoDevelop.Debugger.Soft.Unity/obj/Release/MonoDevelop.Debugger.Sof
 copy "$root/MonoDevelop.Debugger.Soft.Unity/obj/Release/UnityUtilities.dll", "$mdRoot/Addins";
 
 # monodevelop-hg
-mkpath "$mdRoot/Addins/monodevelop-hg";
-copy "$root/monodevelop-hg/monodevelop-hg/bin/ReleaseWin32/monodevelop-hg.dll", "$mdRoot/Addins/VersionControl";
+mkpath "$mdRoot/Addins/VersionControl";
+copy "$root/monodevelop-hg/monodevelop-hg/bin/Release/MonoDevelop.VersionControl.Mercurial.dll", "$mdRoot/Addins/VersionControl";
+copy "$root/monodevelop-hg/monodevelop-hg/bin/Release/Mercurial.dll", "$mdRoot/Addins/VersionControl";
 
 # GTK Sharp dependency files
 mkpath "$mdRoot/lib";
