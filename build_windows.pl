@@ -58,7 +58,7 @@ else
 # Check sources
 die ("Must grab Unity MonoDevelop source from github first") if !-d "$root/monodevelop";
 die ("Must grab Unity MonoDevelop Soft Debugger source from github first") if !-d "$root/MonoDevelop.Debugger.Soft.Unity";
-die ("Must grab monodevelop-hg source from bitbucket first") if !-d "monodevelop-hg";
+die ("Must grab monodevelop-hg source from bitbucket first") if !-d "$root/monodevelop-hg";
 die ("Must grab Boo implementation") if !-d "$root/boo";
 die ("Must grab Boo extensions implementation") if !-d "$root/boo-extensions";
 die ("Must grab Unityscript implementation") if !-d "$root/unityscript";
