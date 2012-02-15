@@ -84,7 +84,7 @@ sub build_debugger {
 }
 
 sub build_monodevelop_hg {
-	chdir "$root/monodevelop-hg";
+	chdir "$root/monodevelop-hg/monodevelop-hg";
 	system("xbuild /property:Configuration=Release /t:Rebuild") && die("Failed building monodevelop-hg");
 }
 
@@ -103,6 +103,7 @@ sub finalize_monodevelop {
 	copy "$root/MonoDevelop.Debugger.Soft.Unity/obj/Release/UnityUtilities.dll", "$mdRoot/AddIns" or die ("Failed to copy UnityUtilities");	
 	# monodevelop-hg
 	copy "$root/monodevelop-hg/monodevelop-hg/bin/Release/MonoDevelop.VersionControl.Mercurial.dll", "$mdRoot/AddIns/VersionControl" or die ("Failed to copy monodevelop-hg");	
+	copy "$root/monodevelop-hg/monodevelop-hg/bin/Release/Mercurial.dll", "$mdRoot/AddIns/VersionControl" or die ("Failed to copy monodevelop-hg");	
 }
 
 sub build_boo {
