@@ -68,7 +68,7 @@ system("\"$ENV{VS100COMNTOOLS}/vsvars32.bat\" && msbuild $root\\monodevelop\\mai
 
 system("\"$ENV{VS100COMNTOOLS}/vsvars32.bat\" && msbuild $root\\MonoDevelop.Debugger.Soft.Unity\\MonoDevelop.Debugger.Soft.Unity.sln /p:Configuration=Release $incremental") && die ("Failed to compile MonoDevelop");
 
-system("\"$ENV{VS100COMNTOOLS}/vsvars32.bat\" && msbuild $root\\monodevelop-hg\\monodevelop-hg.sln /p:Configuration=ReleaseWin32 $incremental") && die ("Failed to compile monodevelop-hg");
+system("\"$ENV{VS100COMNTOOLS}/vsvars32.bat\" && msbuild $root\\monodevelop-hg\\monodevelop-hg\\monodevelop-hg.sln /p:Configuration=ReleaseWin32 $incremental") && die ("Failed to compile monodevelop-hg");
 
 my $mdRoot = "$root/tmp/MonoDevelop";
 my $mdSource = "$root/monodevelop/main/build";
