@@ -1041,8 +1041,6 @@ namespace Mono.Debugging.Soft
 		{
 			// Mark affected breakpoints as pending again
 			var affectedBreakpoints = breakpoints.Where(x => {
-				if (x.Value == null || x.Value.AssemblyLocation == null || x.Key == null || location == null)
-					OnDebuggerOutput (false, "OMG NULL!");
 				OnDebuggerOutput (false, string.Format ("Checking whether to repend assembly at {0} ({1})", x.Value.AssemblyLocation, location));
 				return (x.Key.Enabled && (string.IsNullOrEmpty (x.Value.AssemblyLocation) || x.Value.AssemblyLocation.Equals(location, StringComparison.OrdinalIgnoreCase)));
 			}).ToArray ();
