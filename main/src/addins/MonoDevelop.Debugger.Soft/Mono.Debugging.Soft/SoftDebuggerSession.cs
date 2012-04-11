@@ -1042,7 +1042,7 @@ namespace Mono.Debugging.Soft
 			// Mark affected breakpoints as pending again
 			var affectedBreakpoints = breakpoints.Where(x => {
 				OnDebuggerOutput (false, string.Format ("Checking whether to repend assembly at {0} ({1})", x.Value.AssemblyLocation, location));
-				return (x.Key.Enabled && (string.IsNullOrEmpty (x.Value.AssemblyLocation) || x.Value.AssemblyLocation.Equals(location, StringComparison.OrdinalIgnoreCase)));
+				return BreakpointMatchesAssembly (x.Key, x.Value, location);
 			}).ToArray ();
 			foreach (KeyValuePair<EventRequest, BreakInfo> breakpoint in affectedBreakpoints)
 			{
@@ -1091,7 +1091,14 @@ namespace Mono.Debugging.Soft
 				});
 			}
 		}
-		
+
+		static bool BreakpointMatchesAssembly (EventRequest breakpointRequest, BreakInfo breakpointInfo, string location)
+		{
+			return (breakpointRequest.Enabled && (
+				string.IsNullOrEmpty (breakpointInfo.AssemblyLocation) ||
+				breakpointInfo.AssemblyLocation.Equals(location, StringComparison.OrdinalIgnoreCase)
+			));
+		}
 		
 		void HandleEvent (Event e)
 		{
