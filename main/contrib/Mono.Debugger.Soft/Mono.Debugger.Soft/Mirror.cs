@@ -46,7 +46,7 @@ namespace Mono.Debugger.Soft
 					vm == mirror.VirtualMachine
 				);
 			}
-			return base.Equals(obj);
+			return false;
 		}
 
 		public override int GetHashCode()
