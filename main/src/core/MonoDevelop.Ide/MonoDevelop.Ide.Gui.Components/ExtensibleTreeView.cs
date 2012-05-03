@@ -169,6 +169,7 @@ namespace MonoDevelop.Ide.Gui.Components
 		{
 			this.contextMenuPath = contextMenuPath;
 			builderContext = new TreeBuilderContext (this);
+			states = new Dictionary<Gtk.TreeIter,NodeState> ();
 
 			SetBuilders (builders, options);
 			/*
