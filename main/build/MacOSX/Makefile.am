@@ -60,7 +60,9 @@ app: monostub
 
 	sed -e "s/@BUNDLE_VERSION@/$(BUNDLE_VERSION)/" -e "s/@ASSEMBLY_VERSION@/$(ASSEMBLY_VERSION)/" Info.plist.in > $(MAC_APP_DIR)/Contents/Info.plist
 	cp ../../theme-icons/Mac/*.icns $(MAC_APP_DIR)/Contents/Resources/
+	cp monodevelop.orig monodevelop
 	cp monodevelop.orig $(MACOS)/monodevelop
+	cp mdtool.orig mdtool
 	cp mdtool.orig $(MACOS)/mdtool
 	cp MonoDevelopProperties.xml EditingLayout2.xml $(MAC_APP_DIR)/Contents/MacOS/lib/monodevelop/data/options
 
@@ -165,7 +167,7 @@ mono-bundle: app
 	ln -s Libraries/libmono.dylib $(MAC_APP_DIR)/Contents/Frameworks/Mono.framework/Mono
 	ln -s Versions/Current/Resources $(MAC_APP_DIR)/Contents/Frameworks/Mono.framework/Resources
 	ln -s $(CURRENT) $(MAC_APP_DIR)/Contents/Frameworks/Mono.framework/Versions/Current
-	./transplant_gtk.sh $(MODERN_GTK_DIR) $(BUNDLED_FRAMEWORK_DIR)/Versions/Current
+#	./transplant_gtk.sh $(MODERN_GTK_DIR) $(BUNDLED_FRAMEWORK_DIR)/Versions/Current
 	mkdir -p $(BUNDLED_FRAMEWORK_DIR)/Versions/Current/etc/pango
 	cp pangorc $(BUNDLED_FRAMEWORK_DIR)/Versions/Current/etc/pango
 	cp monodevelop $(MACOS)/monodevelop
