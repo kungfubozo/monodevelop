@@ -1174,6 +1174,12 @@ namespace MonoDevelop.Ide.Gui
 			fileInfo.NewContent = newContent;
 		}
 		
+                void HandleNewContentControlRealized (object sender, EventArgs e)
+                {
+                        JumpToLine ();
+                        newContent.Control.Realized -= HandleNewContentControlRealized;
+                }
+                
 		public bool JumpToLine ()
 		{
 			IEditableTextBuffer ipos = newContent.GetContent<IEditableTextBuffer> ();

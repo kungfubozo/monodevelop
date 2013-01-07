@@ -53,9 +53,7 @@ namespace MonoDevelop.CSharp.Resolver
 		{
 			if (offset < 0)
 				return "";
-			var doc = IdeApp.Workbench.GetDocument (fileName);
-			if (doc == null || doc.Editor == null)
-				doc = IdeApp.Workbench.ActiveDocument;
+			var doc = IdeApp.Workbench.ActiveDocument;
 			if (doc == null || doc.Editor == null)
 				return "";
 			var loc = RefactoringService.GetCorrectResolveLocation (doc, data.OffsetToLocation (offset));
