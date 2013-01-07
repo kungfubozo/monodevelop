@@ -1,9 +1,10 @@
 // ObjectValue.cs
 //
-// Author:
-//   Lluis Sanchez Gual <lluis@novell.com>
-//
+// Authors: Lluis Sanchez Gual <lluis@novell.com>
+//          Jeffrey Stedfast <jeff@xamarin.com>
+// 
 // Copyright (c) 2008 Novell, Inc (http://www.novell.com)
+// Copyright (c) 2012 Xamarin Inc. (http://www.xamarin.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -38,6 +39,7 @@ namespace Mono.Debugging.Client
 	{
 		ObjectPath path;
 		int arrayCount = -1;
+		bool isNull;
 		string name;
 		string value;
 		string typeName;
@@ -88,9 +90,15 @@ namespace Mono.Debugging.Client
 		
 		public static ObjectValue CreateNullObject (IObjectValueSource source, string name, string typeName, ObjectValueFlags flags)
 		{
-			ObjectValue ob = Create (source, new ObjectPath (name), typeName);
+			return CreateNullObject (source, new ObjectPath (name), typeName, flags);
+		}
+		
+		public static ObjectValue CreateNullObject (IObjectValueSource source, ObjectPath path, string typeName, ObjectValueFlags flags)
+		{
+			ObjectValue ob = Create (source, path, typeName);
 			ob.flags = flags | ObjectValueFlags.Object;
 			ob.value = "(null)";
+			ob.isNull = true;
 			return ob;
 		}
 		
@@ -218,6 +226,7 @@ namespace Mono.Debugging.Client
 				if (res != null) {
 					this.value = res.Value;
 					displayValue = res.DisplayValue;
+					isNull = value == null;
 				}
 			}
 		}
@@ -284,7 +293,10 @@ namespace Mono.Debugging.Client
 		/// </remarks>
 		public object GetRawValue ()
 		{
-			return GetRawValue (parentFrame.DebuggerSession.EvaluationOptions);
+			EvaluationOptions ops = parentFrame.DebuggerSession.EvaluationOptions.Clone ();
+			ops.EllipsizeStrings = false;
+			
+			return GetRawValue (ops);
 		}
 		
 		/// <summary>
@@ -379,6 +391,8 @@ namespace Mono.Debugging.Client
 		/// </value>
 		public bool HasChildren {
 			get {
+				if (isNull)
+					return false;
 				if (IsEvaluating)
 					return false;
 				if (children != null)
@@ -446,9 +460,12 @@ namespace Mono.Debugging.Client
 					}
 				}
 			}
-			foreach (ObjectValue ob in children)
+			
+			foreach (ObjectValue ob in children) {
 				if (ob.Name == name)
 					return ob;
+			}
+			
 			return null;
 		}
 		
@@ -490,7 +507,7 @@ namespace Mono.Debugging.Client
 							children.AddRange (cs);
 						} catch (Exception ex) {
 							if (parentFrame != null)
-								parentFrame.DebuggerSession.OnDebuggerOutput( true, ex.ToString());
+								parentFrame.DebuggerSession.OnDebuggerOutput (true, ex.ToString ());
 							children.Add (CreateFatalError ("", ex.Message, ObjectValueFlags.ReadOnly));
 						}
 					}

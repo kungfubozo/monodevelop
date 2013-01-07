@@ -29,6 +29,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using MonoDevelop.Core;
+using Gtk;
 
 namespace MonoDevelop.SourceEditor
 {
@@ -80,7 +81,13 @@ namespace MonoDevelop.SourceEditor
 				return;
 			try {
 				// Directory may have removed/unmounted. Therefore this operation is not guaranteed to work.
-				File.WriteAllText (GetAutoSaveFileName (fileName), content);
+				string tmpFile = Path.GetTempFileName ();
+				File.WriteAllText (tmpFile, content);
+
+				var autosaveFileName = GetAutoSaveFileName (fileName);
+				if (File.Exists (autosaveFileName))
+					File.Delete (autosaveFileName);
+				File.Move (tmpFile, autosaveFileName);
 				Counters.AutoSavedFiles++;
 			} catch (Exception e) {
 				LoggingService.LogError ("Error in auto save while creating: " + fileName +". Disabling auto save.", e);
@@ -92,9 +99,9 @@ namespace MonoDevelop.SourceEditor
 		class FileContent
 		{
 			public string FileName;
-			public Mono.TextEditor.Document Content;
+			public Mono.TextEditor.TextDocument Content;
 
-			public FileContent (string fileName, Mono.TextEditor.Document content)
+			public FileContent (string fileName, Mono.TextEditor.TextDocument content)
 			{
 				this.FileName = fileName;
 				this.Content = content;
@@ -130,16 +137,21 @@ namespace MonoDevelop.SourceEditor
 				resetEvent.WaitOne ();
 				while (queue.Count > 0) {
 					var content = queue.Dequeue ();
-					lock (contentLock) {
+					// Don't create an auto save for unsaved files.
+					if (string.IsNullOrEmpty (content.FileName))
+						continue;
+					Application.Invoke (delegate {
 						string text;
 						try {
 							text = content.Content.Text;
 						} catch (Exception e) {
 							LoggingService.LogError ("Exception in auto save thread.", e);
-							continue;
+							return;
 						}
 						CreateAutoSave (content.FileName, text);
 					}
+					);
+					
 				}
 			}
 		}
@@ -147,16 +159,7 @@ namespace MonoDevelop.SourceEditor
 		public static string LoadAutoSave (string fileName)
 		{
 			string autoSaveFileName = GetAutoSaveFileName (fileName);
-			lock (contentLock)
-			{
-				try {
-					return File.ReadAllText (autoSaveFileName);
-				} catch (Exception e) {
-					LoggingService.LogError ("Error loading autosave from " + autoSaveFileName, e);
-				}
-			}
-
-			return string.Empty;
+			return Mono.TextEditor.Utils.TextFileUtility.ReadAllText (autoSaveFileName);
 		}
 
 		public static void RemoveAutoSaveFile (string fileName)
@@ -177,7 +180,7 @@ namespace MonoDevelop.SourceEditor
 			}
 		}
 
-		public static void InformAutoSaveThread (Mono.TextEditor.Document content)
+		public static void InformAutoSaveThread (Mono.TextEditor.TextDocument content)
 		{
 			if (content == null || !autoSaveEnabled)
 				return;

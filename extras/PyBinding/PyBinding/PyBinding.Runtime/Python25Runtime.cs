@@ -25,6 +25,7 @@ using System.Collections.Generic;
 using System.IO;
 
 using MonoDevelop.Core;
+using MonoDevelop.Core.Execution;
 using MonoDevelop.Projects;
 using MonoDevelop.Core.Serialization;
 using MonoDevelop.Projects.CodeGeneration;
@@ -79,6 +80,16 @@ namespace PyBinding.Runtime
 			return new Python25Runtime () {
 				Path = this.Path
 			};
+		}
+		
+		IExecutionHandler handler;
+		
+		public override IExecutionHandler GetExecutionHandler ()
+		{
+			if (handler == null)
+				handler = new CPythonExecutionHandler ();
+			
+			return handler;
 		}
 		
 		public override string[] GetArguments (PythonConfiguration config)

@@ -22,7 +22,6 @@
     <widget-library name="MonoDevelop.AspNet, Version=2.6.0.0, Culture=neutral" />
     <widget-library name="MonoDevelop.Autotools, Version=2.6.0.0, Culture=neutral" />
     <widget-library name="MonoDevelop.Refactoring, Version=2.6.0.0, Culture=neutral" />
-    <widget-library name="MonoDevelop.Moonlight, Version=2.6.0.0, Culture=neutral" />
     <widget-library name="MonoDevelop.Debugger.Soft, Version=2.6.0.0, Culture=neutral" />
     <widget-library name="../build/MonoDevelop.AddinAuthoring.dll" internal="true" />
   </import>
@@ -1024,8 +1023,6 @@
                       <widget class="Gtk.TreeView" id="tree">
                         <property name="MemberName" />
                         <property name="CanFocus">True</property>
-                        <signal name="PopupMenu" handler="OnTreePopupMenu" />
-                        <signal name="ButtonReleaseEvent" handler="OnTreeButtonReleaseEvent" />
                       </widget>
                     </child>
                   </widget>

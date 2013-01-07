@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Linq;
 using System.Collections;
 using System.Text;
 using MonoDevelop.Core;
@@ -66,7 +67,10 @@ namespace MonoDevelop.VersionControl.Subversion
 		
 		public override string GetBaseText (FilePath sourcefile)
 		{
-			return File.ReadAllText (Svn.GetPathToBaseText (sourcefile));
+			// The base file will not exist if the file has just been
+			// added to svn and not committed
+			var baseFile = Svn.GetPathToBaseText (sourcefile);
+			return File.Exists (baseFile) ? File.ReadAllText (baseFile) : "";
 		}
 
 		public string GetPathToBaseText (FilePath sourcefile)
@@ -144,10 +148,11 @@ namespace MonoDevelop.VersionControl.Subversion
 			url += serverPath;
 			
 			string[] paths = new string[] {url};
-			
+
 			CreateDirectory (paths, message, monitor);
 			Svn.Checkout (this.Url + "/" + serverPath, localPath, null, true, monitor);
 
+			rootPath = localPath;
 			Set<FilePath> dirs = new Set<FilePath> ();
 			PublishDir (dirs, localPath, false, monitor);
 
@@ -163,18 +168,11 @@ namespace MonoDevelop.VersionControl.Subversion
 
 		void PublishDir (Set<FilePath> dirs, FilePath dir, bool rec, IProgressMonitor monitor)
 		{
-			string ndir = (string) dir;
-			while (ndir[ndir.Length - 1] == Path.DirectorySeparatorChar)
-				ndir = ndir.Substring (0, ndir.Length - 1);
-
-			dir = ndir;
-			if (dirs.Contains (dir))
-				return;
-
-			dirs.Add (dir);
-			if (rec) {
-				PublishDir (dirs, dir.ParentDirectory, true, monitor);
-				Add (dir, false, monitor);
+			if (dirs.Add (dir.CanonicalPath)) {
+				if (rec) {
+					PublishDir (dirs, dir.ParentDirectory, true, monitor);
+					Add (dir, false, monitor);
+				}
 			}
 		}
 
@@ -213,6 +211,12 @@ namespace MonoDevelop.VersionControl.Subversion
 
 		public override void Revert (FilePath[] localPaths, bool recurse, IProgressMonitor monitor)
 		{
+			// If we have an array of paths such as: new [] { "/Foo/Directory", "/Foo/Directory/File1", "/Foo/Directory/File2" }
+			// svn will successfully revert the first entry (the directory) and then throw an error when trying to revert the
+			// second and third entries because by reverting the directory the files are implicitly reverted. Try to work around
+			// this issue.
+			Array.Sort<FilePath>(localPaths);
+			Array.Reverse (localPaths);
 			Svn.Revert (localPaths, recurse, monitor);
 		}
 
@@ -230,7 +234,7 @@ namespace MonoDevelop.VersionControl.Subversion
 		{
 			foreach (FilePath path in paths) {
 				if (IsVersioned (path) && File.Exists (path) && !Directory.Exists (path)) {
-					if (rootPath == null)
+					if (rootPath.IsNull)
 						throw new UserException (GettextCatalog.GetString ("Project publishing failed. There is a stale .svn folder in the path '{0}'", path.ParentDirectory));
 					VersionInfo srcInfo = GetVersionInfo (path, false);
 					if (srcInfo.HasLocalChange (VersionStatus.ScheduledDelete)) {
@@ -249,8 +253,8 @@ namespace MonoDevelop.VersionControl.Subversion
 					}
 				}
 				else {
-					if (File.Exists (path) && !IsVersioned (path.ParentDirectory)) {
-						// The file belongs to an unversioned folder. We can add it by versioning the parent
+					if (!IsVersioned (path.ParentDirectory)) {
+						// The file/folder belongs to an unversioned folder. We can add it by versioning the parent
 						// folders up to the root of the repository
 						
 						if (!path.IsChildPathOf (rootPath))
@@ -476,6 +480,14 @@ namespace MonoDevelop.VersionControl.Subversion
 			}
 		}
 		
+		public override DiffInfo GenerateDiff (FilePath baseLocalPath, VersionInfo versionInfo)
+		{
+			string diff = Svn.GetUnifiedDiff (versionInfo.LocalPath, false, false);
+			if (!string.IsNullOrEmpty (diff))
+				return GenerateUnifiedDiffInfo (diff, baseLocalPath, new FilePath[] { versionInfo.LocalPath }).FirstOrDefault ();
+			return null;
+		}
+		
 		public override DiffInfo[] PathDiff (FilePath localPath, Revision fromRevision, Revision toRevision)
 		{
 			string diff = Svn.GetUnifiedDiff (localPath, (SvnRevision)fromRevision, localPath, (SvnRevision)toRevision, true);
@@ -503,8 +515,8 @@ namespace MonoDevelop.VersionControl.Subversion
 		{
 			List<Annotation> annotations = new List<Annotation> (Svn.GetAnnotations (this, localPath, SvnRevision.First, SvnRevision.Base));
 			Annotation nextRev = new Annotation (GettextCatalog.GetString ("working copy"), "", DateTime.MinValue);
-			var baseDocument = new Mono.TextEditor.Document (File.ReadAllText (GetPathToBaseText (localPath)));
-			var workingDocument = new Mono.TextEditor.Document (File.ReadAllText (localPath));
+			var baseDocument = new Mono.TextEditor.TextDocument (File.ReadAllText (GetPathToBaseText (localPath)));
+			var workingDocument = new Mono.TextEditor.TextDocument (File.ReadAllText (localPath));
 			
 			// "SubversionException: blame of the WORKING revision is not supported"
 			foreach (var hunk in baseDocument.Diff (workingDocument)) {

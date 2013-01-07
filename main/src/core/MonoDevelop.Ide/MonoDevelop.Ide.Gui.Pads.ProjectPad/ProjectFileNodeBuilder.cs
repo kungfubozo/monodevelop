@@ -73,7 +73,7 @@ namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 		{
 			ProjectFile file = (ProjectFile) dataObject;
 
-			label = file.Link.IsNullOrEmpty ? file.FilePath.FileName : file.Link.FileName;
+			label = GLib.Markup.EscapeText (file.Link.IsNullOrEmpty ? file.FilePath.FileName : file.Link.FileName);
 			if (!File.Exists (file.FilePath)) {
 				label = "<span foreground='red'>" + label + "</span>";
 			}
@@ -137,8 +137,16 @@ namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 	
 	public class ProjectFileNodeCommandHandler: NodeCommandHandler
 	{
+		public override void OnRenameStarting (ref int selectionStart, ref int selectionLength)
+		{
+			string name = CurrentNode.NodeName;
+			selectionStart = 0;
+			selectionLength = Path.GetFileNameWithoutExtension(name).Length;
+		}
+
 		public override void RenameItem (string newName)
 		{
+			ProjectFile newProjectFile = null;
 			ProjectFile file = (ProjectFile) CurrentNode.DataItem;
 			
 			FilePath oldPath, newPath, newLink = FilePath.Null, oldLink = FilePath.Null;
@@ -152,27 +160,29 @@ namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 				newPath = oldPath.ParentDirectory.Combine (newName);	
 			}
 			
-			if (oldPath != newPath) {
-				try {
-					if (!FileService.IsValidPath (newPath)) {
-						MessageService.ShowWarning (GettextCatalog.GetString ("The name you have chosen contains illegal characters. Please choose a different name."));
-					} else if (File.Exists (newPath) || Directory.Exists (newPath) ||
-					           (file.Project != null && file.Project.Files.GetFileWithVirtualPath (newPath.ToRelative (file.Project.BaseDirectory)) != null)) {
-						MessageService.ShowWarning (GettextCatalog.GetString ("File or directory name is already in use. Please choose a different one."));
-					} else {
-						if (file.IsLink) {
-							file.Link = newLink;
-						} else {
-							FileService.RenameFile (oldPath, newName);
-						}
-						if (file.Project != null)
-							IdeApp.ProjectOperations.Save (file.Project);
-					}
-				} catch (System.ArgumentException) { // new file name with wildcard (*, ?) characters in it
+			try {
+				if (file.Project != null)
+					newProjectFile = file.Project.Files.GetFileWithVirtualPath (newPath.ToRelative (file.Project.BaseDirectory));
+				
+				if (!FileService.IsValidPath (newPath)) {
 					MessageService.ShowWarning (GettextCatalog.GetString ("The name you have chosen contains illegal characters. Please choose a different name."));
-				} catch (System.IO.IOException ex) {
-					MessageService.ShowException (ex, GettextCatalog.GetString ("There was an error renaming the file."));
+				} else if (newProjectFile != null && newProjectFile != file) {
+					// If there is already a file under the newPath which is *different*, then throw an exception
+					MessageService.ShowWarning (GettextCatalog.GetString ("File or directory name is already in use. Please choose a different one."));
+				} else {
+					if (file.IsLink) {
+						file.Link = newLink;
+					} else {
+						// This could throw an exception if we try to replace another file during the rename.
+						FileService.RenameFile (oldPath, newName);
+					}
+					if (file.Project != null)
+						IdeApp.ProjectOperations.Save (file.Project);
 				}
+			} catch (System.ArgumentException) { // new file name with wildcard (*, ?) characters in it
+				MessageService.ShowWarning (GettextCatalog.GetString ("The name you have chosen contains illegal characters. Please choose a different name."));
+			} catch (System.IO.IOException ex) {
+				MessageService.ShowException (ex, GettextCatalog.GetString ("There was an error renaming the file."));
 			}
 		}
 		
@@ -182,26 +192,78 @@ namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 			IdeApp.Workbench.OpenDocument (file.FilePath);
 		}
 		
+		public override void ActivateMultipleItems ()
+		{
+			ProjectFile file;
+			for (int i = 0; i < CurrentNodes.Length; i++) {
+				// Only bring the last file to the front
+				file = (ProjectFile) CurrentNodes [i].DataItem;
+				IdeApp.Workbench.OpenDocument (file.FilePath, i == CurrentNodes.Length - 1);
+			}
+		}
+		
 		public override DragOperation CanDragNode ()
 		{
-			if (((ProjectFile) CurrentNode.DataItem).DependsOnFile == null)
-				return DragOperation.Copy | DragOperation.Move;
-			else
-				return DragOperation.None;
+			return DragOperation.Copy | DragOperation.Move;
 		}
 		
 		public override bool CanDropNode (object dataObject, DragOperation operation)
 		{
-			return (dataObject is SolutionItem && ((ProjectFile) CurrentNode.DataItem).DependsOnFile == null);
+			var target = (ProjectFile) CurrentNode.DataItem;
+			var pf = dataObject as ProjectFile;
+
+			return pf != null && !pf.HasChildren && target.DependsOn == null;
 		}
-		
-		public override void OnNodeDrop (object dataObject, DragOperation operation)
+
+		void Drop (ProjectFile pf, DragOperation operation, HashSet<SolutionEntityItem> projectsToSave)
 		{
+			var target = (ProjectFile) CurrentNode.DataItem;
+			var targetDirectory = target.FilePath.ParentDirectory;
+
+			// file dependencies only work if they are in the same physical folder
+			if (pf.FilePath.ParentDirectory != targetDirectory) {
+				var targetPath = targetDirectory.Combine (pf.FilePath.FileName);
+
+				// if copying to the same directory, make a copy with a different name
+				if (targetPath == pf.FilePath)
+					targetPath = ProjectOperations.GetTargetCopyName (targetPath, false);
+
+				if (File.Exists (targetPath))
+					if (!MessageService.Confirm (GettextCatalog.GetString ("The file '{0}' already exists. Do you want to overwrite it?", targetPath.FileName), AlertButton.OverwriteFile))
+						return;
+
+				// unlink the project file from its current parent
+				pf.DependsOn = null;
+
+				projectsToSave.Add (pf.Project);
+
+				bool move = operation == DragOperation.Move;
+				var opText = move ? GettextCatalog.GetString ("Moving file...") : GettextCatalog.GetString ("Copying file...");
+
+				using (var monitor = IdeApp.Workbench.ProgressMonitors.GetStatusProgressMonitor (opText, MonoDevelop.Ide.Gui.Stock.CopyIcon, true))
+					IdeApp.ProjectOperations.TransferFiles (monitor, pf.Project, pf.FilePath, target.Project, targetPath, move, true);
+
+				pf = target.Project.Files.GetFile (targetPath);
+			}
+
+			// the dropped project file now depends on the file it was just dropped onto
+			pf.DependsOn = target.FilePath.FileName;
+			projectsToSave.Add (pf.Project);
+		}
+
+		public override void OnMultipleNodeDrop (object[] dataObjects, DragOperation operation)
+		{
+			var projectsToSave = new HashSet<SolutionEntityItem> ();
+
+			foreach (var dataObject in dataObjects)
+				Drop ((ProjectFile) dataObject, operation, projectsToSave);
+
+			IdeApp.ProjectOperations.Save (projectsToSave);
 		}
 		
 		public override bool CanDeleteItem ()
 		{
-			return ((ProjectFile) CurrentNode.DataItem).DependsOnFile == null;
+			return true;
 		}
 		
 		[CommandHandler (EditCommands.Delete)]
@@ -359,7 +421,7 @@ namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 				if (action == "--") {
 					info.AddSeparator ();
 				} else {
-					CommandInfo ci = info.Add (BuildAction.Translate (action), action);
+					CommandInfo ci = info.Add (action, action);
 					ci.Checked = toggledActions.Contains (action);
 					if (ci.Checked)
 						ci.CheckedInconsistent = toggledActions.Count > 1;

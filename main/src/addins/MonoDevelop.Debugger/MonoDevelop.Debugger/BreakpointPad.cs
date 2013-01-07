@@ -23,7 +23,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-
 using GLib;
 using Gtk;
 using System;
@@ -46,7 +45,7 @@ namespace MonoDevelop.Debugger
 	{
 		BreakpointStore bps;
 		
-		BreakpointsTreeView tree;
+		PadTreeView tree;
 		Gtk.TreeStore store;
 		Widget control;
 		ScrolledWindow sw;
@@ -54,6 +53,9 @@ namespace MonoDevelop.Debugger
 		TreeViewState treeState;
 		
 		EventHandler<BreakpointEventArgs> breakpointUpdatedHandler;
+		EventHandler<BreakpointEventArgs> breakpointRemovedHandler;
+		EventHandler<BreakpointEventArgs> breakpointAddedHandler;
+		EventHandler breakpointChangedHandler;
 		
 		enum Columns
 		{
@@ -86,7 +88,7 @@ namespace MonoDevelop.Debugger
 			menuSet.AddItem (DebugCommands.EnableDisableBreakpoint);
 			menuSet.AddItem (DebugCommands.ClearAllBreakpoints);
 			menuSet.AddItem (DebugCommands.DisableAllBreakpoints);
-			menuSet.AddItem (EditCommands.Delete);
+			menuSet.AddItem (EditCommands.DeleteKey);
 			menuSet.AddSeparator ();
 			menuSet.Add (propertiesCmd);
 			
@@ -102,10 +104,12 @@ namespace MonoDevelop.Debugger
 			
 			store = new TreeStore (typeof(string), typeof (bool), typeof(string), typeof(object), typeof(string), typeof(string), typeof(string), typeof(string));
 
-			tree = new BreakpointsTreeView (this);
+			tree = new PadTreeView ();
 			tree.Model = store;
 			tree.RulesHint = true;
 			tree.HeadersVisible = true;
+			tree.DoPopupMenu = ShowPopup;
+			tree.KeyPressEvent += OnKeyPressEvent;
 			
 			treeState = new TreeViewState (tree, (int) Columns.Breakpoint);
 							
@@ -124,7 +128,7 @@ namespace MonoDevelop.Debugger
 			
 			TreeViewColumn FrameCol = new TreeViewColumn ();
 			CellRenderer crt = tree.TextRenderer;
-			FrameCol.Title = GettextCatalog.GetString ("File");
+			FrameCol.Title = GettextCatalog.GetString ("Name");
 			FrameCol.PackStart (crt, true);
 			FrameCol.AddAttribute (crt, "text", (int) Columns.FileName);
 			FrameCol.Resizable = true;
@@ -154,14 +158,15 @@ namespace MonoDevelop.Debugger
 			bps = DebuggingService.Breakpoints;
 			
 			UpdateDisplay ();
-			
-			tree.PopupMenu += new PopupMenuHandler (OnPopupMenu);
 
-			breakpointUpdatedHandler = DispatchService.GuiDispatch (new EventHandler<BreakpointEventArgs> (OnBreakpointUpdated));
+			breakpointUpdatedHandler = DispatchService.GuiDispatch<EventHandler<BreakpointEventArgs>> (OnBreakpointUpdated);
+			breakpointRemovedHandler = DispatchService.GuiDispatch<EventHandler<BreakpointEventArgs>> (OnBreakpointRemoved);
+			breakpointAddedHandler = DispatchService.GuiDispatch<EventHandler<BreakpointEventArgs>> (OnBreakpointAdded);
+			breakpointChangedHandler = DispatchService.GuiDispatch<EventHandler> (OnBreakpointChanged);
 			
-			DebuggingService.Breakpoints.BreakpointAdded += OnBpAdded;
-			DebuggingService.Breakpoints.BreakpointRemoved += OnBpRemoved;
-			DebuggingService.Breakpoints.Changed += OnBpChanged;
+			DebuggingService.Breakpoints.BreakpointAdded += breakpointAddedHandler;
+			DebuggingService.Breakpoints.BreakpointRemoved += breakpointRemovedHandler;
+			DebuggingService.Breakpoints.Changed += breakpointChangedHandler;
 			DebuggingService.Breakpoints.BreakpointUpdated += breakpointUpdatedHandler;
 			
 			DebuggingService.PausedEvent += OnDebuggerStatusCheck;
@@ -177,24 +182,19 @@ namespace MonoDevelop.Debugger
 		
 		public void Dispose ()
 		{
-			DebuggingService.Breakpoints.BreakpointAdded -= OnBpAdded;
-			DebuggingService.Breakpoints.BreakpointRemoved -= OnBpRemoved;
-			DebuggingService.Breakpoints.Changed -= OnBpChanged;
+			DebuggingService.Breakpoints.BreakpointAdded -= breakpointAddedHandler;
+			DebuggingService.Breakpoints.BreakpointRemoved -= breakpointRemovedHandler;
+			DebuggingService.Breakpoints.Changed -= breakpointChangedHandler;
 			DebuggingService.Breakpoints.BreakpointUpdated -= breakpointUpdatedHandler;
 			
 			DebuggingService.PausedEvent -= OnDebuggerStatusCheck;
 			DebuggingService.ResumedEvent -= OnDebuggerStatusCheck;
 			DebuggingService.StoppedEvent -= OnDebuggerStatusCheck;
 		}
-		
-		private void OnPopupMenu (object o, PopupMenuArgs args)
-		{
-			ShowPopup ();
-		}
 
-		internal void ShowPopup ()
+		void ShowPopup (Gdk.EventButton evt)
 		{
-			IdeApp.CommandService.ShowContextMenu (menuSet, tree);
+			IdeApp.CommandService.ShowContextMenu (tree, evt, menuSet, tree);
 		}
 		
 		[CommandHandler (LocalCommands.Properties)]
@@ -224,7 +224,8 @@ namespace MonoDevelop.Debugger
 			TreeIter iter;
 			if (tree.Selection.GetSelected (out iter)) {
 				Breakpoint bp = (Breakpoint) store.GetValue (iter, (int) Columns.Breakpoint);
-				IdeApp.Workbench.OpenDocument (bp.FileName, bp.Line, 1);	
+				if (!string.IsNullOrEmpty (bp.FileName))
+					IdeApp.Workbench.OpenDocument (bp.FileName, bp.Line, 1);
 			}
 		}
 		
@@ -232,11 +233,25 @@ namespace MonoDevelop.Debugger
 		[CommandHandler (EditCommands.DeleteKey)]
 		protected void OnDeleted ()
 		{
-			TreeIter iter;
-			if (tree.Selection.GetSelected (out iter)) {
-				Breakpoint bp = (Breakpoint) store.GetValue (iter, (int) Columns.Breakpoint);	
+			bool deleted = false;
+
+			DebuggingService.Breakpoints.BreakpointRemoved -= breakpointRemovedHandler;
+
+			foreach (TreePath path in tree.Selection.GetSelectedRows ()) {
+				TreeIter iter;
+				
+				if (!store.GetIter (out iter, path))
+					continue;
+				
+				var bp = (Breakpoint) store.GetValue (iter, (int) Columns.Breakpoint);
 				bps.Remove (bp);
-			}	
+				deleted = true;
+			}
+			
+			DebuggingService.Breakpoints.BreakpointRemoved += breakpointRemovedHandler;
+			
+			if (deleted)
+				UpdateDisplay ();
 		}
 		
 		[CommandUpdateHandler (EditCommands.Delete)]
@@ -249,6 +264,41 @@ namespace MonoDevelop.Debugger
 			TreeIter iter;
 			cmd.Enabled = tree.Selection.GetSelected (out iter);
 		}
+
+		[GLib.ConnectBefore]
+		void OnKeyPressEvent (object sender, KeyPressEventArgs args)
+		{
+			// Delete the currently selected breakpoint(s) with any delete key
+			switch (args.Event.Key) {
+			case Gdk.Key.Delete:
+			case Gdk.Key.KP_Delete:
+			case Gdk.Key.BackSpace:
+				// Delete the selected breakpoints
+				bool deleted = false;
+
+				DebuggingService.Breakpoints.BreakpointRemoved -= breakpointRemovedHandler;
+
+				foreach (TreePath path in tree.Selection.GetSelectedRows ()) {
+					TreeIter iter;
+					
+					if (!store.GetIter (out iter, path))
+						continue;
+					
+					var bp = (Breakpoint) store.GetValue (iter, (int) Columns.Breakpoint);
+					bps.Remove (bp);
+					deleted = true;
+				}
+
+				DebuggingService.Breakpoints.BreakpointRemoved += breakpointRemovedHandler;
+
+				if (deleted) {
+					args.RetVal = true;
+					UpdateDisplay ();
+				}
+
+				break;
+			}
+		}
 		
 		private void ItemToggled (object o, ToggledArgs args)
 		{
@@ -259,7 +309,6 @@ namespace MonoDevelop.Debugger
 				store.SetValue (iter, (int)Columns.Selected, !val);
 				bp.Enabled = !bp.Enabled;
 			}
-			
 		}
 		
 		public void UpdateDisplay ()
@@ -268,14 +317,27 @@ namespace MonoDevelop.Debugger
 			
 			store.Clear ();
 			if (bps != null) {		
-				foreach (Breakpoint bp in bps.GetBreakpoints () ){
+				foreach (Breakpoint bp in bps.GetBreakpoints ()) {
 					string traceExp = bp.HitAction == HitAction.PrintExpression ? bp.TraceExpression : "";
 					string traceVal = bp.HitAction == HitAction.PrintExpression ? bp.LastTraceValue : "";
 					string hitCount = bp.HitCount > 0 ? bp.HitCount.ToString () : "";
+					string name;
+					
+					if (bp is FunctionBreakpoint) {
+						FunctionBreakpoint fb = (FunctionBreakpoint) bp;
+						
+						if (fb.ParamTypes != null)
+							name = fb.FunctionName + "(" + string.Join (", ", fb.ParamTypes) + ")";
+						else
+							name = fb.FunctionName;
+					} else {
+						name = ((Breakpoint) bp).FileName + ":" + bp.Line.ToString ();
+					}
+					
 					if (bp.Enabled)
-						store.AppendValues ("md-breakpoint", true, bp.FileName + ":" + bp.Line.ToString (), bp, bp.ConditionExpression, traceExp, hitCount, traceVal);
+						store.AppendValues ("md-breakpoint", true, name, bp, bp.ConditionExpression, traceExp, hitCount, traceVal);
 					else
-						store.AppendValues ("md-breakpoint-disabled", false, bp.FileName + ":" + bp.Line.ToString (), bp, bp.ConditionExpression, traceExp, hitCount, traceVal);
+						store.AppendValues ("md-breakpoint-disabled", false, name, bp, bp.ConditionExpression, traceExp, hitCount, traceVal);
 				}
 			}
 			treeState.Load ();
@@ -298,17 +360,17 @@ namespace MonoDevelop.Debugger
 			} while (store.IterNext (ref it));
 		}
 		
-		protected void OnBpAdded (object o, EventArgs args)
+		protected void OnBreakpointAdded (object o, EventArgs args)
 		{
 			UpdateDisplay ();	
 		}
 		
-		protected void OnBpRemoved (object o, EventArgs args)
+		protected void OnBreakpointRemoved (object o, EventArgs args)
 		{
 			UpdateDisplay ();	
 		}
 		
-		protected void OnBpChanged (object o, EventArgs args)
+		protected void OnBreakpointChanged (object o, EventArgs args)
 		{
 			UpdateDisplay ();	
 		}
@@ -318,8 +380,7 @@ namespace MonoDevelop.Debugger
 			if (control != null)
 				control.Sensitive = !DebuggingService.Breakpoints.IsReadOnly;
 		}
-		
-		
+
 		void OnRowActivated (object o, Gtk.RowActivatedArgs args)
 		{
 			OnBpJumpTo ();
@@ -348,24 +409,5 @@ namespace MonoDevelop.Debugger
 		{
 			OnDeleted ();
 		}
-	}
-	
-	class BreakpointsTreeView: MonoDevelop.Ide.Gui.Components.PadTreeView
-	{
-		BreakpointPad pad;
-		
-		public BreakpointsTreeView (BreakpointPad pad)
-		{
-			this.pad = pad;
-		}
-		
-		protected override bool OnButtonPressEvent (Gdk.EventButton evnt)
-		{
-			bool ret = base.OnButtonPressEvent (evnt);
-			if (evnt.Button == 3)
-				pad.ShowPopup ();
-			return ret;
-		}
-
 	}
 }

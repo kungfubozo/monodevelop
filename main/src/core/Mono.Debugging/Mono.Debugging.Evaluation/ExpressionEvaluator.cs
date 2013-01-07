@@ -71,6 +71,9 @@ namespace Mono.Debugging.Evaluation
 			object res = ctx.Adapter.TargetObjectToObject (ctx, obj);
 			if (res == null)
 				return null;
+			
+			if (res is EvaluationResult)
+				return ((EvaluationResult) res).DisplayValue;
 			else
 				return res.ToString ();
 		}
@@ -213,6 +216,20 @@ namespace Mono.Debugging.Evaluation
 	}
 
 	[Serializable]
+	public class EvaluatorAbortedException: EvaluatorException
+	{
+		protected EvaluatorAbortedException (SerializationInfo info, StreamingContext context)
+			: base (info, context)
+		{
+		}
+
+		public EvaluatorAbortedException ()
+			: base ("Aborted.")
+		{
+		}
+	}
+
+	[Serializable]
 	public class NotSupportedExpressionException: EvaluatorException
 	{
 		protected NotSupportedExpressionException (SerializationInfo info, StreamingContext context)
@@ -220,7 +237,7 @@ namespace Mono.Debugging.Evaluation
 		{
 		}
 		
-		public NotSupportedExpressionException ( )
+		public NotSupportedExpressionException ()
 			: base ("Expression not supported.")
 		{
 		}

@@ -35,6 +35,7 @@ using MonoDevelop.Ide.Gui;
 using MonoDevelop.Components.Commands;
 using MonoDevelop.Projects;
 using MonoDevelop.Ide;
+using System.Linq;
 
 namespace MonoDevelop.Debugger
 {
@@ -55,6 +56,7 @@ namespace MonoDevelop.Debugger
 		DisableAllBreakpoints,
 		ShowDisassembly,
 		NewBreakpoint,
+		NewFunctionBreakpoint,
 		RemoveBreakpoint,
 		ShowBreakpointProperties,
 		ExpressionEvaluator,
@@ -141,15 +143,15 @@ namespace MonoDevelop.Debugger
 		{
 			if (DebuggingService.IsDebugging) {
 				info.Enabled = true;
-				info.Text = GettextCatalog.GetString ("_Continue");
+				info.Text = GettextCatalog.GetString ("_Continue Debugging");
 				info.Description = GettextCatalog.GetString ("Continue the execution of the application");
 				return;
 			}
-
+			
 			// If there are no debugger installed, this command will not debug, it will
 			// just run, so the label has to be changed accordingly.
 			if (!DebuggingService.IsDebuggingSupported) {
-				info.Text = IdeApp.ProjectOperations.CurrentRunOperation.IsCompleted ? GettextCatalog.GetString ("_Run") : GettextCatalog.GetString ("_Run again");
+				info.Text = IdeApp.ProjectOperations.CurrentRunOperation.IsCompleted ? GettextCatalog.GetString ("Start Without Debugging") : GettextCatalog.GetString ("Restart Without Debugging");
 				info.Icon = "gtk-execute";
 			}
 
@@ -236,7 +238,7 @@ namespace MonoDevelop.Debugger
 			var dialog = new SelectFileDialog (GettextCatalog.GetString ("Application to Debug")) {
 				TransientFor = IdeApp.Workbench.RootWindow,
 			};
-			if (dialog.Run ())
+			if (dialog.Run () && IdeApp.ProjectOperations.CanExecuteFile (dialog.SelectedFile))
 				IdeApp.ProjectOperations.DebugApplication (dialog.SelectedFile);
 		}
 		
@@ -352,7 +354,7 @@ namespace MonoDevelop.Debugger
 		
 		protected override void Update (CommandInfo info)
 		{
-			info.Enabled = !DebuggingService.Breakpoints.IsReadOnly;
+			info.Enabled = !DebuggingService.Breakpoints.IsReadOnly && DebuggingService.Breakpoints.Count > 0;
 			info.Visible = DebuggingService.IsFeatureSupported (DebuggerFeatures.Breakpoints);
 		}
 	}
@@ -439,7 +441,8 @@ namespace MonoDevelop.Debugger
 		
 		protected override void Update (CommandInfo info)
 		{
-			info.Enabled = !DebuggingService.Breakpoints.IsReadOnly;
+			info.Enabled = !DebuggingService.Breakpoints.IsReadOnly
+				&& DebuggingService.Breakpoints.Any (b => b.Enabled);
 			info.Visible = DebuggingService.IsFeatureSupported (DebuggerFeatures.Breakpoints);
 		}
 	}
@@ -506,6 +509,22 @@ namespace MonoDevelop.Debugger
 			}
 			else
 				info.Enabled = false;
+		}
+	}
+	
+	internal class NewFunctionBreakpointHandler: CommandHandler
+	{
+		protected override void Run ()
+		{
+			FunctionBreakpoint bp = new FunctionBreakpoint ("", "C#");
+			if (DebuggingService.ShowBreakpointProperties (bp, true))
+				DebuggingService.Breakpoints.Add (bp);
+		}
+		
+		protected override void Update (CommandInfo info)
+		{
+			info.Visible = DebuggingService.IsFeatureSupported (DebuggerFeatures.Breakpoints);
+			info.Enabled = !DebuggingService.Breakpoints.IsReadOnly;
 		}
 	}
 	

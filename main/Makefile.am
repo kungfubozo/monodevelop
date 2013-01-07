@@ -1,4 +1,6 @@
-SUBDIRS = contrib src po man theme-icons build tests
+include $(top_srcdir)/xbuild.include
+
+SUBDIRS = external . contrib src po man theme-icons build tests
 
 #capture aclocal flags for autoreconf
 ACLOCAL_AMFLAGS=$(ACLOCAL_FLAGS)
@@ -8,6 +10,12 @@ bin_SCRIPTS = monodevelop mdtool
 buildinfo = $(top_builddir)/build/bin/buildinfo
 
 all: vcrevision
+
+all-local: sln_build
+
+clean: clean-local
+
+clean-local: sln_clean
 
 vcrevision:
 	@if test -d ../.git; then \
@@ -28,6 +36,8 @@ $(buildinfo): vcrevision
 	@echo "Build date: $$(date -u +'%Y-%m-%d %H:%M:%S%z')" >> "$@"
 	@echo "Updated build information"
 	@cat $(buildinfo)
+
+buildinfo: $(buildinfo)
 
 buildinfodir = $(MD_ASSEMBLY_DIR)
 buildinfo_DATA = $(buildinfo)
@@ -105,32 +115,37 @@ MD_LAUNCH=$(MD_LAUNCH_SETUP) UBUNTU_MENUPROXY=0 exec -a "monodevelop" $(RUNTIME)
 run: runmd
 
 runmd: $(PROGRAM)
-	UBUNTU_MENUPROXY=0 $(MD_LAUNCH) --debug $(MD_BIN_PATH)/MonoDevelop.exe
+	$(MD_LAUNCH) --debug $(MD_BIN_PATH)/MonoDevelop.exe --no-redirect
 
 run-debug: $(PROGRAM)
-	MONODEVELOP_CONSOLE_LOG_LEVEL=All $(MD_LAUNCH) --debug=casts $(MD_BIN_PATH)/MonoDevelop.exe
+	MONODEVELOP_CONSOLE_LOG_LEVEL=All $(MD_LAUNCH) --debug=casts $(MD_BIN_PATH)/MonoDevelop.exe --no-redirect
+
+run-gdb: $(PROGRAM)
+	echo "run --debug $(MD_BIN_PATH)/MonoDevelop.exe" > gdb.commands
+	$(MD_LAUNCH_SETUP) gdb $(RUNTIME) -x gdb.commands
+	rm -f gdb.commands
 
 run-profile: $(PROGRAM)
-	$(MD_LAUNCH) -O=inline --profile $(MD_BIN_PATH)/MonoDevelop.exe
+	$(MD_LAUNCH) --profile=log:calls $(MD_BIN_PATH)/MonoDevelop.exe --no-redirect
 
 run-profile-stat: $(PROGRAM)
-	$(MD_LAUNCH) --profile=logging:stat $(MD_BIN_PATH)/MonoDevelop.exe
+	$(MD_LAUNCH) --profile=log:sample $(MD_BIN_PATH)/MonoDevelop.exe --no-redirect
 
 run-trace: $(PROGRAM)
-	$(MD_LAUNCH_SETUP) MONODEVELOP_TRACE=1 exec strace -ttt -f -o md.strace mono $(MD_BIN_PATH)/MonoDevelop.exe
+	$(MD_LAUNCH_SETUP) MONODEVELOP_TRACE=1 exec strace -ttt -f -o md.strace mono $(MD_BIN_PATH)/MonoDevelop.exe --no-redirect
 
 plot-trace:
 	if [ ! -e 'plot-timeline.py' ]; then wget http://gitorious.org/performance-scripts/mainline/blobs/raw/master/plot-timeline.py; fi
 	python plot-timeline.py -o md-trace.png  md.strace
 
 run-profile-heap: $(PROGRAM)
-	$(MD_LAUNCH) -O=inline --profile=heap:heaplog $(MD_BIN_PATH)/MonoDevelop.exe
-	
+	$(MD_LAUNCH) -O=inline --profile=heap:heaplog $(MD_BIN_PATH)/MonoDevelop.exe --no-redirect
+
 check-addins:
 	$(MDTOOL_RUN) setup reg-build -v
 
 test:
-	cd tests/UnitTests && make test fixture=$(fixture)
+	cd tests && $(MAKE) test assembly=$(assembly)
 
 app-dir: all
 	cd build && make app-dir
@@ -142,7 +157,9 @@ app-dir: all
 
 # we can't use the variables that are conditionally defined
 EXTRA_DIST = $(bin_SCRIPTS) $(desktop_DATA) $(pixmap_DATA) \
-	monodevelop.xml $(pkgconfig_in_files) vcrevision
+	monodevelop.xml $(pkgconfig_in_files) vcrevision external/Makefile.in \
+	Main.sln \
+	md.targets
 
 DISTCLEANFILES = monodevelop intltool-extract intltool-merge intltool-update \
 	$(pkgconfig_DATA) 
@@ -156,14 +173,11 @@ include $(top_srcdir)/Makefile.include
 filter_stale_uninstalled = \
     | egrep -v '^.*/share/mime/.*$$' \
     | egrep -v '^.*./share/icons/hicolor/icon-theme\.cache$$'
-    
+
 filter_stale_buildfiles       = | egrep -v '^./report.out$$'
 distuninstallcheck_listfiles  = find . -type f -print 		# automake-1.9 setting
 distuninstallcheck_listfiles += $(filter_stale_uninstalled)	# amend by required filtering
 distcleancheck_listfiles      = find . -type f -print		# automake-1.9 setting
 distcleancheck_listfiles     += $(filter_stale_buildfiles)	# amend by required filtering
 
-.PHONY: vcrevision
-
-package-monomac:
-	$(MD_LAUNCH_SETUP) mono --debug "build/bin/mdtool.exe" setup pack ../extras/MonoDevelop.MonoMac/build/MonoDevelop.MonoMac.dll
+.PHONY: vcrevision buildinfo

@@ -36,11 +36,74 @@ using System.Xml;
 
 namespace MonoDevelop.Core
 {
+	/// <summary>
+	/// The Property wrapper wraps a global property service value as an easy to use object.
+	/// </summary>
+	public class PropertyWrapper<T>
+	{
+		T value;
+		readonly string propertyName;
+
+		public T Value {
+			get {
+				return value;
+			}
+			set {
+				Set (value);
+			}
+		}
+
+		/// <summary>
+		/// Set the property to the specified value.
+		/// </summary>
+		/// <param name='newValue'>
+		/// The new value.
+		/// </param>
+		/// <returns>
+		/// true, if the property has changed, false otherwise.
+		/// </returns>
+		public bool Set (T newValue)
+		{
+			if (!object.Equals (this.value, newValue)) {
+				this.value = newValue;
+				PropertyService.Set (propertyName, value);
+				OnChanged (EventArgs.Empty);
+				return true;
+			}
+			return false;
+		}
+
+		public PropertyWrapper (string propertyName, T defaultValue)
+		{
+			this.propertyName = propertyName;
+			value = PropertyService.Get (propertyName, defaultValue);
+		}
+
+		public static implicit operator T (PropertyWrapper<T> watch)
+		{
+			return watch.value;
+		}
+
+		protected virtual void OnChanged (EventArgs e)
+		{
+			EventHandler handler = this.Changed;
+			if (handler != null)
+				handler (this, e);
+		}
+		public event EventHandler Changed;
+	}
+
 	public static class PropertyService
 	{
+		public static PropertyWrapper<T> Wrap<T> (string property, T defaultValue)
+		{
+			return new PropertyWrapper<T> (property, defaultValue);
+		}
+
 		//force the static class to intialize
 		internal static void Initialize ()
 		{
+
 		}
 		readonly static string FileName = "MonoDevelopProperties.xml";
 		static Properties properties;
@@ -120,7 +183,7 @@ namespace MonoDevelop.Core
 			//try versioned profiles from most recent to oldest
 			//skip the last in the array, it's the current profile
 			int userProfileMostRecent = UserProfile.ProfileVersions.Length - 2;
-			for (int i = userProfileMostRecent; i >= 0; i--) {
+			for (int i = userProfileMostRecent; i >= 1; i--) {
 				string v = UserProfile.ProfileVersions[i];
 				var p = UserProfile.GetProfile (v);
 				if (File.Exists (p.ConfigDir.Combine (FileName))) {

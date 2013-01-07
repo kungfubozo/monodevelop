@@ -26,10 +26,12 @@
 //
 
 using System;
+using System.Linq;
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.Reflection;
+
 using Mono.Debugging.Client;
-using System.Diagnostics;
 
 namespace Mono.Debugging.Evaluation
 {
@@ -78,7 +80,6 @@ namespace Mono.Debugging.Evaluation
 				return type;
 			}
 		}
-
 		
 		public override object ObjectValue {
 			get {
@@ -130,8 +131,6 @@ namespace Mono.Debugging.Evaluation
 				if (!groupPrivateMembers)
 					flags |= BindingFlags.NonPublic;
 				
-				ObjectValueNameTracker names = new ObjectValueNameTracker (ctx);
-				
 				TypeDisplayData tdata = ctx.Adapter.GetTypeDisplayData (ctx, type);
 				object tdataType = type;
 				
@@ -146,7 +145,6 @@ namespace Mono.Debugging.Evaluation
 						continue;
 
 					ObjectValue oval = val.CreateObjectValue (options);
-					names.FixName (val, oval);
 					list.Add (oval);
 				}
 				
@@ -174,8 +172,7 @@ namespace Mono.Debugging.Evaluation
 				}
 				
 				return list.ToArray ();
-			}
-			catch (Exception ex) {
+			} catch (Exception ex) {
 				Console.WriteLine (ex);
 				ctx.WriteDebuggerOutput (ex.Message);
 				return new ObjectValue [0];

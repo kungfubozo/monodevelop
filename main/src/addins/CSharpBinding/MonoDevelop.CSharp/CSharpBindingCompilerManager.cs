@@ -55,17 +55,19 @@ namespace MonoDevelop.CSharp
 
 		public static BuildResult Compile (ProjectItemCollection projectItems, DotNetProjectConfiguration configuration, ConfigurationSelector configSelector, IProgressMonitor monitor)
 		{
-			CSharpCompilerParameters compilerParameters = (CSharpCompilerParameters)configuration.CompilationParameters ?? new CSharpCompilerParameters ();
-			CSharpProjectParameters projectParameters = (CSharpProjectParameters)configuration.ProjectParameters ?? new CSharpProjectParameters ();
+			var compilerParameters = (CSharpCompilerParameters)configuration.CompilationParameters ?? new CSharpCompilerParameters ();
+			var projectParameters = (CSharpProjectParameters)configuration.ProjectParameters ?? new CSharpProjectParameters ();
 			
-			string outputName       = configuration.CompiledOutputName;
-			string responseFileName = Path.GetTempFileName();
-			
+			FilePath outputName = configuration.CompiledOutputName;
+			string responseFileName = Path.GetTempFileName ();
+
+			//make sure that the output file is writable
 			if (File.Exists (outputName)) {
 				bool isWriteable = false;
 				int count = 0;
 				do {
 					try {
+						outputName.MakeWritable ();
 						using (var stream = File.OpenWrite (outputName)) {
 							isWriteable = true;
 						}
@@ -78,21 +80,50 @@ namespace MonoDevelop.CSharp
 					return null;
 				}
 			}
-			
+
+			//get the runtime
 			TargetRuntime runtime = MonoDevelop.Core.Runtime.SystemAssemblyService.DefaultRuntime;
 			DotNetProject project = configuration.ParentItem as DotNetProject;
 			if (project != null)
 				runtime = project.TargetRuntime;
 
-			StringBuilder sb = new StringBuilder ();
+			//get the compiler name
+			string compilerName;
+			try {
+				compilerName = GetCompilerName (runtime, configuration.TargetFramework);
+			} catch (Exception e) {
+				string message = "Could not obtain a C# compiler";
+				monitor.ReportError (message, e);
+				return null;
+			}
+
+			var sb = new StringBuilder ();
+
+			HashSet<string> alreadyAddedReference = new HashSet<string> ();
+
+			var monoRuntime = runtime as MonoTargetRuntime;
+			if (!compilerParameters.NoStdLib && (monoRuntime == null || monoRuntime.HasMultitargetingMcs)) {
+				string corlib = project.AssemblyContext.GetAssemblyFullName ("mscorlib", project.TargetFramework);
+				if (corlib != null) {
+					corlib = project.AssemblyContext.GetAssemblyLocation (corlib, project.TargetFramework);
+				}
+				if (corlib == null) {
+					var br = new BuildResult ();
+					br.AddError (string.Format ("Could not find mscorlib for framework {0}", project.TargetFramework.Id));
+					return br;
+				}
+				AppendQuoted (sb, "/r:", corlib);
+				sb.AppendLine ("-nostdlib");
+			}
+
 			List<string> gacRoots = new List<string> ();
 			sb.AppendFormat ("\"/out:{0}\"", outputName);
 			sb.AppendLine ();
 			
-			HashSet<string> alreadyAddedReference = new HashSet<string> ();
 			foreach (ProjectReference lib in projectItems.GetAll <ProjectReference> ()) {
 				if (lib.ReferenceType == ReferenceType.Project && !(lib.OwnerProject.ParentSolution.FindProjectByName (lib.Reference) is DotNetProject))
 					continue;
+				string refPrefix = string.IsNullOrEmpty (lib.Aliases) ? "" : lib.Aliases + "=";
 				foreach (string fileName in lib.GetReferencedFileNames (configSelector)) {
 					switch (lib.ReferenceType) {
 					case ReferenceType.Package:
@@ -104,7 +135,7 @@ namespace MonoDevelop.CSharp
 						}
 
 						if (alreadyAddedReference.Add (fileName))
-							AppendQuoted (sb, "/r:", fileName);
+							AppendQuoted (sb, "/r:", refPrefix + fileName);
 						
 						if (pkg.GacRoot != null && !gacRoots.Contains (pkg.GacRoot))
 							gacRoots.Add (pkg.GacRoot);
@@ -122,7 +153,7 @@ namespace MonoDevelop.CSharp
 						break;
 					default:
 						if (alreadyAddedReference.Add (fileName))
-							AppendQuoted (sb, "/r:", fileName);
+							AppendQuoted (sb, "/r:", refPrefix + fileName);
 						break;
 					}
 				}
@@ -145,7 +176,7 @@ namespace MonoDevelop.CSharp
 			}
 			
 			if (configuration.DebugMode) {
-				sb.AppendLine ("/debug:+");
+//				sb.AppendLine ("/debug:+");
 				sb.AppendLine ("/debug:full");
 			}
 			
@@ -279,14 +310,7 @@ namespace MonoDevelop.CSharp
 			
 			File.WriteAllText (responseFileName, sb.ToString ());
 			
-			string compilerName;
-			try {
-				compilerName = GetCompilerName (runtime, configuration.TargetFramework);
-			} catch (Exception e) {
-				string message = "Could not obtain a C# compiler";
-				monitor.ReportError (message, e);
-				return null;
-			}
+
 			
 			monitor.Log.WriteLine (compilerName + " /noconfig " + sb.ToString ().Replace ('\n',' '));
 			
@@ -427,7 +451,7 @@ namespace MonoDevelop.CSharp
 		
 		// Snatched from our codedom code, with some changes to make it compatible with csc
 		// (the line+column group is optional is csc)
-		static Regex regexError = new Regex (@"^(\s*(?<file>[^\(]+)(\((?<line>\d*)(,(?<column>\d*[\+]*))?\))?:\s+)*(?<level>\w+)\s+(?<number>..\d+):\s*(?<message>.*)", RegexOptions.Compiled | RegexOptions.ExplicitCapture);
+		static Regex regexError = new Regex (@"^(\s*(?<file>.+[^)])(\((?<line>\d*)(,(?<column>\d*[\+]*))?\))?:\s+)*(?<level>\w+)\s+(?<number>..\d+):\s*(?<message>.*)", RegexOptions.Compiled | RegexOptions.ExplicitCapture);
 		static BuildError CreateErrorFromString (string error_string)
 		{
 			// When IncludeDebugInformation is true, prevents the debug symbols stats from braeking this.

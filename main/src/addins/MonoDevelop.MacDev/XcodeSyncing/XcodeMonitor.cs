@@ -46,7 +46,7 @@ namespace MonoDevelop.MacDev.XcodeSyncing
 	class XcodeMonitor
 	{
 		FilePath originalProjectDir;
-		int nextHackDir = 0;
+		static int nextHackDir = 0;
 		string name;
 		
 		FilePath xcproj, projectDir;
@@ -68,35 +68,39 @@ namespace MonoDevelop.MacDev.XcodeSyncing
 			return Directory.Exists (xcproj);
 		}
 		
+		// Note: This method may throw TimeoutException or AppleScriptException
 		public void UpdateProject (IProgressMonitor monitor, List<XcodeSyncedItem> allItems, XcodeProject emptyProject)
 		{
 			items = allItems;
 			
-			monitor.BeginTask (GettextCatalog.GetString ("Updating Xcode project..."), items.Count);
-			monitor.Log.WriteLine ("Updating synced project with {0} items", items.Count);
-			XC4Debug.Log ("Updating synced project with {0} items", items.Count);
-		
+			monitor.BeginTask (GettextCatalog.GetString ("Updating Xcode project for {0}...", name), items.Count);
+			
 			var ctx = new XcodeSyncContext (projectDir, syncTimeCache);
 			
 			var toRemove = new HashSet<string> (itemMap.Keys);
 			var toClose = new HashSet<string> ();
 			var syncList = new List<XcodeSyncedItem> ();
 			bool updateProject = false;
-			
+
+			monitor.Log.WriteLine ("Calculating sync list...");
 			foreach (var item in items) {
-				bool needsSync = item.NeedsSyncOut (ctx);
+				bool needsSync = item.NeedsSyncOut (monitor, ctx);
 				if (needsSync)
 					syncList.Add (item);
 				
 				var files = item.GetTargetRelativeFileNames ();
-				foreach (var f in files) {
-					toRemove.Remove (f);
-					if (!itemMap.ContainsKey (f)) {
+				foreach (var file in files) {
+					toRemove.Remove (file);
+					
+					if (!itemMap.ContainsKey (file)) {
+						monitor.Log.WriteLine ("   '{0}' needs to be added.", file);
 						updateProject = true;
 					} else if (needsSync) {
-						toClose.Add (f);
+						monitor.Log.WriteLine ("   '{0}' needs to be closed & updated.", file);
+						toClose.Add (file);
 					}
-					itemMap [f] = item;
+					
+					itemMap[file] = item;
 				}
 			}
 			updateProject = updateProject || toRemove.Any ();
@@ -104,26 +108,41 @@ namespace MonoDevelop.MacDev.XcodeSyncing
 			bool removedOldProject = false;
 			if (updateProject) {
 				if (pendingProjectWrite == null && ProjectExists ()) {
-					monitor.Log.WriteLine ("Project file needs to be updated, closing and removing old project");
+					monitor.Log.WriteLine ("The project.pbxproj file needs to be updated, closing and removing old project.");
 					CloseProject ();
-					DeleteXcproj ();
+					DeleteXcproj (monitor);
 					removedOldProject = true;
+
+					// All items need to be re-synced...
+					syncList.Clear ();
+					foreach (var item in items) {
+						syncList.Add (item);
+
+						var files = item.GetTargetRelativeFileNames ();
+						foreach (var file in files)
+							itemMap[file] = item;
+					}
 				}
 			} else {
 				foreach (var f in toClose)
-					CloseFile (projectDir.Combine (f));
+					CloseFile (monitor, projectDir.Combine (f));
 			}
-			
-			foreach (var f in toRemove) {
-				itemMap.Remove (f);
-				syncTimeCache.Remove (f);
-				var path = projectDir.Combine (f);
-				if (File.Exists (path))
-					File.Delete (path);
-			}
-			
+
 			if (removedOldProject) {
-				HackRelocateProject ();
+				HackRelocateProject (monitor);
+				ctx.ProjectDir = projectDir;
+				syncTimeCache.Clear ();
+			} else {
+				foreach (var f in toRemove) {
+					itemMap.Remove (f);
+					syncTimeCache.Remove (f);
+					var path = projectDir.Combine (f);
+					try {
+						if (File.Exists (path))
+							File.Delete (path);
+					} catch {
+					}
+				}
 			}
 			
 			foreach (var item in items) {
@@ -132,16 +151,15 @@ namespace MonoDevelop.MacDev.XcodeSyncing
 			}
 			
 			foreach (var item in syncList) {
-				monitor.Log.WriteLine ("Syncing item {0}", item.GetTargetRelativeFileNames ()[0]);
-				item.SyncOut (ctx);
+				item.SyncOut (monitor, ctx);
 				monitor.Step (1);
 			}
 			
 			if (updateProject) {
-				monitor.Log.WriteLine ("Queuing Xcode project {0} to write when opened", projectDir);
+				monitor.Log.WriteLine ("Queued write of '{0}'.", xcproj);
 				pendingProjectWrite = emptyProject;
 			}
-			
+
 			monitor.EndTask ();
 			monitor.ReportSuccess (GettextCatalog.GetString ("Xcode project updated."));
 		}
@@ -150,31 +168,23 @@ namespace MonoDevelop.MacDev.XcodeSyncing
 		// gets extremely unhappy if a new or changed project is in the same location as
 		// a previously opened one.
 		//
-		// To work around this we increment a subdirectory name and use that, and do some
-		// careful bookkeeping to reduce the unnecessary I/O overhead that this adds.
+		// To work around this we increment a subdirectory name and use that.
 		//
-		void HackRelocateProject ()
+		void HackRelocateProject (IProgressMonitor monitor)
 		{
-			var oldProjectDir = projectDir;
 			HackGetNextProjectDir ();
-			XC4Debug.Log ("Relocating {0} to {1}", oldProjectDir, projectDir);
-			foreach (var f in syncTimeCache) {
-				var target = projectDir.Combine (f.Key);
-				var src = oldProjectDir.Combine (f.Key);
-				var parent = target.ParentDirectory;
-				if (!Directory.Exists (parent))
-					Directory.CreateDirectory (parent);
-				File.Move (src, target);
-			}
+			
+			monitor.Log.WriteLine ("Changed Xcode project path to {0}", projectDir);
 		}
 		
 		void HackGetNextProjectDir ()
 		{
 			do {
-				this.projectDir = originalProjectDir.Combine (nextHackDir.ToString ());
+				projectDir = originalProjectDir.Combine (nextHackDir.ToString ());
 				nextHackDir++;
-			} while (Directory.Exists (this.projectDir));
-			this.xcproj = projectDir.Combine (name + ".xcodeproj");
+			} while (Directory.Exists (projectDir));
+			
+			xcproj = projectDir.Combine (name + ".xcodeproj");
 		}
 		
 		HashSet<string> GetKnownFiles ()
@@ -189,7 +199,7 @@ namespace MonoDevelop.MacDev.XcodeSyncing
 			return knownItems;
 		}
 		
-		void ScanForAddedFiles (XcodeSyncBackContext ctx, HashSet<string> knownFiles, string directory, string relativePath)
+		void ScanForAddedFiles (IProgressMonitor monitor, XcodeSyncBackContext ctx, HashSet<string> knownFiles, string directory, string relativePath)
 		{
 			foreach (var file in Directory.EnumerateFiles (directory)) {
 				if (file.EndsWith ("~") || file.EndsWith (".m"))
@@ -201,17 +211,20 @@ namespace MonoDevelop.MacDev.XcodeSyncing
 				if (file.EndsWith (".h")) {
 					NSObjectTypeInfo parsed = NSObjectInfoService.ParseHeader (file);
 					
+					monitor.Log.WriteLine ("New Objective-C header file found: {0}", Path.Combine (relativePath, Path.GetFileName (file)));
 					ctx.TypeSyncJobs.Add (XcodeSyncObjcBackJob.NewType (parsed, relativePath));
 				} else {
 					FilePath original, relative;
 					
-					if (relativePath != null)
+					if (relativePath != null) {
 						relative = new FilePath (Path.Combine (relativePath, Path.GetFileName (file)));
-					else
+						original = ctx.Project.BaseDirectory.Combine (relative);
+					} else {
 						relative = new FilePath (Path.GetFileName (file));
+						original = ((IXcodeTrackedProject) ctx.Project).DefaultBundleResourceDir.Combine (relative);
+					}
 					
-					original = ctx.Project.BaseDirectory.Combine (relative);
-					
+					monitor.Log.WriteLine ("New content file found: {0}", relative);
 					ctx.FileSyncJobs.Add (new XcodeSyncFileBackJob (original, relative, true));
 				}
 			}
@@ -228,27 +241,29 @@ namespace MonoDevelop.MacDev.XcodeSyncing
 				else
 					relative = Path.GetFileName (dir);
 				
-				ScanForAddedFiles (ctx, knownFiles, dir, relative);
+				ScanForAddedFiles (monitor, ctx, knownFiles, dir, relative);
 			}
 		}
 
 		public XcodeSyncBackContext GetChanges (IProgressMonitor monitor, NSObjectInfoService infoService, DotNetProject project)
 		{
 			var ctx = new XcodeSyncBackContext (projectDir, syncTimeCache, infoService, project);
-			var needsSync = new List<XcodeSyncedItem> (items.Where (i => i.NeedsSyncBack (ctx)));
+			var needsSync = new List<XcodeSyncedItem> (items.Where (i => i.NeedsSyncBack (monitor, ctx)));
 			var knownFiles = GetKnownFiles ();
 			
-			ScanForAddedFiles (ctx, knownFiles, projectDir, null);
+			if (Directory.Exists (projectDir)) {
+				monitor.BeginTask ("Scanning for newly-added files in the Xcode project...", 0);
+				ScanForAddedFiles (monitor, ctx, knownFiles, projectDir, null);
+				monitor.EndTask ();
+			}
 			
 			if (needsSync.Count > 0) {
-				monitor.BeginStepTask (GettextCatalog.GetString ("Synchronizing Xcode project changes"), needsSync.Count, 1);
+				monitor.BeginStepTask (GettextCatalog.GetString ("Synchronizing changes made to known files in Xcode back to MonoDevelop..."), needsSync.Count, 1);
 				for (int i = 0; i < needsSync.Count; i++) {
 					var item = needsSync [i];
-					item.SyncBack (ctx);
+					item.SyncBack (monitor, ctx);
 					monitor.Step (1);
 				}
-				
-				monitor.Log.WriteLine (GettextCatalog.GetPluralString ("Synchronized {0} file", "Synchronized {0} files", needsSync.Count), needsSync.Count);
 				monitor.EndTask ();
 			}
 			
@@ -259,152 +274,248 @@ namespace MonoDevelop.MacDev.XcodeSyncing
 		{
 			var appPathKey = new NSString ("NSApplicationPath");
 			var appPathVal = new NSString (AppleSdkSettings.XcodePath);
+			
 			return NSWorkspace.SharedWorkspace.LaunchedApplications.Any (app => appPathVal.Equals (app[appPathKey]));
 		}
 		
-		public void SaveProject ()
+		// Note: This method may throw TimeoutException or AppleScriptException
+		public void SaveProject (IProgressMonitor monitor)
 		{
+			monitor.Log.WriteLine ("Asking Xcode to save pending changes for the {0} project", name);
 			AppleScript.Run (XCODE_SAVE_IN_PATH, AppleSdkSettings.XcodePath, projectDir);
 		}
 
-		void SyncProject ()
+		void SyncProject (IProgressMonitor monitor)
 		{
 			if (pendingProjectWrite != null) {
+				monitor.Log.WriteLine ("Generating project.pbxproj file for {0}", name);
 				pendingProjectWrite.Generate (projectDir);
 				pendingProjectWrite = null;
 			}
 		}
 		
-		public void OpenProject ()
+		// Note: This method may throw TimeoutException or AppleScriptException
+		public void OpenFile (IProgressMonitor monitor, string relativeName)
 		{
-			SyncProject ();
-			AppleScript.Run (XCODE_OPEN_PROJECT, AppleSdkSettings.XcodePath, xcproj);
-		}
-		
-		public void OpenFile (string relativeName)
-		{
-			XC4Debug.Log ("Opening file in Xcode: {0}", relativeName);
-			SyncProject ();
-			AppleScript.Run (XCODE_OPEN_PROJECT_FILE, AppleSdkSettings.XcodePath, xcproj, projectDir.Combine (relativeName));
+			SyncProject (monitor);
+			
+			string path = projectDir.Combine (relativeName);
+			
+			monitor.Log.WriteLine ("Asking Xcode to open '{0}'...", path);
+			try {
+				AppleScript.Run (XCODE_OPEN_PROJECT_FILE, AppleSdkSettings.XcodePath, xcproj, path);
+				monitor.Log.WriteLine ("Xcode successfully opened '{0}'", path);
+			} catch (AppleScriptException asex) {
+				monitor.Log.WriteLine ("Xcode failed to open '{0}': OSAError={1}: {2}", path, (int) asex.ErrorCode, asex.Message);
+				throw;
+			} catch (TimeoutException) {
+				monitor.Log.WriteLine ("Xcode timed out trying to open '{0}'.", path);
+				throw;
+			}
 		}
 		
 		public void DeleteProjectDirectory ()
 		{
-			XC4Debug.Log ("Deleting temp project directories");
 			bool isRunning = CheckRunning ();
-			if (Directory.Exists (projectDir))
-				Directory.Delete (projectDir, true);
+			
+			XC4Debug.Log ("Deleting temporary Xcode project directories.");
+
+			try {
+				if (Directory.Exists (projectDir))
+					Directory.Delete (projectDir, true);
+			} catch (Exception ex) {
+				XC4Debug.Indent ();
+				XC4Debug.Log (ex.Message);
+				XC4Debug.Unindent ();
+			}
+
 			if (isRunning) {
-				XC4Debug.Log ("Xcode still running, leaving empty directory in place to prevent name re-use");
-				Directory.CreateDirectory (projectDir);
+				XC4Debug.Log ("Xcode still running, leaving empty directory in place to prevent name re-use.");
+				if (!Directory.Exists (projectDir))
+					Directory.CreateDirectory (projectDir);
 			} else {
-				XC4Debug.Log ("Xcode not running, removing all temp directories");
-				if (Directory.Exists (this.originalProjectDir))
-					Directory.Delete (this.originalProjectDir, true);
+				XC4Debug.Log ("Xcode not running, removing all temporary directories.");
+				try {
+					if (Directory.Exists (originalProjectDir))
+						Directory.Delete (originalProjectDir, true);
+				} catch (Exception ex) {
+					XC4Debug.Indent ();
+					XC4Debug.Log (ex.Message);
+					XC4Debug.Unindent ();
+				}
 			}
 		}
 		
-		void DeleteXcproj ()
+		void DeleteXcproj (IProgressMonitor monitor)
 		{
-			XC4Debug.Log ("Deleting project artifacts");
-			if (Directory.Exists (xcproj))
-				Directory.Delete (xcproj, true);
+			monitor.Log.WriteLine ("Deleting project artifacts.");
+			try {
+				if (Directory.Exists (xcproj))
+					Directory.Delete (xcproj, true);
+			} catch {
+			}
 		}
 		
 		static string GetWorkspacePath (string infoPlist)
 		{
 			try {
-				var dict = PDictionary.Load (infoPlist);
+				var dict = PDictionary.FromFile (infoPlist);
 				PString val;
 				if (dict.TryGetValue<PString>("WorkspacePath", out val))
 					return val.Value;
 			} catch (Exception e) {
-				LoggingService.LogError ("Error while reading info.plist from:" + infoPlist, e);
+				LoggingService.LogError ("Error while reading info.plist from " + infoPlist, e);
 			}
 			return null;
 		}
 		
+		// Note: This method may throw TimeoutException or AppleScriptException
 		public bool IsProjectOpen ()
 		{
 			if (!CheckRunning ())
 				return false;
+			
 			return AppleScript.Run (XCODE_CHECK_PROJECT_OPEN, AppleSdkSettings.XcodePath, xcproj) == "true";
 		}
 		
-		public bool CloseProject ()
+		public void CloseProject ()
 		{
 			if (!CheckRunning ())
-				return true;
+				return;
 			
-			var success = AppleScript.Run (XCODE_CLOSE_IN_PATH, AppleSdkSettings.XcodePath, projectDir) == "true";
-			XC4Debug.Log ("Closing project: {0}", success);
-			return success;
+			XC4Debug.Log ("Asking Xcode to close the {0} project...", name);
+			
+			try {
+				// Exceptions closing the project are non-fatal.
+				bool closed = AppleScript.Run (XCODE_CLOSE_IN_PATH, AppleSdkSettings.XcodePath, projectDir) == "true";
+				XC4Debug.Log ("Xcode {0} the project.", closed ? "successfully closed" : "failed to close");
+			} catch (AppleScriptException asex) {
+				XC4Debug.Log ("Xcode failed to close the project: OSAError {0}: {1}", (int) asex.ErrorCode, asex.Message);
+			} catch (TimeoutException) {
+				XC4Debug.Log ("Xcode timed out trying to close the project.");
+			}
 		}
 		
-		public bool CloseFile (string fileName)
+		// Note: This method may throw TimeoutException or AppleScriptException
+		public void OpenProject (IProgressMonitor monitor)
+		{
+			SyncProject (monitor);
+			
+			monitor.Log.WriteLine ("Asking Xcode to open the {0} project...", name);
+			try {
+				AppleScript.Run (XCODE_OPEN_PROJECT, AppleSdkSettings.XcodePath, projectDir);
+				monitor.Log.WriteLine ("Xcode successfully opened the {0} project.", name);
+			} catch (AppleScriptException asex) {
+				monitor.Log.WriteLine ("Xcode failed to open the {0} project: OSAError {1}: {2}", name, (int) asex.ErrorCode, asex.Message);
+				throw;
+			} catch (TimeoutException) {
+				monitor.Log.WriteLine ("Xcode timed out trying to open the {0} project.", name);
+				throw;
+			}
+		}
+		
+		// Note: This method may throw TimeoutException or AppleScriptException
+		void CloseFile (IProgressMonitor monitor, string fileName)
 		{
 			if (!CheckRunning ())
-				return true;
+				return;
 			
-			var success = AppleScript.Run (XCODE_CLOSE_IN_PATH, AppleSdkSettings.XcodePath, fileName) == "true";
-			XC4Debug.Log ("Closing file {0}: {1}", fileName, success);
-			return success;
+			monitor.Log.WriteLine ("Asking Xcode to close '{0}'...", fileName);
+			try {
+				AppleScript.Run (XCODE_CLOSE_IN_PATH, AppleSdkSettings.XcodePath, fileName);
+				monitor.Log.WriteLine ("Xcode successfully closed '{0}'", fileName);
+			} catch (AppleScriptException asex) {
+				monitor.Log.WriteLine ("Xcode failed to close '{0}': OSAError {1}: {2}", fileName, (int) asex.ErrorCode, asex.Message);
+				throw;
+			} catch (TimeoutException) {
+				monitor.Log.WriteLine ("Xcode timed out trying to close '{0}'.", fileName);
+				throw;
+			}
 		}
-
+		
+		// Note: Can throw TimeoutException
 		const string XCODE_OPEN_PROJECT =
 @"tell application ""{0}""
-	activate
-	open ""{1}""
-end tell";
-
-		const string XCODE_OPEN_PROJECT_FILE =
-@"tell application ""{0}""
-	activate
-	open ""{1}""
-	open ""{2}""
-end tell";
-
-		const string XCODE_SAVE_IN_PATH =
-@"tell application ""{0}""
-	set pp to ""{1}""
-	set ext to {{ "".storyboard"", "".xib"", "".h"", "".m"" }}
-	repeat with d in documents
-		if d is modified then
-			set f to path of d
-			if f starts with pp then
-				repeat with e in ext
-					if f ends with e then
-						save d
-						exit repeat
-					end if
-				end repeat
-			end if
-		end if
-	end repeat
+	if it is not running then
+		with timeout of 60 seconds
+			launch
+			activate
+		end timeout
+	end if
+	with timeout of 60 seconds
+		open ""{1}""
+	end timeout
 end tell";
 		
+		// Note: Can throw TimeoutException
+		const string XCODE_OPEN_PROJECT_FILE =
+@"tell application ""{0}""
+	with timeout of 60 seconds
+		activate
+		activate
+		open ""{1}""
+		activate
+		open ""{2}""
+	end timeout
+end tell";
+		
+		// Note: Can throw TimeoutException
+		const string XCODE_SAVE_IN_PATH =
+@"tell application ""{0}""
+	if it is running then
+		set fileExtensions to {{ "".storyboard"", "".xib"", "".h"", "".m"" }}
+		set projectPath to ""{1}""
+		
+		with timeout of 30 seconds
+			repeat with doc in documents
+				if doc is modified then
+					set docPath to path of doc
+					if docPath starts with projectPath then
+						repeat with ext in fileExtensions
+							if docPath ends with ext then
+								save doc
+								exit repeat
+							end if
+						end repeat
+					end if
+				end if
+			end repeat
+		end timeout
+	end if
+end tell";
+		
+		// Note: Can throw TimeoutException
 		const string XCODE_CLOSE_IN_PATH =
 @"tell application ""{0}""
-	set pp to ""{1}""
-	repeat with d in documents
-		set f to path of d
-		if f starts with pp then
-			close d
-			return true
-		end if
-	end repeat
+	if it is running then
+		set projectPath to ""{1}""
+		with timeout of 30 seconds
+			repeat with doc in documents
+				set docPath to path of doc
+				if docPath starts with projectPath then
+					close doc
+					return true
+				end if
+			end repeat
+		end timeout
+	end if
 	return false
 end tell";
 		
+		// Note: Can throw TimeoutException
 		const string XCODE_CHECK_PROJECT_OPEN =
 @"tell application ""{0}""
-	set pp to ""{1}""
-	repeat with p in projects
-		if real path of p is pp then
-			return true
-			exit repeat
-		end if
-	end repeat
+	if it is running then
+		with timeout of 30 seconds
+			set projectPath to ""{1}""
+			repeat with proj in projects
+				if real path of proj is projectPath then
+					return true
+					exit repeat
+				end if
+			end repeat
+		end timeout
+	end if
 	return false
 end tell";
 	}

@@ -91,7 +91,7 @@ namespace MonoDevelop.Projects
 			AddinManager.AddExtensionNodeHandler (ProjectBindingsExtensionPath, OnProjectsExtensionChanged);
 			AddinManager.ExtensionChanged += OnExtensionChanged;
 			
-			defaultFormat = formatManager.GetFileFormat ("MSBuild05");
+			defaultFormat = formatManager.GetFileFormat ("MSBuild10");
 		}
 		
 		public DataContext DataContext {
@@ -499,7 +499,7 @@ namespace MonoDevelop.Projects
 					return project;
 				}
 			}
-			return null;
+			throw new InvalidOperationException ("Project type '" + type + "' not found");
 		}
 		
 		public Solution GetWrapperSolution (IProgressMonitor monitor, string filename)
@@ -776,16 +776,6 @@ namespace MonoDevelop.Projects
 		internal override BuildResult Compile(IProgressMonitor monitor, SolutionEntityItem item, BuildData buildData, ItemCompileCallback callback)
 		{
 			return callback (monitor, item, buildData);
-		}
-		
-		public override void PopulateSupportFileList (Project project, FileCopySet list, ConfigurationSelector configuration)
-		{
-			project.PopulateSupportFileList (list, configuration);
-		}
-		
-		public override void PopulateOutputFileList (Project project, List<FilePath> list, ConfigurationSelector configuration)
-		{
-			project.PopulateOutputFileList (list, configuration);
 		}
 	}	
 	

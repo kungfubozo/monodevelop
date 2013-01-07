@@ -32,11 +32,11 @@ using Gtk;
 
 using MonoDevelop.Core;
 using MonoDevelop.Projects;
-using MonoDevelop.Projects.Dom;
-using MonoDevelop.Projects.Dom.Parser;
 using MonoDevelop.Projects.Text;
 using MonoDevelop.Ide.Gui.Dialogs;
 using MonoDevelop.Ide;
+using ICSharpCode.NRefactory.TypeSystem;
+using MonoDevelop.Ide.TypeSystem;
 
 namespace MonoDevelop.CSharp.Project
 {
@@ -97,7 +97,8 @@ namespace MonoDevelop.CSharp.Project
 			iconEntry.Path = projectParameters.Win32Icon;
 			iconEntry.DefaultPath = project.BaseDirectory;
 			allowUnsafeCodeCheckButton.Active = compilerParameters.UnsafeCode;
-			
+			noStdLibCheckButton.Active = compilerParameters.NoStdLib;
+
 			ListStore langVerStore = new ListStore (typeof (string));
 			langVerStore.AppendValues (GettextCatalog.GetString ("Default"));
 			langVerStore.AppendValues ("ISO-1");
@@ -180,6 +181,7 @@ namespace MonoDevelop.CSharp.Project
 			foreach (DotNetProjectConfiguration configuration in configs) {
 				CSharpCompilerParameters compilerParameters = (CSharpCompilerParameters) configuration.CompilationParameters; 
 				compilerParameters.UnsafeCode = allowUnsafeCodeCheckButton.Active;
+				compilerParameters.NoStdLib = noStdLibCheckButton.Active;
 				compilerParameters.LangVersion = langVersion;
 			}
 		}
@@ -203,13 +205,13 @@ namespace MonoDevelop.CSharp.Project
 		void FillClasses ()
 		{
 			try {
-				ProjectDom     ctx = ProjectDomService.GetProjectDom (project);
+				var ctx = TypeSystemService.GetCompilation (project);
 				if (ctx == null)
 					// Project not found in parser database
 					return;
-				foreach (IType c in ctx.Types) {
+				foreach (var c in ctx.GetAllTypeDefinitions ()) {
 					if (c.Methods != null) {
-						foreach (IMethod m in c.Methods) {
+						foreach (var m in c.Methods) {
 							if (m.IsStatic && m.Name == "Main")
 								classListStore.AppendValues (c.FullName);
 						}

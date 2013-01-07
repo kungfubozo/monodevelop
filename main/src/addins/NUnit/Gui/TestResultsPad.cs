@@ -27,6 +27,7 @@
 //
 
 using System;
+using System.IO;
 using System.Text;
 using System.Collections;
 using System.Collections.Generic;
@@ -51,15 +52,14 @@ namespace MonoDevelop.NUnit
 		VBox panel;
 		HPaned book;
 		
-		Label infoFailed = new Label (GettextCatalog.GetString ("<b>Failed</b>: {0}", 0));
-		Label infoIgnored = new Label (GettextCatalog.GetString ("<b>Ignored</b>: {0}", 0));
+		Label infoLabel = new Label ();
 		Label infoCurrent = new Label ();
 		HBox labels;
 		
 		Label resultLabel = new Label ();
 		
 		ProgressBar progressBar = new ProgressBar ();
-		TreeView failuresTreeView;
+		MonoDevelop.Ide.Gui.Components.PadTreeView failuresTreeView;
 		TreeStore failuresStore;
 		TextView outputView;
 		TextTag bold;
@@ -74,14 +74,15 @@ namespace MonoDevelop.NUnit
 		ToggleButton buttonSuccess;
 		ToggleButton buttonFailures;
 		ToggleButton buttonIgnored;
+		ToggleButton buttonInconclusive;
 		ToggleButton buttonOutput;
 		
 		bool running;
 		int testsToRun;
 		int testsRun;
-		int testsFailed;
-		int testsIgnored;
-		
+
+		UnitTestResult resultSummary;
+
 		UnitTest rootTest;
 		string configuration;
 		ArrayList results = new ArrayList ();
@@ -91,7 +92,8 @@ namespace MonoDevelop.NUnit
 		
 		bool cancel;
 		
-		public class ResultRecord {
+		public class ResultRecord
+		{
 			public UnitTest Test;
 			public UnitTestResult Result;
 		}
@@ -109,9 +111,9 @@ namespace MonoDevelop.NUnit
 			panel.FocusChain = new Gtk.Widget [] { book };
 			
 			// Failures tree
-			failuresTreeView = new TreeView ();
+			failuresTreeView = new MonoDevelop.Ide.Gui.Components.PadTreeView ();
 			failuresTreeView.HeadersVisible = false;
-			failuresStore = new TreeStore (typeof(Pixbuf), typeof (string), typeof(object), typeof(string));
+			failuresStore = new TreeStore (typeof(Pixbuf), typeof(string), typeof(object), typeof(string), typeof(int));
 			var pr = new CellRendererPixbuf ();
 			CellRendererText tr = new CellRendererText ();
 			TreeViewColumn col = new TreeViewColumn ();
@@ -124,23 +126,26 @@ namespace MonoDevelop.NUnit
 		
 			var sw = new MonoDevelop.Components.CompactScrolledWindow ();
 			sw.ShadowType = ShadowType.None;
-			sw.Add(failuresTreeView);
+			sw.Add (failuresTreeView);
 			book.Pack1 (sw, true, true);
 			
-			outputView = new TextView();
+			outputView = new TextView ();
 			outputView.Editable = false;
 			bold = new TextTag ("bold");
 			bold.Weight = Pango.Weight.Bold;
 			outputView.Buffer.TagTable.Add (bold);
 			sw = new MonoDevelop.Components.CompactScrolledWindow ();
 			sw.ShadowType = ShadowType.None;
-			sw.Add(outputView);
+			sw.Add (outputView);
 			book.Pack2 (sw, true, true);
 			outputViewScrolled = sw;
 			
-			failuresTreeView.ButtonReleaseEvent += new Gtk.ButtonReleaseEventHandler (OnPopupMenu);
 			failuresTreeView.RowActivated += OnRowActivated;
 			failuresTreeView.Selection.Changed += OnRowSelected;
+			failuresTreeView.DoPopupMenu = delegate (EventButton evt) {
+				IdeApp.CommandService.ShowContextMenu (failuresTreeView, evt,
+					"/MonoDevelop/NUnit/ContextMenu/TestResultsPad");
+			};
 			
 			Control.ShowAll ();
 			
@@ -161,6 +166,15 @@ namespace MonoDevelop.NUnit
 			buttonSuccess.Toggled += new EventHandler (OnShowSuccessfulToggled);
 			buttonSuccess.TooltipText = GettextCatalog.GetString ("Show Successful Tests");
 			toolbar.Add (buttonSuccess);
+
+			buttonInconclusive = new ToggleButton ();
+			buttonInconclusive.Label = GettextCatalog.GetString ("Inconclusive Tests");
+			buttonInconclusive.Active = true;
+			buttonInconclusive.Image = new Gtk.Image (CircleImage.Inconclusive);
+			buttonInconclusive.Image.Show ();
+			buttonInconclusive.Toggled += new EventHandler (OnShowInconclusiveToggled);
+			buttonInconclusive.TooltipText = GettextCatalog.GetString ("Show Inconclusive Tests");
+			toolbar.Add (buttonInconclusive);
 			
 			buttonFailures = new ToggleButton ();
 			buttonFailures.Label = GettextCatalog.GetString ("Failed Tests");
@@ -170,14 +184,14 @@ namespace MonoDevelop.NUnit
 			buttonFailures.Toggled += new EventHandler (OnShowFailuresToggled);
 			buttonFailures.TooltipText = GettextCatalog.GetString ("Show Failed Tests");
 			toolbar.Add (buttonFailures);
-			
+
 			buttonIgnored = new ToggleButton ();
 			buttonIgnored.Label = GettextCatalog.GetString ("Ignored Tests");
 			buttonIgnored.Active = true;
 			buttonIgnored.Image = new Gtk.Image (CircleImage.NotRun);
 			buttonIgnored.Image.Show ();
 			buttonIgnored.Toggled += new EventHandler (OnShowIgnoredToggled);
-			buttonIgnored.TooltipText = GettextCatalog.GetString( "Show Ignored Tests");
+			buttonIgnored.TooltipText = GettextCatalog.GetString ("Show Ignored Tests");
 			toolbar.Add (buttonIgnored);
 			
 			buttonOutput = new ToggleButton ();
@@ -220,18 +234,18 @@ namespace MonoDevelop.NUnit
 			
 			labels = new HBox (false, 10);
 			
-			infoFailed.UseMarkup = true;
-			infoIgnored.UseMarkup = true;
-			
-			labels.PackStart (infoFailed, true, false, 0);
-			labels.PackStart (infoIgnored, true, false, 0);
-			
+			infoLabel.UseMarkup = true;
+
+			labels.PackStart (infoLabel, true, false, 0);
+
 			runPanel.Add (new Gtk.Label (), true);
 			runPanel.Add (labels);
 			runPanel.Add (infoSep, false, 10);
 			
-			progressBar.HeightRequest = infoFailed.SizeRequest().Height;
+			progressBar.HeightRequest = infoLabel.SizeRequest ().Height;
 			runPanel.ShowAll ();
+			resultSummary = new UnitTestResult ();
+			UpdateCounters ();
 		}
 		
 		public void Dispose ()
@@ -251,8 +265,7 @@ namespace MonoDevelop.NUnit
 			progressBar.Fraction = 0;
 			progressBar.Text = "";
 			testsRun = 0;
-			testsFailed = 0;
-			testsIgnored = 0;
+			resultSummary = new UnitTestResult ();
 			UpdateCounters ();
 			if (rootTest != null) {
 				rootTest = testService.SearchTest (rootTest.FullName);
@@ -279,28 +292,30 @@ namespace MonoDevelop.NUnit
 		{
 		}
 		
+		string GetResultsMarkup ()
+		{
+			return string.Format (GettextCatalog.GetString ("<b>Passed</b>: {0}   <b>Failed</b>: {1}   <b>Errors</b>: {2}   <b>Inconclusive</b>: {3}   <b>Invalid</b>: {4}   <b>Ignored</b>: {5}   <b>Skipped</b>: {6}   <b>Time</b>: {7}"), 
+					                        resultSummary.Passed, resultSummary.Failures, resultSummary.Errors, resultSummary.Inconclusive, resultSummary.NotRunnable, resultSummary.Ignored, resultSummary.Skipped, resultSummary.Time);
+		}
 		void UpdateCounters ()
 		{
-			infoFailed.Markup = GettextCatalog.GetString ("<b>Failed</b>: {0}", testsFailed);
-			infoIgnored.Markup = GettextCatalog.GetString ("<b>Ignored</b>: {0}", testsIgnored);
+			infoLabel.Markup = GetResultsMarkup ();
 		}
 		
 		public void InitializeTestRun (UnitTest test)
 		{
 			rootTest = test;
 			results.Clear ();
+
 			testsToRun = test.CountTestCases ();
-			
 			error = null;
 			errorMessage = null;
 			
 			progressBar.Fraction = 0;
 			progressBar.Text = "";
 			progressBar.Text = "0 / " + testsToRun;
-
 			testsRun = 0;
-			testsFailed = 0;
-			testsIgnored = 0;
+			resultSummary = new UnitTestResult ();
 			UpdateCounters ();
 			
 			infoSep.Show ();
@@ -327,7 +342,7 @@ namespace MonoDevelop.NUnit
 			if (rootTest != null) {
 				Gdk.Pixbuf infoIcon = failuresTreeView.RenderIcon (Gtk.Stock.DialogInfo, Gtk.IconSize.Menu, "");
 				string msg = string.Format (isRunning ? GettextCatalog.GetString ("Running tests for <b>{0}</b> configuration <b>{1}</b>") : GettextCatalog.GetString ("Test results for <b>{0}</b> configuration <b>{1}</b>"), rootTest.Name, configuration);
-				startMessageIter = failuresStore.AppendValues (infoIcon, msg, rootTest);
+				startMessageIter = failuresStore.AppendValues (infoIcon, msg, rootTest, null, 0);
 			} else {
 				startMessageIter = Gtk.TreeIter.Zero;
 			}
@@ -347,31 +362,49 @@ namespace MonoDevelop.NUnit
 				msg += ": " + errorMessage;
 
 			Gdk.Pixbuf stock = failuresTreeView.RenderIcon (Gtk.Stock.DialogError, Gtk.IconSize.Menu, "");
-			TreeIter testRow = failuresStore.AppendValues (stock, msg, null);
-			failuresStore.AppendValues (testRow, null, Escape (error.GetType().Name + ": " + error.Message), null);
-			TreeIter row = failuresStore.AppendValues (testRow, null, GettextCatalog.GetString ("Stack Trace"), null);
+			TreeIter testRow = failuresStore.AppendValues (stock, msg, null, null, 0);
+			failuresStore.AppendValues (testRow, null, Escape (error.GetType ().Name + ": " + error.Message), null);
+			TreeIter row = failuresStore.AppendValues (testRow, null, GettextCatalog.GetString ("Stack Trace"), null, null, 0);
 			AddStackTrace (row, error.StackTrace, null);
 		}
 		
+		readonly static Regex stackTraceLineRegex = new Regex (@".*\s(?<file>.*)\:\D*\s?(?<line>\d+)", RegexOptions.Compiled);
+		
+		public static bool TryParseLocationFromStackTrace (string stackTraceLine, out string fileName, out int lineNumber)
+		{
+			var match = stackTraceLineRegex.Match (stackTraceLine);
+
+			if (!match.Success) {
+				fileName = null;
+				lineNumber = -1;
+				return false;
+			}
+			try {
+				fileName = match.Groups ["file"].Value;
+				lineNumber = int.Parse (match.Groups ["line"].Value);
+			} catch (Exception) {
+				fileName = null;
+				lineNumber = -1;
+				return false;
+			}
+			return true;
+		}
+
 		void AddStackTrace (TreeIter row, string stackTrace, UnitTest test)
 		{
-			string[] stackLines = stackTrace.Replace ("\r","").Split ('\n');
+			string[] stackLines = stackTrace.Replace ("\r", "").Split ('\n');
 			foreach (string line in stackLines) {
-				Regex r = new Regex (@".*?\(.*?\)\s\[.*?\]\s.*?\s(?<file>.*)\:(?<line>\d*)");
-				Match m = r.Match (line);
-				string file;
-				if (m.Groups["file"] != null && m.Groups["line"] != null)
-					file = m.Groups["file"].Value + ":" + m.Groups["line"].Value;
-				else
-					file = null;
-				failuresStore.AppendValues (row, null, Escape (line), test, file);
+				string fileName;
+				int lineNumber;
+				TryParseLocationFromStackTrace (line, out fileName, out lineNumber);
+				failuresStore.AppendValues (row, null, Escape (line), test, fileName, lineNumber);
 			}
 		}
 		
 		public void FinishTestRun ()
 		{
 			if (!Gtk.TreeIter.Zero.Equals (startMessageIter)) {
-				string msg = string.Format (GettextCatalog.GetString ("Test results for <b>{0}</b> configuration <b>{1}</b>"), rootTest.Name, configuration);
+				string msg = string.Format (GettextCatalog.GetString ("Test results for <b>{0}</b> configuration <b>{1}</b>"), rootTest != null ? rootTest.Name : "null", configuration);
 				failuresStore.SetValue (startMessageIter, 1, msg);
 				startMessageIter = Gtk.TreeIter.Zero;
 			}
@@ -387,12 +420,8 @@ namespace MonoDevelop.NUnit
 			buttonStop.Sensitive = false;
 			buttonRun.Sensitive = true;
 			
-			StringBuilder sb = new StringBuilder ();
-			sb.Append (GettextCatalog.GetString ("<b>Tests</b>: {0}", testsRun)).Append ("  ");
-			sb.Append (GettextCatalog.GetString ("<b>Failed</b>: {0}", testsFailed)).Append ("  ");
-			sb.Append (GettextCatalog.GetString ("<b>Ignored</b>: {0}", testsIgnored));
-			resultLabel.Markup = sb.ToString ();
-			
+			resultLabel.Markup = GetResultsMarkup ();
+
 			Running = false;
 		}
 		
@@ -408,28 +437,19 @@ namespace MonoDevelop.NUnit
 				return;
 			NUnitService.Instance.RunTest (rootTest, null);
 		}
-		
-		void OnPopupMenu (object o, Gtk.ButtonReleaseEventArgs args)
-		{
-			if (args.Event.Button == 3) {
-				IdeApp.CommandService.ShowContextMenu ("/MonoDevelop/NUnit/ContextMenu/TestResultsPad");
-			}
-		}
 
 		void OnRowActivated (object s, EventArgs a)
 		{
 			Gtk.TreeIter iter;
 			if (failuresTreeView.Selection.GetSelected (out iter)) {
-				string file = (string) failuresStore.GetValue (iter, 3);
-				if (file != null) {
-					int i = file.LastIndexOf (':');
-					if (i != -1) {
-						int line;
-						if (int.TryParse (file.Substring (i+1), out line)) {
-							IdeApp.Workbench.OpenDocument (file.Substring (0, i), line, -1);
-							return;
-						}
+				string file = (string)failuresStore.GetValue (iter, 3);
+				int line = (int)failuresStore.GetValue (iter, 4);
+				try {
+					if (file != null && File.Exists (file)) {
+						IdeApp.Workbench.OpenDocument (file, line, -1);
+						return;
 					}
+				} catch (Exception) {
 				}
 			}
 			OnShowTest ();
@@ -454,7 +474,7 @@ namespace MonoDevelop.NUnit
 		{
 			Pad pad = IdeApp.Workbench.GetPad<TestPad> ();
 			pad.BringToFront ();
-			TestPad content = (TestPad) pad.Content;
+			TestPad content = (TestPad)pad.Content;
 			content.SelectTest (GetSelectedTest ());
 		}
 		
@@ -507,7 +527,7 @@ namespace MonoDevelop.NUnit
 			if (!failuresTreeView.Selection.GetSelected (out foo, out iter))
 				return null;
 				
-			UnitTest t = (UnitTest) failuresStore.GetValue (iter, 2);
+			UnitTest t = (UnitTest)failuresStore.GetValue (iter, 2);
 			return t;
 		}
 		
@@ -515,8 +535,13 @@ namespace MonoDevelop.NUnit
 		{
 			RefreshList ();
 		}
-
+		
 		void OnShowFailuresToggled (object sender, EventArgs args)
+		{
+			RefreshList ();
+		}
+		
+		void OnShowInconclusiveToggled (object sender, EventArgs args)
 		{
 			RefreshList ();
 		}
@@ -570,10 +595,18 @@ namespace MonoDevelop.NUnit
 				}
 				failuresTreeView.ScrollToCell (failuresStore.GetPath (testRow), null, false, 0, 0);
 			}
-			if (result.IsIgnored) {
+			if (result.IsNotRun) {
 				if (!buttonIgnored.Active)
 					return;
 				TreeIter testRow = failuresStore.AppendValues (CircleImage.NotRun, Escape (test.FullName), test);
+				if (result.Message != null)
+					failuresStore.AppendValues (testRow, null, Escape (result.Message), test);
+				failuresTreeView.ScrollToCell (failuresStore.GetPath (testRow), null, false, 0, 0);
+			}
+			if (result.IsInconclusive) {
+				if (!buttonInconclusive.Active)
+					return;
+				TreeIter testRow = failuresStore.AppendValues (CircleImage.Inconclusive, Escape (test.FullName), test);
 				if (result.Message != null)
 					failuresStore.AppendValues (testRow, null, Escape (result.Message), test);
 				failuresTreeView.ScrollToCell (failuresStore.GetPath (testRow), null, false, 0, 0);
@@ -606,12 +639,7 @@ namespace MonoDevelop.NUnit
 			rec.Test = test;
 			rec.Result = result;
 			
-			if (result.IsFailure) {
-				testsFailed++;
-			}
-			if (result.IsIgnored) {
-				testsIgnored++;
-			}
+			resultSummary.Add (result);
 			results.Add (rec);
 			
 			ShowTestResult (test, result);
@@ -652,36 +680,51 @@ namespace MonoDevelop.NUnit
 		public event TestHandler CancelRequested;
 	}
 	
-	class TestMonitor: GuiSyncObject, ITestProgressMonitor
+	class TestMonitor: ITestProgressMonitor
 	{
-		// TestResultsPad can't be a GuiSyncObject because there are some
-		// object identity issues. If the pad is registered using the
-		// proxy, it will get different hash codes depending on the caller.
-		
 		ITestProgressMonitor monitor;
 		TestResultsPad pad;
 		
-		public TestMonitor (TestResultsPad pad) {
+		public TestMonitor (TestResultsPad pad)
+		{
 			this.pad = pad;
 			this.monitor = pad;
 		}
-		public void InitializeTestRun (UnitTest test) {
-			pad.InitializeTestRun (test);
+		public void InitializeTestRun (UnitTest test)
+		{
+			DispatchService.GuiDispatch (delegate {
+				pad.InitializeTestRun (test);
+			});
 		}
-		public void FinishTestRun () {
-			pad.FinishTestRun ();
+		public void FinishTestRun ()
+		{
+			DispatchService.GuiDispatch (delegate {
+				pad.FinishTestRun ();
+			});
 		}
-		public void Cancel () {
-			pad.Cancel ();
+		public void Cancel ()
+		{
+			DispatchService.GuiDispatch (delegate {
+				pad.Cancel ();
+			});
 		}
-		public void BeginTest (UnitTest test) {
-			monitor.BeginTest (test);
+		public void BeginTest (UnitTest test)
+		{
+			DispatchService.GuiDispatch (delegate {
+				monitor.BeginTest (test);
+			});
 		}
-		public void EndTest (UnitTest test, UnitTestResult result) {
-			monitor.EndTest (test, result);
+		public void EndTest (UnitTest test, UnitTestResult result)
+		{
+			DispatchService.GuiDispatch (delegate {
+				monitor.EndTest (test, result);
+			});
 		}
-		public void ReportRuntimeError (string message, Exception exception) {
-			monitor.ReportRuntimeError (message, exception);
+		public void ReportRuntimeError (string message, Exception exception)
+		{
+			DispatchService.GuiDispatch (delegate {
+				monitor.ReportRuntimeError (message, exception);
+			});
 		}
 		public bool IsCancelRequested {
 			get { return monitor.IsCancelRequested; }

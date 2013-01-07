@@ -28,6 +28,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 using MonoDevelop.Core.Logging;
 
@@ -38,7 +40,10 @@ namespace MonoDevelop.Core
 	{
 		static List<ILogger> loggers = new List<ILogger> ();
 		static RemoteLogger remoteLogger;
-		
+		static DateTime timestamp;
+		static TextWriter defaultError;
+		static TextWriter defaultOut;
+
 		static LoggingService ()
 		{
 			ConsoleLogger consoleLogger = new ConsoleLogger ();
@@ -70,6 +75,134 @@ namespace MonoDevelop.Core
 					LogError (e.ToString ());
 				}
 			}
+
+			timestamp = DateTime.Now;
+		}
+
+		static string GenericLogFile {
+			get { return "MonoDevelop.log"; }
+		}
+		
+		public static DateTime LogTimestamp {
+			get { return timestamp; }
+		}
+
+		static string UniqueLogFile {
+			get {
+				return string.Format ("MonoDevelop.{0}.log", timestamp.ToString ("yyyy-MM-dd__HH-mm-ss"));
+			}
+		}
+		
+		public static void Initialize (bool redirectOutput)
+		{
+			PurgeOldLogs ();
+
+			// Always redirect on windows otherwise we cannot get output at all
+			if (Platform.IsWindows || redirectOutput)
+				RedirectOutputToLogFile ();
+		}
+		
+		public static void Shutdown ()
+		{
+			RestoreOutputRedirection ();
+		}
+
+		static void PurgeOldLogs ()
+		{
+			// Delete all logs older than a week
+			if (!Directory.Exists (UserProfile.Current.LogDir))
+				return;
+
+			var files = Directory.EnumerateFiles (UserProfile.Current.LogDir)
+				.Select (f => new FileInfo (f))
+				.Where (f => f.CreationTimeUtc < DateTime.UtcNow.Subtract (TimeSpan.FromDays (7)));
+
+			foreach (var v in files) {
+				try {
+					v.Delete ();
+				} catch (Exception ex) {
+					Console.Error.WriteLine (ex);
+				}
+			}
+		}
+
+		static void RedirectOutputToLogFile ()
+		{
+			FilePath logDir = UserProfile.Current.LogDir;
+			if (!Directory.Exists (logDir))
+				Directory.CreateDirectory (logDir);
+			
+			try {
+				if (Platform.IsWindows) {
+					//TODO: redirect the file descriptors on Windows, just plugging in a textwriter won't get everything
+					RedirectOutputToFileWindows (logDir, UniqueLogFile);
+				} else {
+					RedirectOutputToFileUnix (logDir, UniqueLogFile);
+				}
+			} catch (Exception ex) {
+				Console.Error.WriteLine (ex);
+			}
+		}
+
+		static void RedirectOutputToFileWindows (FilePath logDirectory, string logName)
+		{
+			var stream = File.Open (logDirectory.Combine (logName), FileMode.Create, FileAccess.Write, FileShare.Read);
+			var writer = new StreamWriter (stream) { AutoFlush = true };
+			
+			var stderr = new MonoDevelop.Core.ProgressMonitoring.LogTextWriter ();
+			stderr.ChainWriter (Console.Error);
+			stderr.ChainWriter (writer);
+			defaultError = Console.Error;
+			Console.SetError (stderr);
+
+			var stdout = new MonoDevelop.Core.ProgressMonitoring.LogTextWriter ();
+			stdout.ChainWriter (Console.Out);
+			stdout.ChainWriter (writer);
+			defaultOut = Console.Out;
+			Console.SetOut (stdout);
+		}
+		
+		static void RedirectOutputToFileUnix (FilePath logDirectory, string logName)
+		{
+			const int STDOUT_FILENO = 1;
+			const int STDERR_FILENO = 2;
+			
+			Mono.Unix.Native.OpenFlags flags = Mono.Unix.Native.OpenFlags.O_WRONLY
+				| Mono.Unix.Native.OpenFlags.O_CREAT | Mono.Unix.Native.OpenFlags.O_TRUNC;
+			var mode = Mono.Unix.Native.FilePermissions.S_IFREG
+				| Mono.Unix.Native.FilePermissions.S_IRUSR | Mono.Unix.Native.FilePermissions.S_IWUSR
+				| Mono.Unix.Native.FilePermissions.S_IRGRP | Mono.Unix.Native.FilePermissions.S_IWGRP;
+			
+			var file = logDirectory.Combine (logName);
+			int fd = Mono.Unix.Native.Syscall.open (file, flags, mode);
+			if (fd < 0)
+				//error
+				return;
+			try {
+				int res = Mono.Unix.Native.Syscall.dup2 (fd, STDOUT_FILENO);
+				if (res < 0)
+					//error
+					return;
+				
+				res = Mono.Unix.Native.Syscall.dup2 (fd, STDERR_FILENO);
+				if (res < 0)
+					//error
+					return;
+
+				var genericLog = logDirectory.Combine (GenericLogFile);
+				File.Delete (genericLog);
+				Mono.Unix.Native.Syscall.symlink (file, genericLog);
+			} finally {
+				Mono.Unix.Native.Syscall.close (fd);
+			}
+		}
+
+		static void RestoreOutputRedirection ()
+		{
+			if (defaultError != null)
+				Console.SetError (defaultError);
+			if (defaultOut != null)
+				Console.SetOut (defaultOut);
 		}
 		
 		internal static RemoteLogger RemoteLogger {

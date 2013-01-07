@@ -65,9 +65,9 @@ namespace Mono.TextEditor.Vi
 		}
 		
 		public void LoadMark (TextEditorData data) {
-			int x = data.Document.OffsetToLineNumber (base.LineSegment.Offset);
+			int x = base.LineSegment.LineNumber;
 			data.Caret.Line = x;
-			int len = base.LineSegment.Length;
+			int len = base.LineSegment.LengthIncludingDelimiter;
 			if (ColumnNumber >= len) {
 				// Check if the line has been truncated after the setting the mark
 				data.Caret.Column = len - 1;

@@ -43,12 +43,11 @@ namespace MonoDevelop.Core
 	public static class FileService
 	{
 		const string addinFileSystemExtensionPath = "/MonoDevelop/Core/FileSystemExtensions";
-		readonly static char[] separators = { Path.DirectorySeparatorChar, Path.VolumeSeparatorChar, Path.AltDirectorySeparatorChar };
-		
+
 		static FileServiceErrorHandler errorHandler;
 		
 		static FileSystemExtension fileSystemChain;
-		static FileSystemExtension defaultExtension = new DefaultFileSystemExtension ();
+		static FileSystemExtension defaultExtension = Platform.IsWindows ? new DefaultFileSystemExtension () : new UnixFileSystemExtension () ;
 		
 		static EventQueue eventQueue = new EventQueue ();
 		
@@ -87,6 +86,17 @@ namespace MonoDevelop.Core
 			}
 		}
 		
+		public static FilePath ResolveFullPath (FilePath path)
+		{
+			try {
+				return GetFileSystemForPath (path, false).ResolveFullPath (path);
+			} catch (Exception e) {
+				if (!HandleError (GettextCatalog.GetString ("Can't resolve full path {0}", path), e))
+					throw;
+				return FilePath.Empty;
+			}
+		}
+		
 		public static void DeleteFile (string fileName)
 		{
 			Debug.Assert (!String.IsNullOrEmpty (fileName));
@@ -118,11 +128,9 @@ namespace MonoDevelop.Core
 			Debug.Assert (!String.IsNullOrEmpty (oldName));
 			Debug.Assert (!String.IsNullOrEmpty (newName));
 			if (Path.GetFileName (oldName) != newName) {
-				string newPath = Path.Combine (Path.GetDirectoryName (oldName), newName);
-				InternalMoveFile (oldName, newPath);
+				var newPath = ((FilePath)oldName).ParentDirectory.Combine (newName);
+				InternalRenameFile (oldName, newName);
 				OnFileRenamed (new FileCopyEventArgs (oldName, newPath, false));
-				OnFileCreated (new FileEventArgs (newPath, false));
-				OnFileRemoved (new FileEventArgs (oldName, false));
 			}
 		}
 		
@@ -175,11 +183,22 @@ namespace MonoDevelop.Core
 			}
 		}
 		
+		static void InternalRenameFile (string srcFile, string newName)
+		{
+			Debug.Assert (!string.IsNullOrEmpty (srcFile));
+			Debug.Assert (!string.IsNullOrEmpty (newName));
+			FileSystemExtension srcExt = GetFileSystemForPath (srcFile, false);
+			
+			srcExt.RenameFile (srcFile, newName);
+		}
+		
 		public static void CreateDirectory (string path)
 		{
-			Debug.Assert (!String.IsNullOrEmpty (path));
-			GetFileSystemForPath (path, true).CreateDirectory (path);
-			OnFileCreated (new FileEventArgs (path, true));
+			if (!Directory.Exists (path)) {
+				Debug.Assert (!String.IsNullOrEmpty (path));
+				GetFileSystemForPath (path, true).CreateDirectory (path);
+				OnFileCreated (new FileEventArgs (path, true));
+			}
 		}
 		
 		public static void CopyDirectory (string srcPath, string dstPath)
@@ -264,6 +283,8 @@ namespace MonoDevelop.Core
 			return nx;
 		}
 		
+/*
+		readonly static char[] separators = { Path.DirectorySeparatorChar, Path.VolumeSeparatorChar, Path.AltDirectorySeparatorChar };
 		public static string AbsoluteToRelativePath (string baseDirectoryPath, string absPath)
 		{
 			if (!Path.IsPathRooted (absPath))
@@ -297,6 +318,87 @@ namespace MonoDevelop.Core
 			if (result.Length == 0)
 				return ".";
 			return result.ToString ();
+		}*/
+		
+		static bool IsSeparator (char ch)
+		{
+			return ch == Path.DirectorySeparatorChar || ch == Path.AltDirectorySeparatorChar || ch == Path.VolumeSeparatorChar;
+		}
+		
+		public unsafe static string AbsoluteToRelativePath (string baseDirectoryPath, string absPath)
+		{
+			if (!Path.IsPathRooted (absPath) || string.IsNullOrEmpty (baseDirectoryPath))
+				return absPath;
+				
+			absPath = Path.GetFullPath (absPath);
+			baseDirectoryPath = Path.GetFullPath (baseDirectoryPath).TrimEnd (Path.DirectorySeparatorChar);
+			
+			fixed (char* bPtr = baseDirectoryPath, aPtr = absPath) {
+				var bEnd = bPtr + baseDirectoryPath.Length;
+				var aEnd = aPtr + absPath.Length;
+				char* lastStartA = aEnd;
+				char* lastStartB = bEnd;
+				
+				int indx = 0;
+				// search common base path
+				var a = aPtr;
+				var b = bPtr;
+				while (a < aEnd) {
+					if (*a != *b)
+						break;
+					if (IsSeparator (*a)) {
+						indx++;
+						lastStartA = a + 1;
+						lastStartB = b; 
+					}
+					a++;
+					b++;
+					if (b >= bEnd) {
+						if (a >= aEnd || IsSeparator (*a)) {
+							indx++;
+							lastStartA = a + 1;
+							lastStartB = b;
+						}
+						break;
+					}
+				}
+				if (indx == 0) 
+					return absPath;
+				
+				if (lastStartA >= aEnd)
+					return ".";
+
+				// handle case a: some/path b: some/path/deeper...
+				if (a >= aEnd) {
+					if (IsSeparator (*b)) {
+						lastStartA = a + 1;
+						lastStartB = b;
+					}
+				}
+				
+				// look how many levels to go up into the base path
+				int goUpCount = 0;
+				while (lastStartB < bEnd) {
+					if (IsSeparator (*lastStartB))
+						goUpCount++;
+					lastStartB++;
+				}
+				var size = goUpCount * 2 + goUpCount + aEnd - lastStartA;
+				var result = new char [size];
+				fixed (char* rPtr = result) {
+					// go paths up
+					var r = rPtr;
+					for (int i = 0; i < goUpCount; i++) {
+						*(r++) = '.';
+						*(r++) = '.';
+						*(r++) = Path.DirectorySeparatorChar;
+					}
+					// copy the remaining absulute path
+					while (lastStartA < aEnd)
+						*(r++) = *(lastStartA++);
+				}
+				return new string (result);
+			}
 		}
 		
 		public static string RelativeToAbsolutePath (string baseDirectoryPath, string relPath)

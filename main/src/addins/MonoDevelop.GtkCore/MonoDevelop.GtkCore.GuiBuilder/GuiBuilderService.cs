@@ -34,7 +34,6 @@ using System.CodeDom.Compiler;
 
 using MonoDevelop.Ide.Gui;
 using MonoDevelop.Projects;
-using MonoDevelop.Projects.Dom.Parser;
 using MonoDevelop.Projects.Text;
 using MonoDevelop.Core;
 using MonoDevelop.Core.Execution;
@@ -42,12 +41,15 @@ using MonoDevelop.Deployment;
 using MonoDevelop.Projects.Policies;
 using MonoDevelop.Ide;
 using MonoDevelop.Ide.Gui.Content;
+using MonoDevelop.Ide.TypeSystem;
+
 
 namespace MonoDevelop.GtkCore.GuiBuilder
 {
 	class GuiBuilderService
 	{
 		static string GuiBuilderLayout = "Visual Design";
+		static int loadedGuiProjects;
 		
 #if DUMMY_STRINGS_FOR_TRANSLATION_DO_NOT_COMPILE
 		private void DoNotCompile ()
@@ -70,8 +72,6 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 		{
 			if (IdeApp.Workbench == null)
 				return;
-			IdeApp.Workbench.ActiveDocumentChanged += new EventHandler (OnActiveDocumentChanged);
-			IdeApp.ProjectOperations.EndBuild += OnProjectCompiled;
 //			IdeApp.Workspace.ParserDatabase.AssemblyInformationChanged += (AssemblyInformationEventHandler) DispatchService.GuiDispatch (new AssemblyInformationEventHandler (OnAssemblyInfoChanged));
 			
 			IdeApp.Exited += delegate {
@@ -81,7 +81,29 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 				}
 			};
 		}
-		
+
+		static void InitializeService ()
+		{
+			IdeApp.ProjectOperations.EndBuild += OnProjectCompiled;
+			IdeApp.Workbench.ActiveDocumentChanged += OnActiveDocumentChanged;
+		}
+
+		static void ShutdownService ()
+		{
+			IdeApp.ProjectOperations.EndBuild -= OnProjectCompiled;
+			IdeApp.Workbench.ActiveDocumentChanged -= OnActiveDocumentChanged;
+			if (steticApp != null) {
+				StoreConfiguration ();
+				steticApp.Dispose ();
+				steticApp = null;
+			}
+		}
+
+		public static GuiBuilderProject CreateBuilderProject (DotNetProject project, string fileName)
+		{
+			return new GuiBuilderProject (project, fileName);
+		}
+
 		public static Stetic.Application SteticApp {
 			get {
 				// Stetic is not thread safe, so all has to be done in the gui thread
@@ -96,6 +118,18 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 				}
 				return steticApp;
 			}
+		}
+
+		internal static void NotifyGuiProjectLoaded ()
+		{
+			if (++loadedGuiProjects == 1)
+				InitializeService ();
+		}
+
+		internal static void NotifyGuiProjectUnloaded ()
+		{
+			if (--loadedGuiProjects == 0)
+				ShutdownService ();
 		}
 		
 		static string OnAssemblyResolve (string assemblyName)
@@ -199,13 +233,13 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 				// being used by the IDE. This will avoid unnecessary updates.
 				if (IdeApp.Workspace.IsOpen) {
 					foreach (Project prj in IdeApp.Workspace.GetAllProjects ()) {
-						if (!HasOpenDesigners (prj, false)) {
+						if (!HasOpenDesigners (prj, false) && GtkDesignInfo.HasDesignedObjects (prj)) {
 							GtkDesignInfo info = GtkDesignInfo.FromProject (prj);
 							info.ReloadGuiBuilderProject ();
 						}
 					}
 				}
-				
+
 				SteticApp.UpdateWidgetLibraries (false);
 			}
 		}
@@ -329,18 +363,19 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 				};
 				provider.GenerateCodeFromCompileUnit (cu, fileStream, options);
 				text = fileStream.ToString ();
-				text = FormatGeneratedFile (fileName, text, provider);
+				text = FormatGeneratedFile (fileName, text, project, provider);
 			}
 			
 			if (saveToFile)
 				File.WriteAllText (fileName, text);
-			
-			if (ProjectDomService.HasDom (project)) {
-				// Only update the parser database if the project is actually loaded in the IDE.
-				ProjectDomService.Parse (project, fileName, text);
-				if (saveToFile) 
-					FileService.NotifyFileChanged (fileName);
-			}
+			TypeSystemService.ParseFile (project, fileName);
+//			
+//			if (ProjectDomService.HasDom (project)) {
+//				// Only update the parser database if the project is actually loaded in the IDE.
+//				ProjectDomService.Parse (project, fileName, text);
+//				if (saveToFile) 
+//					FileService.NotifyFileChanged (fileName);
+//			}
 
 			return fileName;
 		}
@@ -359,7 +394,13 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 				DateTime last_gen_time = File.Exists (info.SteticGeneratedFile) ? File.GetLastWriteTime (info.SteticGeneratedFile) : DateTime.MinValue;
 				
 				bool ref_changed = false;
-				foreach (ProjectReference pref in project.References) {
+
+				// Disabled check for changes in referenced assemblies, since it cause too much
+				// regeneration of code. If a component has changed in a referenced project, this
+				// project may not build, but this can be solved by editing some file in the
+				// designer and saving.
+
+/*				foreach (ProjectReference pref in project.References) {
 					if (!pref.IsValid)
 						continue;
 					foreach (string filename in pref.GetReferencedFileNames (configuration)) {
@@ -370,7 +411,7 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 					}
 					if (ref_changed)
 						break;
-				}
+				}*/
 	
 				// Check if generated code is already up to date.
 				if (!ref_changed && last_gen_time >= File.GetLastWriteTime (info.SteticFile))
@@ -438,7 +479,9 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 						options.GettextClass = info.GettextClass;
 						options.UsePartialClasses = project.UsePartialTypes;
 						options.GenerateSingleFile = false;
+						options.GenerateModifiedOnly = true;
 						generationResult = SteticApp.GenerateProjectCode (options, info.GuiBuilderProject.SteticProject);
+						info.GuiBuilderProject.SteticProject.ResetModifiedWidgetFlags ();
 					} catch (Exception ex) {
 						generatedException = ex;
 					}
@@ -480,10 +523,9 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 						timer.Trace ("Generating code for " + unit.Name);
 						provider.GenerateCodeFromCompileUnit (unit, sw, codeGeneratorOptions);
 						string content = sw.ToString ();
-						string eol = pol.GetEolMarker ();
-									
+								
 						timer.Trace ("Formatting code");
-						content = FormatGeneratedFile (fname, content, provider);
+						content = FormatGeneratedFile (fname, content, project, provider);
 						timer.Trace ("Writing code");
 						File.WriteAllText (fname, content);
 					} finally {
@@ -525,26 +567,27 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 			return pfile.FilePath;
 		}
 		
-		static string FormatGeneratedFile (string file, string content, CodeDomProvider provider)
+		static string FormatGeneratedFile (string file, string content, Project project, CodeDomProvider provider)
 		{
 			content = StripHeaderAndBlankLines (content, provider);
-			
-			var pol = PolicyService.InvariantPolicies.Get<TextStylePolicy> ();
-			string eol = pol.GetEolMarker ();
-			if (Environment.NewLine != eol)
-				content = content.Replace (Environment.NewLine, eol);
-			
+
 			string mt = DesktopService.GetMimeTypeForUri (file);
 			var formatter = MonoDevelop.Ide.CodeFormatting.CodeFormatterService.GetFormatter (mt);
 			if (formatter != null)
 				content = formatter.FormatText (PolicyService.InvariantPolicies, content);
+			
+			// The project policies should be taken for generated files (windows git eol problem)
+			var pol = project.Policies.Get<TextStylePolicy> (DesktopService.GetMimeTypeForUri (file));
+			string eol = pol.GetEolMarker ();
+			if (Environment.NewLine != eol)
+				content = content.Replace (Environment.NewLine, eol);
 			
 			return content;
 		}
 		
 		static string StripHeaderAndBlankLines (string text, CodeDomProvider provider)
 		{
-			Mono.TextEditor.Document doc = new Mono.TextEditor.Document ();
+			Mono.TextEditor.TextDocument doc = new Mono.TextEditor.TextDocument ();
 			doc.Text = text;
 			int realStartLine = 0;
 			for (int i = 1; i <= doc.LineCount; i++) {
@@ -562,11 +605,11 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 			if (provider is Microsoft.CSharp.CSharpCodeProvider) {
 				bool previousWasBlank = false;
 				for (int i = 1; i <= doc.LineCount; i++) {
-					Mono.TextEditor.LineSegment line = doc.GetLine (i);
+					Mono.TextEditor.DocumentLine line = doc.GetLine (i);
 					bool isBlank, isBracket;
 					CheckLine (doc, line, out isBlank, out isBracket);
-					if (isBlank && previousWasBlank && line.Length > 0) {
-						((Mono.TextEditor.IBuffer)doc).Remove (line.Offset, line.Length);
+					if (isBlank && previousWasBlank && line.LengthIncludingDelimiter > 0) {
+						doc.Remove (line.Offset, line.LengthIncludingDelimiter);
 						i--;
 					}
 					previousWasBlank = isBlank || isBracket;
@@ -574,14 +617,14 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 			}
 			
 			int offset = doc.GetLine (realStartLine).Offset;
-			return doc.GetTextAt (offset, doc.Length - offset);
+			return doc.GetTextAt (offset, doc.TextLength - offset);
 		}
 
-		static void CheckLine (Mono.TextEditor.Document doc, Mono.TextEditor.LineSegment line, out bool isBlank, out bool isBracket)
+		static void CheckLine (Mono.TextEditor.TextDocument doc, Mono.TextEditor.DocumentLine line, out bool isBlank, out bool isBracket)
 		{
 			isBlank = true;
 			isBracket = false;
-			for (int i = 0; i < line.Length; i++) {
+			for (int i = 0; i < line.LengthIncludingDelimiter; i++) {
 				char c = doc.GetCharAt (line.Offset + i);
 				if (c == '{') {
 					isBracket = true;

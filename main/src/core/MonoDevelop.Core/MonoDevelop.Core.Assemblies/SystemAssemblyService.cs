@@ -239,26 +239,34 @@ namespace MonoDevelop.Core.Assemblies
 			return aname;
 		}
 		
+		static Dictionary<string, AssemblyName> assemblyNameCache = new Dictionary<string, AssemblyName> ();
 		internal static System.Reflection.AssemblyName GetAssemblyNameObj (string file)
 		{
-			try {
-				AssemblyDefinition asm = AssemblyDefinition.ReadAssembly (file);
-				return new AssemblyName (asm.Name.FullName);
+			lock (assemblyNameCache) {
+				AssemblyName name;
+				if (assemblyNameCache.TryGetValue (file, out name))
+					return name;
 				
-				// Don't use reflection to get the name since it is a common cause for deadlocks
-				// in Mono < 2.6.
-				// return System.Reflection.AssemblyName.GetAssemblyName (file);
-				
-			} catch (FileNotFoundException) {
-				// GetAssemblyName is not case insensitive in mono/windows. This is a workaround
-				foreach (string f in Directory.GetFiles (Path.GetDirectoryName (file), Path.GetFileName (file))) {
-					if (f != file)
-						return GetAssemblyNameObj (f);
+				try {
+					/*
+					// Don't use reflection to get the name since it is a common cause for deadlocks
+					// in Mono < 2.6.
+					AssemblyDefinition asm = AssemblyDefinition.ReadAssembly (file);
+					assemblyNameCache [file] = new AssemblyName (asm.Name.FullName);
+					return assemblyNameCache [file];
+					*/
+					assemblyNameCache [file] = System.Reflection.AssemblyName.GetAssemblyName (file);
+					return assemblyNameCache [file];
+				} catch (FileNotFoundException) {
+					// GetAssemblyName is not case insensitive in mono/windows. This is a workaround
+					foreach (string f in Directory.GetFiles (Path.GetDirectoryName (file), Path.GetFileName (file))) {
+						if (f != file) {
+							assemblyNameCache [file] = GetAssemblyNameObj (f);
+							return assemblyNameCache [file];
+						}
+					}
+					throw;
 				}
-				throw;
-			} catch (BadImageFormatException) {
-				AssemblyDefinition asm = AssemblyDefinition.ReadAssembly (file);
-				return new AssemblyName (asm.Name.FullName);
 			}
 		}
 		
@@ -345,5 +353,85 @@ namespace MonoDevelop.Core.Assemblies
 			if (dirs != null)
 				userAssemblyContext.Directories = dirs;
 		}
+
+		/// <summary>
+		/// Simply get all assembly reference names from an assembly given it's file name.
+		/// </summary>
+		public static IEnumerable<string> GetAssemblyReferences (string fileName)
+		{
+			using (var universe = new IKVM.Reflection.Universe ()) {
+				IKVM.Reflection.Assembly assembly;
+				try {
+					assembly = universe.LoadFile (fileName);
+				} catch {
+					yield break;
+				}
+				foreach (var r in assembly.GetReferencedAssemblies ()) {
+					yield return r.Name;
+				}
+			}
+
+			/* CECIL version:
+
+			Mono.Cecil.AssemblyDefinition adef;
+			try {
+				adef = Mono.Cecil.AssemblyDefinition.ReadAssembly (fileName);
+			} catch {
+				yield break;
+			}
+			foreach (Mono.Cecil.AssemblyNameReference aref in adef.MainModule.AssemblyReferences) {
+				yield return aref.Name;
+			}*/
+		}
+
+		public class ManifestResource
+		{
+			public string Name {
+				get; private set;
+			}
+
+			Func<Stream> streamCallback;
+			public Stream Open ()
+			{
+				return streamCallback ();
+			}
+
+			public ManifestResource (string name, Func<Stream> streamCallback)
+			{
+				this.streamCallback = streamCallback;
+				Name = name;
+			}
+		}
+
+		/// <summary>
+		/// Simply get all assembly manifest resources from an assembly given it's file name.
+		/// </summary>
+		public static IEnumerable<ManifestResource> GetAssemblyManifestResources (string fileName)
+		{
+			using (var universe = new IKVM.Reflection.Universe ()) {
+				IKVM.Reflection.Assembly assembly;
+				try {
+					assembly = universe.LoadFile (fileName);
+				} catch {
+					yield break;
+				}
+				foreach (var _r in assembly.GetManifestResourceNames ()) {
+					var r = _r;
+					yield return new ManifestResource (r, () => assembly.GetManifestResourceStream (r));
+				}
+			}
+
+			/* CECIL version:
+
+		Mono.Cecil.AssemblyDefinition a = Mono.Cecil.AssemblyDefinition.ReadAssembly (asmInBundle);
+			foreach (Mono.Cecil.ModuleDefinition m in a.Modules) {
+				for (int i = 0; i < m.Resources.Count; i++) {
+					var er = m.Resources[i] as Mono.Cecil.EmbeddedResource;
+					
+					yield return new ManifestResource (er.Name, () => er.GetResourceStream ().ReadToEnd ());
+				}
+			}*/
+		}
+
 	}
 }

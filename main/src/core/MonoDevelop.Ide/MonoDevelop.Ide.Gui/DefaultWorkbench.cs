@@ -44,13 +44,14 @@ using MonoDevelop.Components.DockToolbars;
 using Gtk;
 using MonoDevelop.Components;
 using MonoDevelop.Ide.Extensions;
+using Mono.TextEditor;
 
 namespace MonoDevelop.Ide.Gui
 {
 	/// <summary>
 	/// This is the a Workspace with a multiple document interface.
 	/// </summary>
-	internal class DefaultWorkbench : WorkbenchWindow
+	internal class DefaultWorkbench : WorkbenchWindow, ICommandDelegatorRouter
 	{
 		readonly static string mainMenuPath    = "/MonoDevelop/Ide/MainMenu";
 		readonly static string viewContentPath = "/MonoDevelop/Ide/Pads";
@@ -79,8 +80,6 @@ namespace MonoDevelop.Ide.Gui
 
 		bool fullscreen;
 		Rectangle normalBounds = new Rectangle(0, 0, 640, 480);
-		
-		internal static GType gtype;
 		
 		Gtk.Container rootWidget;
 		DockToolbarFrame toolbarFrame;
@@ -213,15 +212,7 @@ namespace MonoDevelop.Ide.Gui
 
 			DeleteEvent += new Gtk.DeleteEventHandler (OnClosing);
 			
-			if (Gtk.IconTheme.Default.HasIcon ("monodevelop")) 
-				Gtk.Window.DefaultIconName = "monodevelop";
-			else
-				this.IconList = new Gdk.Pixbuf[] {
-					ImageService.GetPixbuf (MonoDevelop.Ide.Gui.Stock.MonoDevelop, Gtk.IconSize.Menu),
-					ImageService.GetPixbuf (MonoDevelop.Ide.Gui.Stock.MonoDevelop, Gtk.IconSize.Button),
-					ImageService.GetPixbuf (MonoDevelop.Ide.Gui.Stock.MonoDevelop, Gtk.IconSize.Dnd),
-					ImageService.GetPixbuf (MonoDevelop.Ide.Gui.Stock.MonoDevelop, Gtk.IconSize.Dialog)
-				};
+			SetAppIcons ();
 
 			//this.WindowPosition = Gtk.WindowPosition.None;
 
@@ -229,6 +220,37 @@ namespace MonoDevelop.Ide.Gui
 			DragDataReceived += new Gtk.DragDataReceivedHandler (onDragDataRec);
 			
 			IdeApp.CommandService.SetRootWindow (this);
+		}
+		
+		void SetAppIcons ()
+		{
+			//first try to get the icon from the GTK icon theme
+			var appIconName = BrandingService.GetString ("ApplicationIconId")
+				?? BrandingService.ApplicationName.ToLower ();
+			if (Gtk.IconTheme.Default.HasIcon (appIconName)) {
+				Gtk.Window.DefaultIconName = appIconName;
+				return;
+			}
+			
+			//branded icons
+			var iconsEl = BrandingService.GetElement ("ApplicationIcons");
+			if (iconsEl != null) {
+				try {
+					this.IconList = iconsEl.Elements ("Icon")
+						.Select (el => new Gdk.Pixbuf (BrandingService.GetFile ((string)el))).ToArray ();
+					return;
+				} catch (Exception ex) {
+					LoggingService.LogError ("Could not load app icons", ex);
+				}
+			}
+			
+			//built-ins
+			this.IconList = new Gdk.Pixbuf[] {
+				ImageService.GetPixbuf (MonoDevelop.Ide.Gui.Stock.MonoDevelop, Gtk.IconSize.Menu),
+				ImageService.GetPixbuf (MonoDevelop.Ide.Gui.Stock.MonoDevelop, Gtk.IconSize.Button),
+				ImageService.GetPixbuf (MonoDevelop.Ide.Gui.Stock.MonoDevelop, Gtk.IconSize.Dnd),
+				ImageService.GetPixbuf (MonoDevelop.Ide.Gui.Stock.MonoDevelop, Gtk.IconSize.Dialog)
+			};
 		}
 
 		void onDragDataRec (object o, Gtk.DragDataReceivedArgs args)
@@ -329,6 +351,8 @@ namespace MonoDevelop.Ide.Gui
 		public void CloseContent (IViewContent content)
 		{
 			if (viewContentCollection.Contains(content)) {
+				if (content.Project != null)
+					content.Project.NameChanged -= HandleProjectNameChanged;
 				viewContentCollection.Remove(content);
 			}
 		}
@@ -378,14 +402,25 @@ namespace MonoDevelop.Ide.Gui
 			TabLabel tabLabel = new TabLabel (new Label (), mimeimage != null ? mimeimage : new Gtk.Image (""));
 			tabLabel.CloseClicked += new EventHandler (closeClicked);			
 			tabLabel.ClearFlag (WidgetFlags.CanFocus);
+			tabLabel.Show ();
+			
 			SdiWorkspaceWindow sdiWorkspaceWindow = new SdiWorkspaceWindow (this, content, tabControl, tabLabel);
 			sdiWorkspaceWindow.TitleChanged += delegate { SetWorkbenchTitle (); };
 			sdiWorkspaceWindow.Closed += CloseWindowEvent;
+			sdiWorkspaceWindow.Show ();
+			
 			tabControl.InsertPage (sdiWorkspaceWindow, tabLabel, -1);
-			tabLabel.Show ();
+			
+			if (content.Project != null)
+				content.Project.NameChanged += HandleProjectNameChanged;
 			
 			if (bringToFront)
 				content.WorkbenchWindow.SelectWindow();
+		}
+
+		void HandleProjectNameChanged (object sender, SolutionItemRenamedEventArgs e)
+		{
+			SetWorkbenchTitle ();
 		}
 		
 		void ShowPadNode (ExtensionNode node)
@@ -610,7 +645,7 @@ namespace MonoDevelop.Ide.Gui
 				if (e.IsDirectory) {
 					foreach (IViewContent content in viewContentCollection) {
 						if (content.ContentName != null && ((FilePath)content.ContentName).IsChildPathOf (e.SourceFile)) {
-							content.ContentName = e.TargetFile + content.ContentName.Substring(e.SourceFile.FileName.Length);
+							content.ContentName = e.TargetFile.Combine (((FilePath) content.ContentName).FileName);
 						}
 					}
 				} else {
@@ -707,6 +742,7 @@ namespace MonoDevelop.Ide.Gui
 			
 			if (lastActiveWindows.Count > MAX_LASTACTIVEWINDOWS)
 				lastActiveWindows.RemoveFirst ();
+			
 			lastActiveWindows.AddLast (lastActive);
 			lastActive = ActiveWorkbenchWindow;
 			SetWorkbenchTitle ();
@@ -797,8 +833,8 @@ namespace MonoDevelop.Ide.Gui
 			tabControl = new SdiDragNotebook (dock.ShadedContainer);
 			tabControl.Scrollable = true;
 			tabControl.SwitchPage += OnActiveWindowChanged;
-			tabControl.PageAdded += delegate { OnActiveWindowChanged (null, null); };
-			tabControl.PageRemoved += delegate { OnActiveWindowChanged (null, null); };
+			tabControl.PageAdded += OnActiveWindowChanged;
+			tabControl.PageRemoved += OnActiveWindowChanged;
 		
 			tabControl.ButtonPressEvent += delegate(object sender, ButtonPressEventArgs e) {
 				int tab = tabControl.FindTabAtPosition (e.Event.XRoot, e.Event.YRoot);
@@ -809,16 +845,7 @@ namespace MonoDevelop.Ide.Gui
 					ToggleFullViewMode ();
 			};
 			
-			this.tabControl.PopupMenu += delegate {
-				ShowPopup ();
-			};
-			this.tabControl.ButtonReleaseEvent += delegate (object sender, Gtk.ButtonReleaseEventArgs e) {
-				int tab = tabControl.FindTabAtPosition (e.Event.XRoot, e.Event.YRoot);
-				if (tab < 0)
-					return;
-				if (e.Event.Button == 3)
-					ShowPopup ();
-			};
+			this.tabControl.DoPopupMenu = ShowPopup;
 			
 			tabControl.TabsReordered += new TabsReorderedHandler (OnTabsReordered);
 
@@ -944,11 +971,10 @@ namespace MonoDevelop.Ide.Gui
 			}
 		}
 		
-		void ShowPopup ()
+		void ShowPopup (int tabIndex, Gdk.EventButton evt)
 		{
-			Gtk.Menu contextMenu = IdeApp.CommandService.CreateMenu ("/MonoDevelop/Ide/ContextMenu/DocumentTab");
-			if (contextMenu != null)
-				contextMenu.Popup ();
+			this.tabControl.Page = tabIndex;
+			IdeApp.CommandService.ShowContextMenu (this.tabControl, evt, "/MonoDevelop/Ide/ContextMenu/DocumentTab");
 		}
 		
 		void OnTabsReordered (Widget widget, int oldPlacement, int newPlacement)
@@ -1315,6 +1341,37 @@ namespace MonoDevelop.Ide.Gui
 		}
 		
 		#endregion
+
+		#region ICommandDelegatorRouter implementation
+		
+		// The command route is redirected here to the active document view.
+		// This is done to make the view commands available even when the
+		// view has not the active focus, especially when the focus is
+		// on a pad. Although it may seem a bit inconsistent (because
+		// MD will not have active commands which don't directly apply to
+		// the active widget) in general it makes sense, views are the
+		// main working areas of the IDE and users often expect view commands
+		// to be available even if the focus is in a secondary Pad window.
+		//
+		// This change also fixes some issues with the property and outline
+		// pads, which depend on the current selection, and were being reset
+		// when the main view lost focus.
+		
+		object ICommandDelegatorRouter.GetNextCommandTarget ()
+		{
+			// This is the last object of the chain
+			return null;
+		}
+
+		object ICommandDelegatorRouter.GetDelegatedCommandTarget ()
+		{
+			// The command manager checks if an object has already been visited
+			// while scanning the command route, so if the active command
+			// route already includes the active workbench view, it won't be
+			// visited again
+			return ActiveWorkbenchWindow;
+		}
+		#endregion
 	}
 
 	class PadActivationHandler: CommandHandler
@@ -1389,6 +1446,28 @@ namespace MonoDevelop.Ide.Gui
 				rect.Height -= CurrentPageWidget.Allocation.Height;
 			yield return rect;
 		}
+		
+		public Action<int,Gdk.EventButton> DoPopupMenu { get; set; }
+		
+		protected override bool OnButtonPressEvent (Gdk.EventButton evnt)
+		{
+			if (DoPopupMenu != null && evnt.TriggersContextMenu ()) {
+				int tab = FindTabAtPosition (evnt.XRoot, evnt.YRoot);
+				if (tab >= 0) {
+					DoPopupMenu (tab, evnt);
+					return true;
+				}
+			}
+			return base.OnButtonPressEvent (evnt);
+		}
+		
+		protected override bool OnPopupMenu ()
+		{
+			if (DoPopupMenu != null) {
+				DoPopupMenu (this.Page, null);
+				return true;
+			}
+			return base.OnPopupMenu ();
+		}
 	}
 }
-

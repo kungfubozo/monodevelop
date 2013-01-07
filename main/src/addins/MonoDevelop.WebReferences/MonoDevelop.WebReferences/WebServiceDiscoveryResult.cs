@@ -67,11 +67,18 @@ namespace MonoDevelop.WebReferences
 		public abstract IEnumerable<string> GetAssemblyReferences ();
 		
 		public abstract FilePath GetReferencePath (DotNetProject project, string refName);
+
+		public abstract string GetServiceURL ();
 		
 		public abstract string ProxyGenerator { get; }
 		
 		public virtual void GenerateFiles (DotNetProject project, string namspace, string referenceName)
 		{
+			//make sure we have a valid value for the namespace
+			if (string.IsNullOrEmpty (namspace)) {
+				namspace = project.GetDefaultNamespace (null);
+			}
+			
 			// Create the base directory if it does not exists
 			FilePath basePath = GetReferencePath (project, referenceName).CanonicalPath;
 			if (!Directory.Exists (basePath))

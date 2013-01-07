@@ -62,6 +62,7 @@ namespace MonoDevelop.Projects
 		}
 		
 		[Test()]
+		[Ignore ("We don't install the msbuild assemblies in the right place for this tests")]
 		public void Resources ()
 		{
 			string solFile = Util.GetSampleProject ("resources-tester", "ResourcesTester.sln");
@@ -209,9 +210,71 @@ namespace MonoDevelop.Projects
 			Assert.AreEqual ("cc SomeProject", cmd.GetCommandArgs (p, c.Selector));
 			
 			cmd.WorkingDir = NormalizePath ("/some/${ProjectName}/place");
-			Assert.AreEqual (NormalizePath ("/some/SomeProject/place"), (string)cmd.GetCommandWorkingDir (p, c.Selector));
+			Assert.AreEqual (Path.GetFullPath (NormalizePath ("/some/SomeProject/place")), (string)cmd.GetCommandWorkingDir (p, c.Selector));
 		}
 		
+		[Test()]
+		public void FileDependencies ()
+		{
+			string solFile = Util.GetSampleProject ("file-dependencies", "ConsoleProject.sln");
+			Solution sol = (Solution) Services.ProjectService.ReadWorkspaceItem (Util.GetMonitor (), solFile);
+
+			Project p = (Project) sol.Items [0];
+			var dir = p.BaseDirectory;
+
+			var file1 = p.Files.GetFile (dir.Combine ("file1.xml"));
+			var file2 = p.Files.GetFile (dir.Combine ("file2.xml"));
+			var file3 = p.Files.GetFile (dir.Combine ("file3.xml"));
+			var file4 = p.Files.GetFile (dir.Combine ("file4.xml"));
+			var file5 = p.Files.GetFile (dir.Combine ("file5.xml"));
+
+			Assert.AreEqual (file3, file1.DependsOnFile);
+			Assert.AreEqual (file3, file2.DependsOnFile);
+
+			Assert.AreEqual (2, file3.DependentChildren.Count);
+			Assert.IsTrue (file3.DependentChildren.Contains (file1));
+			Assert.IsTrue (file3.DependentChildren.Contains (file2));
+
+			Assert.AreEqual (file5, file4.DependsOnFile);
+			Assert.AreEqual (1, file5.DependentChildren.Count);
+			Assert.IsTrue (file5.DependentChildren.Contains (file4));
+
+			// Change a dependency
+
+			file1.DependsOn = "";
+			Assert.IsNull (file1.DependsOnFile);
+			Assert.AreEqual (file3, file2.DependsOnFile);
+
+			Assert.AreEqual (1, file3.DependentChildren.Count);
+			Assert.IsTrue (file3.DependentChildren.Contains (file2));
+
+			// Unresolved dependency
+
+			file1.DependsOn = "foo.xml";
+			Assert.IsNull (file1.DependsOnFile);
+
+			var foo = p.AddFile (dir.Combine ("foo.xml"));
+			Assert.AreEqual (foo, file1.DependsOnFile);
+
+			// Resolved dependency
+
+			file2.DependsOn = "foo.xml";
+			Assert.AreEqual (foo, file2.DependsOnFile);
+			Assert.AreEqual (0, file3.DependentChildren.Count);
+
+			// Remove a file
+
+			p.Files.Remove (file5);
+			Assert.IsNull (file4.DependsOnFile);
+
+			// Add a file
+
+			file5 = p.AddFile (dir.Combine ("file5.xml"));
+			Assert.AreEqual (file5, file4.DependsOnFile);
+			Assert.AreEqual (1, file5.DependentChildren.Count);
+			Assert.IsTrue (file5.DependentChildren.Contains (file4));
+		}
+
 		public static string NormalizePath (string path)
 		{
 			return path.Replace ('/', Path.DirectorySeparatorChar);

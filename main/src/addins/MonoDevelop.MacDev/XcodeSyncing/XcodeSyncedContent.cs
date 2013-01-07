@@ -42,46 +42,80 @@ namespace MonoDevelop.MacDev.XcodeSyncing
 		FilePath targetRelative, source;
 		bool isInterfaceDefinition;
 		
-		public XcodeSyncedContent (ProjectFile p)
+		public XcodeSyncedContent (ProjectFile pf)
 		{
-			this.targetRelative = p.ProjectVirtualPath;
-			this.source = p.FilePath;
-			isInterfaceDefinition = p.BuildAction == BuildAction.InterfaceDefinition;
+			isInterfaceDefinition = pf.BuildAction == BuildAction.InterfaceDefinition;
+			source = pf.FilePath;
+
+			switch (pf.BuildAction) {
+			case BuildAction.BundleResource:
+				targetRelative = ((IXcodeTrackedProject) pf.Project).GetBundleResourceId (pf);
+				break;
+			case BuildAction.Content:
+			default:
+				targetRelative = pf.ProjectVirtualPath;
+				break;
+			}
 		}
 		
-		public override bool NeedsSyncOut (XcodeSyncContext context)
+		public override bool NeedsSyncOut (IProgressMonitor monitor, XcodeSyncContext context)
 		{
 			string target = context.ProjectDir.Combine (targetRelative);
-			return !File.Exists (target) || context.GetSyncTime (targetRelative) != File.GetLastWriteTime (source);
+			
+			if (!File.Exists (target))
+				return true;
+			
+			if (File.GetLastWriteTime (source) > context.GetSyncTime (targetRelative)) {
+				monitor.Log.WriteLine ("{0} has changed since last sync.", targetRelative);
+				return true;
+			}
+			
+			return false;
 		}
 		
-		public override void SyncOut (XcodeSyncContext context)
+		public override void SyncOut (IProgressMonitor monitor, XcodeSyncContext context)
 		{
-			FilePath target = context.ProjectDir.Combine (targetRelative);
+			monitor.Log.WriteLine ("Exporting '{0}' to Xcode.", targetRelative);
+			
+			var target = context.ProjectDir.Combine (targetRelative);
 			var dir = target.ParentDirectory;
+			
 			if (!Directory.Exists (dir))
 				Directory.CreateDirectory (dir);
+			
 			if (File.Exists (target))
 				File.Delete (target);
-			try {
-				var result = Mono.Unix.Native.Syscall.link (source, target);
-				Mono.Unix.UnixMarshal.ThrowExceptionForLastErrorIf (result);
-			} catch {
-				File.Copy (source, target);
-			}
-			context.UpdateSyncTime (targetRelative);
+			
+			File.Copy (source, target);
+			DateTime mtime = File.GetLastWriteTime (target);
+			context.SetSyncTime (targetRelative, mtime);
 		}
 		
-		public override bool NeedsSyncBack (XcodeSyncContext context)
+		public override bool NeedsSyncBack (IProgressMonitor monitor, XcodeSyncContext context)
 		{
 			if (!isInterfaceDefinition)
 				return false;
+			
 			string target = context.ProjectDir.Combine (targetRelative);
-			return File.GetLastWriteTime (target) != context.GetSyncTime (targetRelative);
+			
+			if (!File.Exists (target)) {
+				monitor.Log.WriteLine ("{0} has been removed since last sync.", targetRelative);
+				// FIXME: some day we should mirror this change back to MonoDevelop
+				return false;
+			}
+			
+			if (File.GetLastWriteTime (target) > context.GetSyncTime (targetRelative)) {
+				monitor.Log.WriteLine ("{0} has changed since last sync.", targetRelative);
+				return true;
+			}
+			
+			return false;
 		}
 		
-		public override void SyncBack (XcodeSyncBackContext context)
+		public override void SyncBack (IProgressMonitor monitor, XcodeSyncBackContext context)
 		{
+			monitor.Log.WriteLine ("Queueing sync-back of changes made to '{0}' from Xcode.", targetRelative);
+			
 			context.FileSyncJobs.Add (new XcodeSyncFileBackJob (source, targetRelative, false));
 		}
 		

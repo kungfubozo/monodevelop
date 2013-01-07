@@ -23,9 +23,9 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
+
 using System;
 using System.Collections.Generic;
-using MonoDevelop.MacDev.Plist;
 using MonoDevelop.Core;
 using System.Linq;
 using MonoMac.Foundation;
@@ -42,7 +42,17 @@ namespace MonoDevelop.MacDev.PlistEditor
 	{
 		static readonly IntPtr cls_NSPropertyListSerialization = Class.GetHandle ("NSPropertyListSerialization");
 		static readonly IntPtr sel_dataFromPropertyList_format_options_error = Selector.GetHandle ("dataWithPropertyList:format:options:error:");
-				
+		static readonly IntPtr sel_propertyListWithData_options_format_error = Selector.GetHandle ("propertyListWithData:options:format:error:");
+		
+		[DllImport (MonoMac.Constants.ObjectiveCLibrary, EntryPoint="objc_msgSend")]
+		static extern IntPtr IntPtr_objc_msgSend_IntPtr_Int_OutInt_OutIntPtr (
+			IntPtr target,
+			IntPtr selector,
+			IntPtr arg0,
+			int arg1,
+			out int arg2,
+			out IntPtr arg3);
+		
 		[DllImport (MonoMac.Constants.ObjectiveCLibrary, EntryPoint="objc_msgSend")]
 		static extern IntPtr IntPtr_objc_msgSend_IntPtr_Int_Int_OutIntPtr (
 			IntPtr target,
@@ -52,6 +62,80 @@ namespace MonoDevelop.MacDev.PlistEditor
 			int arg2,
 			out IntPtr arg3);
 		
+		public static PObject Create (string type)
+		{
+			switch (type) {
+			case "Array":
+				return new PArray ();
+			case "Dictionary":
+				return new PDictionary ();
+			case "Boolean":
+				return new PBoolean (true);
+			case "Data":
+				return new PData (new byte[0]);
+			case "Date":
+				return new PDate (DateTime.Now);
+			case "Number":
+				return new PNumber (0);
+			case "Real":
+				return new PReal (0);
+			case "String":
+				return new PString ("");
+			}
+			LoggingService.LogError ("Unknown pobject type:" + type);
+			return new PString ("<error>");
+		}
+		
+		internal static IEnumerable<KeyValuePair<string, PObject>> ToEnumerable (PObject obj)
+		{
+			if (obj is PDictionary) {
+				return (PDictionary) obj;
+			} else if (obj is PArray) {
+				return ((PArray) obj).Select (k => new KeyValuePair<string, PObject> (k is IPValueObject ? ((IPValueObject) k).Value.ToString () : null, k));
+			} else {
+				return Enumerable.Empty <KeyValuePair<string, PObject>> ();
+			}
+		}
+		
+		internal static NSData DataFromPropertyList (NSObject pobject, NSPropertyListFormat format, int options)
+		{
+			IntPtr errorPtr;
+			var ptr = IntPtr_objc_msgSend_IntPtr_Int_Int_OutIntPtr (
+				cls_NSPropertyListSerialization,
+				sel_dataFromPropertyList_format_options_error,
+				pobject.Handle, (int) format, options, out errorPtr);
+			
+			if (errorPtr != IntPtr.Zero) {
+				var error = (NSError) MonoMac.ObjCRuntime.Runtime.GetNSObject (errorPtr);
+				throw new Exception (error.LocalizedDescription);
+			}
+			
+			if (ptr == IntPtr.Zero)
+				return null;
+			
+			return (NSData) MonoMac.ObjCRuntime.Runtime.GetNSObject (ptr);
+		}
+		
+		internal static NSObject PropertyListWithData (NSData data, int options, out NSPropertyListFormat format)
+		{
+			IntPtr errorPtr;
+			int formatInt;
+			var ptr = IntPtr_objc_msgSend_IntPtr_Int_OutInt_OutIntPtr (
+				cls_NSPropertyListSerialization,
+				sel_propertyListWithData_options_format_error,
+				data.Handle, options, out formatInt, out errorPtr);
+			format = (NSPropertyListFormat) formatInt;
+			
+			if (errorPtr != IntPtr.Zero) {
+				var error = (NSError) MonoMac.ObjCRuntime.Runtime.GetNSObject (errorPtr);
+				throw new Exception (error.LocalizedDescription);
+			}
+			
+			if (ptr == IntPtr.Zero)
+				return null;
+			
+			return MonoMac.ObjCRuntime.Runtime.GetNSObject (ptr);
+		}
 		
 		PObject parent;
 		public PObject Parent {
@@ -68,6 +152,8 @@ namespace MonoDevelop.MacDev.PlistEditor
 		public abstract string TypeString {
 			get;
 		}
+
+		public abstract PObject Clone ();
 		
 		public void Replace (PObject newObject)
 		{
@@ -115,8 +201,6 @@ namespace MonoDevelop.MacDev.PlistEditor
 		
 		public abstract NSObject Convert ();
 		
-		public abstract void RenderValue (CustomPropertiesWidget widget, CellRendererCombo renderer);
-		
 		public abstract void SetValue (string text);
 		
 		public static implicit operator PObject (string value)
@@ -127,6 +211,11 @@ namespace MonoDevelop.MacDev.PlistEditor
 		public static implicit operator PObject (int value)
 		{
 			return new PNumber (value);
+		}
+		
+		public static implicit operator PObject (double value)
+		{
+			return new PReal (value);
 		}
 		
 		public static implicit operator PObject (bool value)
@@ -163,29 +252,23 @@ namespace MonoDevelop.MacDev.PlistEditor
 		
 		public event EventHandler Changed;
 		
-		public string ToXml ()
+		public byte[] ToByteArray (bool binary)
 		{
 			using (new NSAutoreleasePool ()) {
-				var errorPtr = IntPtr.Zero;
 				var pobject = Convert ();
-				
-				var nsDataPtr = IntPtr_objc_msgSend_IntPtr_Int_Int_OutIntPtr (
-					cls_NSPropertyListSerialization,
-					sel_dataFromPropertyList_format_options_error,
-					pobject.Handle, (int) NSPropertyListFormat.Xml, 0, out errorPtr);
-				
-				if (errorPtr != IntPtr.Zero) {
-					var error = (NSError) MonoMac.ObjCRuntime.Runtime.GetNSObject (errorPtr);
-					throw new Exception (error.LocalizedDescription);
-				} else if (nsDataPtr == IntPtr.Zero) {
-					throw new Exception ("Could not convert the NSDictionary to xml representation");	
-				} else {
-					var nsData = (NSData) MonoMac.ObjCRuntime.Runtime.GetNSObject (nsDataPtr);
-					return System.Text.Encoding.UTF8.GetString (nsData.ToArray ());
+				NSPropertyListFormat format = binary? NSPropertyListFormat.Binary : NSPropertyListFormat.Xml;
+				var data = PObject.DataFromPropertyList (pobject, format, 0);
+				if (data == null) {
+					throw new Exception ("Could not convert the NSDictionary to the specified format");	
 				}
+				return data.ToArray ();
 			}
 		}
 		
+		public string ToXml ()
+		{
+			return Encoding.UTF8.GetString (ToByteArray (false));
+		}
 	}
 	
 	public abstract class PObjectContainer : PObject
@@ -194,7 +277,12 @@ namespace MonoDevelop.MacDev.PlistEditor
 		public abstract void Save (string fileName);
 	}
 	
-	public abstract class PValueObject<T> : PObject
+	public interface IPValueObject
+	{
+		object Value { get; set; }
+	}
+	
+	public abstract class PValueObject<T> : PObject, IPValueObject
 	{
 		T val;
 		public T Value {
@@ -207,6 +295,11 @@ namespace MonoDevelop.MacDev.PlistEditor
 			}
 		}
 		
+		object IPValueObject.Value {
+			get { return Value; }
+			set { Value = (T) value; }
+		}
+		
 		public PValueObject (T value)
 		{
 			this.Value = value;
@@ -215,13 +308,7 @@ namespace MonoDevelop.MacDev.PlistEditor
 		public PValueObject ()
 		{
 		}
-		
-		public override void RenderValue (CustomPropertiesWidget widget, CellRendererCombo renderer)
-		{
-			renderer.Sensitive = true;
-			renderer.Text = Value.ToString ();
-		}
-		
+
 		public static implicit operator T (PValueObject<T> pObj)
 		{
 			return pObj != null ? pObj.Value : default(T);
@@ -230,12 +317,13 @@ namespace MonoDevelop.MacDev.PlistEditor
 	
 	public class PDictionary : PObjectContainer, IEnumerable<KeyValuePair<string, PObject>>
 	{
+		public const string Type = "Dictionary";
 		Dictionary<string, PObject> dict;
 		List<string> order;
 		
 		public override string TypeString {
 			get {
-				return GettextCatalog.GetString ("Dictionary");
+				return Type;
 			}
 		}
 		
@@ -307,6 +395,14 @@ namespace MonoDevelop.MacDev.PlistEditor
 		{
 			dict = new Dictionary<string, PObject> ();
 			order = new List<string> ();
+		}
+
+		public override PObject Clone ()
+		{
+			var dict = new PDictionary ();
+			foreach (var kv in this)
+				dict.Add (kv.Key, kv.Value.Clone ());
+			return dict;
 		}
 
 		public bool ContainsKey (string name)
@@ -394,14 +490,7 @@ namespace MonoDevelop.MacDev.PlistEditor
 			value = (T)obj;
 			return true;
 		}
-		
-		
-		public override void RenderValue (CustomPropertiesWidget widget, CellRendererCombo renderer)
-		{
-			renderer.Sensitive = false;
-			renderer.Text = string.Format (GettextCatalog.GetPluralString ("({0} item)", "({0} items)", dict.Count), dict.Count);
-		}
-		
+
 		public override void SetValue (string text)
 		{
 			throw new NotSupportedException ();
@@ -428,11 +517,44 @@ namespace MonoDevelop.MacDev.PlistEditor
 			}
 		}
 		
-		public static PDictionary Load (string fileName)
+		public static PDictionary FromByteArray (byte[] array, out bool isBinary)
 		{
 			using (new NSAutoreleasePool ()) {
-				var dict = NSDictionary.FromFile (fileName);
-				return (PDictionary)Conv (dict);
+				NSPropertyListFormat format;
+				var data = NSData.FromArray (array);
+				var dict = PObject.PropertyListWithData (data, 0, out format);
+				isBinary = format != NSPropertyListFormat.OpenStep;
+				return (PDictionary) FromNSObject (dict);
+			}
+		}
+		
+		[Obsolete ("Use FromFile")]
+		public static PDictionary Load (string fileName)
+		{
+			bool isBinary;
+			return FromFile (fileName, out isBinary);
+		}
+		
+		public static PDictionary FromFile (string fileName)
+		{
+			bool isBinary;
+			return FromFile (fileName, out isBinary);
+		}
+		
+		public static PDictionary FromFile (string fileName, out bool isBinary)
+		{
+			using (new NSAutoreleasePool ()) {
+				NSError error;
+				var data = NSData.FromFile (fileName, 0, out error);
+				if (error == null) {
+					NSPropertyListFormat format;
+					var dict = PObject.PropertyListWithData (data, 0, out format);
+					if (error == null) {
+						isBinary = format != NSPropertyListFormat.OpenStep;
+						return (PDictionary) FromNSObject (dict);
+					}
+				}
+				throw new Exception (error.LocalizedDescription);
 			}
 		}
 		
@@ -449,7 +571,7 @@ namespace MonoDevelop.MacDev.PlistEditor
 				if (nsd != null) {
 					foreach (var pair in nsd) {
 						string k = pair.Key.ToString ();
-						this [k] = Conv (pair.Value);
+						this [k] = FromNSObject (pair.Value);
 					}
 				} else {
 					return false;
@@ -460,54 +582,6 @@ namespace MonoDevelop.MacDev.PlistEditor
 			}
 			OnChanged (EventArgs.Empty);
 			return true;
-		}
-		
-		static IntPtr selObjCType = MonoMac.ObjCRuntime.Selector.GetHandle ("objCType");
-		internal static PObject Conv (NSObject val)
-		{
-			if (val == null)
-				return null;
-			if (val is NSDictionary) {
-				var result = new PDictionary ();
-				foreach (var pair in (NSDictionary)val) {
-					string k = pair.Key.ToString ();
-					result[k] = Conv (pair.Value);
-				}
-				return result;
-			}
-			
-			if (val is NSArray) {
-				var result = new PArray ();
-				var arr = NSArray.ArrayFromHandle<NSObject> (((NSArray)val).Handle);
-				if (arr == null)
-					return null;
-				foreach (var f in arr) {
-					if (f != null)
-						result.Add (Conv (f));
-				}
-				return result;
-			}
-			
-			if (val is NSString)
-				return ((NSString)val).ToString ();
-			if (val is NSNumber) {
-				var nr = (NSNumber)val;
-				var str = Marshal.PtrToStringAnsi (MonoMac.ObjCRuntime.Messaging.IntPtr_objc_msgSend (val.Handle, selObjCType));
-				if (str == "c" || str == "C" || str == "B")
-					return nr.BoolValue;
-				return nr.Int32Value;
-			}
-			if (val is NSDate)
-				return PDate.referenceDate + TimeSpan.FromSeconds (((NSDate)val).SecondsSinceReferenceDate);
-			
-			if (val is NSData) {
-				var data = (NSData)val;
-				var bytes = new byte[data.Length];
-				Marshal.Copy (data.Bytes, bytes, 0, (int)data.Length);
-				return bytes;
-			}
-			
-			throw new NotSupportedException (val.ToString ());
 		}
 		
 		public override string ToString ()
@@ -543,15 +617,74 @@ namespace MonoDevelop.MacDev.PlistEditor
 			}
 			return result;
 		}
+		
+		static IntPtr selObjCType = Selector.GetHandle ("objCType");
+		
+		public static PObject FromNSObject (NSObject val)
+		{
+			if (val == null)
+				return null;
+			
+			var dict = val as NSDictionary;
+			if (dict != null) {
+				var result = new PDictionary ();
+				foreach (var pair in dict) {
+					string k = pair.Key.ToString ();
+					result[k] = FromNSObject (pair.Value);
+				}
+				return result;
+			}
+			
+			var arr = val as NSArray;
+			if (arr != null) {
+				var result = new PArray ();
+				uint count = arr.Count;
+				for (uint i = 0; i < count; i++) {
+					var obj = MonoMac.ObjCRuntime.Runtime.GetNSObject (arr.ValueAt (i));
+					if (obj != null)
+						result.Add (FromNSObject (obj));
+				}
+				return result;
+			}
+			
+			var str = val as NSString;
+			if (str != null)
+				return str.ToString ();
+			
+			var nr = val as NSNumber;
+			if (nr != null) {
+				char t;
+				unsafe {
+					t = (char) *((byte*) MonoMac.ObjCRuntime.Messaging.IntPtr_objc_msgSend (val.Handle, selObjCType));
+				}
+				if (t == 'c' || t == 'C' || t == 'B')
+					return nr.BoolValue;
+				return nr.Int32Value;
+			}
+			
+			var date = val as NSDate;
+			if (date != null)
+				return (DateTime) date;
+			
+			var data = val as NSData;
+			if (data != null) {
+				var bytes = new byte[data.Length];
+				Marshal.Copy (data.Bytes, bytes, 0, (int)data.Length);
+				return bytes;
+			}
+			
+			throw new NotSupportedException (val.ToString ());
+		}
 	}
 	
 	public class PArray : PObjectContainer, IEnumerable<PObject>
 	{
+		public const string Type = "Array";
 		List<PObject> list;
 		
 		public override string TypeString {
 			get {
-				return GettextCatalog.GetString ("Array");
+				return Type;
 			}
 		}
 		
@@ -570,6 +703,14 @@ namespace MonoDevelop.MacDev.PlistEditor
 		public PArray ()
 		{
 			list = new List<PObject> ();
+		}
+
+		public override PObject Clone ()
+		{
+			var array = new PArray ();
+			foreach (var item in this)
+				array.Add (item.Clone ());
+			return array;
 		}
 		
 		public EventHandler<PObjectEventArgs> Added;
@@ -598,7 +739,7 @@ namespace MonoDevelop.MacDev.PlistEditor
 				if (nsa != null) {
 					var arr = NSArray.ArrayFromHandle<NSObject> (nsa.Handle);
 					foreach (var f in arr) {
-						Add (PDictionary.Conv (f));
+						Add (PDictionary.FromNSObject (f));
 					}
 				} else {
 					return false;
@@ -673,12 +814,6 @@ namespace MonoDevelop.MacDev.PlistEditor
 			return NSArray.FromNSObjects (list.Select (x => x.Convert ()).ToArray ());
 		}
 		
-		public override void RenderValue (CustomPropertiesWidget widget, CellRendererCombo renderer)
-		{
-			renderer.Sensitive = false;
-			renderer.Text = string.Format (GettextCatalog.GetPluralString ("({0} item)", "({0} items)", Count), Count);
-		}
-		
 		public override string ToString ()
 		{
 			return string.Format ("[PArray: Items={0}]", Count);
@@ -696,6 +831,7 @@ namespace MonoDevelop.MacDev.PlistEditor
 				}
 			} finally {
 				SuppressChangeEvents = false;
+				OnChanged (EventArgs.Empty);
 			}
 		}
 		
@@ -727,74 +863,94 @@ namespace MonoDevelop.MacDev.PlistEditor
 	
 	public class PBoolean : PValueObject<bool>
 	{
+		public const string Yes = "Yes";
+		public const string No = "No";
+		
+		public const string Type = "Boolean";
+		
 		public override string TypeString {
 			get {
-				return GettextCatalog.GetString ("Boolean");
+				return Type;
 			}
 		}
 		
 		public PBoolean (bool value) : base(value)
 		{
 		}
+
+		public override PObject Clone ()
+		{
+			return new PBoolean (Value);
+		}
 		
 		public override void SetValue (string text)
 		{
-			Value = text == GettextCatalog.GetString ("Yes");
+			if (text == Yes || text == GettextCatalog.GetString ("Yes"))
+				Value = true;
+			else if (text == No || text == GettextCatalog.GetString ("No"))
+				Value = false;
 		}
 		
 		public override NSObject Convert ()
 		{
 			return NSNumber.FromBoolean (Value);
 		}
-		
-		public override void RenderValue (CustomPropertiesWidget widget, CellRendererCombo renderer)
-		{
-			renderer.Sensitive = true;
-			renderer.Text = Value ? GettextCatalog.GetString ("Yes") : GettextCatalog.GetString ("No");
-		}
 	}
 	
 	public class PData : PValueObject<byte[]>
 	{
+		public const string Type = "Data";
+		static readonly byte[] Empty = new byte [0];
+		
 		public override string TypeString {
 			get {
-				return GettextCatalog.GetString ("Data");
+				return Type;
 			}
 		}
 		
 		public override NSObject Convert ()
 		{
-			return NSData.FromArray (Value);
+			// Work around a bug in NSData.FromArray as it cannot (currently) handle
+			// zero length arrays
+			if (Value.Length == 0)
+				return new NSData ();
+			else
+				return NSData.FromArray (Value);
 		}
 		
-		public PData (byte[] value) : base(value)
+		public PData (byte[] value) : base(value ?? Empty)
 		{
+		}
+
+		public override PObject Clone ()
+		{
+			return new PData (Value);
 		}
 		
 		public override void SetValue (string text)
 		{
 			throw new NotSupportedException ();
 		}
-		
-		public override void RenderValue (CustomPropertiesWidget widget, CellRendererCombo renderer)
-		{
-			renderer.Sensitive = false;
-			renderer.Text = string.Format ("byte[{0}]", Value != null ? Value.Length : 0);
-		}
 	}
 	
 	public class PDate : PValueObject<DateTime>
 	{
+		public const string Type = "Date";
 		internal static DateTime referenceDate = new DateTime (2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 		
 		public override string TypeString {
 			get {
-				return GettextCatalog.GetString ("Date");
+				return Type;
 			}
 		}
 		
 		public PDate (DateTime value) : base(value)
 		{
+		}
+
+		public override PObject Clone ()
+		{
+			return new PDate (Value);
 		}
 		
 		public override void SetValue (string text)
@@ -811,14 +967,21 @@ namespace MonoDevelop.MacDev.PlistEditor
 	
 	public class PNumber : PValueObject<int>
 	{
+		public const string Type = "Number";
+		
 		public override string TypeString {
 			get {
-				return GettextCatalog.GetString ("Number");
+				return Type;
 			}
 		}
 		
 		public PNumber (int value) : base(value)
 		{
+		}
+
+		public override PObject Clone ()
+		{
+			return new PNumber (Value);
 		}
 		
 		public override void SetValue (string text)
@@ -833,12 +996,46 @@ namespace MonoDevelop.MacDev.PlistEditor
 			return NSNumber.FromInt32 (Value);
 		}
 	}
+
+	public class PReal : PValueObject<double>
+	{
+		public const string Type = "Real";
+		
+		public override string TypeString {
+			get {
+				return Type;
+			}
+		}
+		
+		public PReal (double value) : base(value)
+		{
+		}
+
+		public override PObject Clone ()
+		{
+			return new PReal (Value);
+		}
+		
+		public override void SetValue (string text)
+		{
+			double newValue;
+			if (double.TryParse (text, out newValue))
+				Value = newValue;
+		}
+
+		public override NSObject Convert ()
+		{
+			return NSNumber.FromDouble (Value);
+		}
+	}
 	
 	public class PString : PValueObject<string>
 	{
+		public const string Type = "String";
+		
 		public override string TypeString {
 			get {
-				return GettextCatalog.GetString ("String");
+				return Type;
 			}
 		}
 		
@@ -846,6 +1043,11 @@ namespace MonoDevelop.MacDev.PlistEditor
 		{
 			if (value == null)
 				throw new ArgumentNullException ("value");
+		}
+
+		public override PObject Clone ()
+		{
+			return new PString (Value);
 		}
 		
 		public override void SetValue (string text)
@@ -858,20 +1060,6 @@ namespace MonoDevelop.MacDev.PlistEditor
 		public override NSObject Convert ()
 		{
 			return new NSString (Value);
-		}
-		
-		public override void RenderValue (CustomPropertiesWidget widget, CellRendererCombo renderer)
-		{
-			renderer.Sensitive = true;
-			var key = Parent != null? widget.Scheme.GetKey (Parent.Key) : null;
-			if (key != null) {
-				var val = key.Values.FirstOrDefault (v => v.Identifier == Value);
-				if (val != null && widget.ShowDescriptions) {
-					renderer.Text = GettextCatalog.GetString (val.Description);
-					return;
-				}
-			}
-			base.RenderValue (widget, renderer);
 		}
 	}
 	

@@ -46,6 +46,8 @@ using Gtk;
 using System.Text;
 using MonoDevelop.Components.Docking;
 using MonoDevelop.Ide.Gui.Components;
+using MonoDevelop.Components.Commands;
+using MonoDevelop.Ide.Commands;
 
 namespace MonoDevelop.Ide.Gui.Pads
 {
@@ -77,6 +79,7 @@ namespace MonoDevelop.Ide.Gui.Pads
 		const string showWarningsPropertyName = "SharpDevelop.TaskList.ShowWarnings";
 		const string showMessagesPropertyName = "SharpDevelop.TaskList.ShowMessages";
 		const string logSeparatorPositionPropertyName = "SharpDevelop.TaskList.LogSeparatorPosition";
+		const string outputViewVisiblePropertyName = "SharpDevelop.TaskList.OutputViewVisible";
 
 		static class DataColumns
 		{
@@ -174,8 +177,7 @@ namespace MonoDevelop.Ide.Gui.Pads
 			
 			view = new MonoDevelop.Ide.Gui.Components.PadTreeView (sort);
 			view.RulesHint = true;
-			view.PopupMenu += new PopupMenuHandler (OnPopupMenu);
-			view.ButtonPressEvent += new ButtonPressEventHandler (OnButtonPressed);
+			view.DoPopupMenu = (evnt) => IdeApp.CommandService.ShowContextMenu (view, evnt, CreateMenu ());
 			AddColumns ();
 			LoadColumnsVisibility ();
 			view.Columns[VisibleColumns.Type].SortColumnId = VisibleColumns.Type;
@@ -185,9 +187,9 @@ namespace MonoDevelop.Ide.Gui.Pads
 			sw = new MonoDevelop.Components.CompactScrolledWindow ();
 			sw.ShadowType = ShadowType.None;
 			sw.Add (view);
-			TaskService.Errors.TasksRemoved      += (TaskEventHandler) DispatchService.GuiDispatch (new TaskEventHandler (ShowResults));
-			TaskService.Errors.TasksAdded        += (TaskEventHandler) DispatchService.GuiDispatch (new TaskEventHandler (TaskAdded));
-			TaskService.Errors.TasksChanged      += (TaskEventHandler) DispatchService.GuiDispatch (new TaskEventHandler (TaskChanged));
+			TaskService.Errors.TasksRemoved      += DispatchService.GuiDispatch<TaskEventHandler> (ShowResults);
+			TaskService.Errors.TasksAdded        += DispatchService.GuiDispatch<TaskEventHandler> (TaskAdded);
+			TaskService.Errors.TasksChanged      += DispatchService.GuiDispatch<TaskEventHandler> (TaskChanged);
 			TaskService.Errors.CurrentLocationTaskChanged += HandleTaskServiceErrorsCurrentLocationTaskChanged;
 			
 			IdeApp.Workspace.FirstWorkspaceItemOpened += OnCombineOpen;
@@ -206,21 +208,41 @@ namespace MonoDevelop.Ide.Gui.Pads
 			
 			Control.ShowAll ();
 			
-			sw.SizeAllocated += delegate {
-				if (outputView.Visible)
-					PropertyService.Set (logSeparatorPositionPropertyName, (double) ((double) control.Position / (double) control.Allocation.Width));
-			};
+			control.SizeAllocated += HandleControlSizeAllocated;
 			
-			outputView.Hide ();
+			bool outputVisible = PropertyService.Get<bool> (outputViewVisiblePropertyName, false);
+			if (outputVisible) {
+				outputView.Visible = true;
+				logBtn.Active = true;
+			} else {
+				outputView.Hide ();
+			}
 			
-			CreateMenu ();
-
+			sw.SizeAllocated += HandleSwSizeAllocated;
+			
 			// Load existing tasks
 			foreach (Task t in TaskService.Errors) {
 				AddTask (t);
 			}
 
 			control.FocusChain = new Gtk.Widget [] { sw };
+		}
+		
+		void HandleSwSizeAllocated (object o, SizeAllocatedArgs args)
+		{
+			if (!initialLogShow && outputView.Visible) {
+				var val = (double) ((double) control.Position / (double) control.Allocation.Width);
+				PropertyService.Set (logSeparatorPositionPropertyName, val);
+			}
+		}
+		
+		[GLib.ConnectBefore]
+		void HandleControlSizeAllocated (object o, SizeAllocatedArgs args)
+		{
+			if (initialLogShow && outputView.Visible) {
+				SetInitialOutputViewSize (args.Allocation.Width);
+				initialLogShow = false;
+			}
 		}
 		
 		public IProgressMonitor GetBuildProgressMonitor ()
@@ -283,128 +305,116 @@ namespace MonoDevelop.Ide.Gui.Pads
 		{
 		}
 
-		void CreateMenu ()
+		Gtk.Menu CreateMenu ()
 		{
-			if (menu == null)
-			{
-				ActionGroup group = new ActionGroup ("Popup");
+			if (menu != null)
+				return menu;
+			
+			var group = new ActionGroup ("Popup");
 
-				Gtk.Action help = new Gtk.Action ("help", GettextCatalog.GetString ("Show Error Reference"),
-				                          GettextCatalog.GetString ("Show Error Reference"), Gtk.Stock.Help);
-				help.Activated += new EventHandler (OnShowReference);
-				group.Add (help, "F1");
+			var help = new Gtk.Action ("help", GettextCatalog.GetString ("Show Error Reference"),
+				GettextCatalog.GetString ("Show Error Reference"), Gtk.Stock.Help);
+			help.Activated += OnShowReference;
+			group.Add (help, "F1");
 
-				Gtk.Action copy = new Gtk.Action ("copy", GettextCatalog.GetString ("_Copy"),
-				                          GettextCatalog.GetString ("Copy task"), Gtk.Stock.Copy);
-				copy.Activated += new EventHandler (OnTaskCopied);
-				group.Add (copy, "<Control><Mod2>c");
+			var copy = new Gtk.Action ("copy", GettextCatalog.GetString ("_Copy"),
+				GettextCatalog.GetString ("Copy task"), Gtk.Stock.Copy);
+			copy.Activated += OnTaskCopied;
+			group.Add (copy, "<Control><Mod2>c");
 
-				Gtk.Action jump = new Gtk.Action ("jump", GettextCatalog.GetString ("_Go to"),
-				                          GettextCatalog.GetString ("Go to task"), Gtk.Stock.JumpTo);
-				jump.Activated += new EventHandler (OnTaskJumpto);
-				group.Add (jump);
+			var jump = new Gtk.Action ("jump", GettextCatalog.GetString ("_Go to"),
+				GettextCatalog.GetString ("Go to task"), Gtk.Stock.JumpTo);
+			jump.Activated += OnTaskJumpto;
+			group.Add (jump);
 
-				Gtk.Action columns = new Gtk.Action ("columns", GettextCatalog.GetString ("Columns"));
-				group.Add (columns, null);
+			var columns = new Gtk.Action ("columns", GettextCatalog.GetString ("Columns"));
+			group.Add (columns, null);
 
-				ToggleAction columnType = new ToggleAction ("columnType", GettextCatalog.GetString ("Type"),
-				                                            GettextCatalog.GetString ("Toggle visibility of Type column"), null);
-				columnType.Toggled += new EventHandler (OnColumnVisibilityChanged);
-				columnsActions[columnType] = VisibleColumns.Type;
-				group.Add (columnType);
+			var columnType = new ToggleAction ("columnType", GettextCatalog.GetString ("Type"),
+				GettextCatalog.GetString ("Toggle visibility of Type column"), null);
+			columnType.Toggled += OnColumnVisibilityChanged;
+			columnsActions[columnType] = VisibleColumns.Type;
+			group.Add (columnType);
 
-				ToggleAction columnValidity = new ToggleAction ("columnValidity", GettextCatalog.GetString ("Validity"),
-				                                                GettextCatalog.GetString ("Toggle visibility of Validity column"), null);
-				columnValidity.Toggled += new EventHandler (OnColumnVisibilityChanged);
-				columnsActions[columnValidity] = VisibleColumns.Marked;
-				group.Add (columnValidity);
+			var columnValidity = new ToggleAction ("columnValidity", GettextCatalog.GetString ("Validity"),
+				GettextCatalog.GetString ("Toggle visibility of Validity column"), null);
+			columnValidity.Toggled += OnColumnVisibilityChanged;
+			columnsActions[columnValidity] = VisibleColumns.Marked;
+			group.Add (columnValidity);
 
-				ToggleAction columnLine = new ToggleAction ("columnLine", GettextCatalog.GetString ("Line"),
-				                                            GettextCatalog.GetString ("Toggle visibility of Line column"), null);
-				columnLine.Toggled += new EventHandler (OnColumnVisibilityChanged);
-				columnsActions[columnLine] = VisibleColumns.Line;
-				group.Add (columnLine);
+			var columnLine = new ToggleAction ("columnLine", GettextCatalog.GetString ("Line"),
+				GettextCatalog.GetString ("Toggle visibility of Line column"), null);
+			columnLine.Toggled += OnColumnVisibilityChanged;
+			columnsActions[columnLine] = VisibleColumns.Line;
+			group.Add (columnLine);
 
-				ToggleAction columnDescription = new ToggleAction ("columnDescription", GettextCatalog.GetString ("Description"),
-				                                                   GettextCatalog.GetString ("Toggle visibility of Description column"), null);
-				columnDescription.Toggled += new EventHandler (OnColumnVisibilityChanged);
-				columnsActions[columnDescription] = VisibleColumns.Description;
-				group.Add (columnDescription);
+			var columnDescription = new ToggleAction ("columnDescription", GettextCatalog.GetString ("Description"),
+				GettextCatalog.GetString ("Toggle visibility of Description column"), null);
+			columnDescription.Toggled += OnColumnVisibilityChanged;
+			columnsActions[columnDescription] = VisibleColumns.Description;
+			group.Add (columnDescription);
 
-				ToggleAction columnFile = new ToggleAction ("columnFile", GettextCatalog.GetString ("File"),
-				                                            GettextCatalog.GetString ("Toggle visibility of File column"), null);
-				columnFile.Toggled += new EventHandler (OnColumnVisibilityChanged);
-				columnsActions[columnFile] = VisibleColumns.File;
-				group.Add (columnFile);
+			var columnFile = new ToggleAction ("columnFile", GettextCatalog.GetString ("File"),
+				GettextCatalog.GetString ("Toggle visibility of File column"), null);
+			columnFile.Toggled += OnColumnVisibilityChanged;
+			columnsActions[columnFile] = VisibleColumns.File;
+			group.Add (columnFile);
 
-				ToggleAction columnProject = new ToggleAction ("columnProject", GettextCatalog.GetString ("Project"),
-				                                            GettextCatalog.GetString ("Toggle visibility of Project column"), null);
-				columnProject.Toggled += new EventHandler (OnColumnVisibilityChanged);
-				columnsActions[columnProject] = VisibleColumns.Project;
-				group.Add (columnProject);
+			var columnProject = new ToggleAction ("columnProject", GettextCatalog.GetString ("Project"),
+				GettextCatalog.GetString ("Toggle visibility of Project column"), null);
+			columnProject.Toggled += OnColumnVisibilityChanged;
+			columnsActions[columnProject] = VisibleColumns.Project;
+			group.Add (columnProject);
 
-				ToggleAction columnPath = new ToggleAction ("columnPath", GettextCatalog.GetString ("Path"),
-				                                            GettextCatalog.GetString ("Toggle visibility of Path column"), null);
-				columnPath.Toggled += new EventHandler (OnColumnVisibilityChanged);
-				columnsActions[columnPath] = VisibleColumns.Path;
-				group.Add (columnPath);
+			var columnPath = new ToggleAction ("columnPath", GettextCatalog.GetString ("Path"),
+				GettextCatalog.GetString ("Toggle visibility of Path column"), null);
+			columnPath.Toggled += OnColumnVisibilityChanged;
+			columnsActions[columnPath] = VisibleColumns.Path;
+			group.Add (columnPath);
 
-				UIManager uiManager = new UIManager ();
-				uiManager.InsertActionGroup (group, 0);
-				
-				string uiStr = "<ui><popup name='popup'>"
-					+ "<menuitem action='help'/>"
-					+ "<menuitem action='copy'/>"
-					+ "<menuitem action='jump'/>"
-					+ "<separator/>"
-					+ "<menu action='columns'>"
-					+ "<menuitem action='columnType' />"
-					+ "<menuitem action='columnValidity' />"
-					+ "<menuitem action='columnLine' />"
-					+ "<menuitem action='columnDescription' />"
-					+ "<menuitem action='columnFile' />"
-					+ "<menuitem action='columnProject' />"
-					+ "<menuitem action='columnPath' />"
-					+ "</menu>"
-					+ "</popup></ui>";
+			var uiManager = new UIManager ();
+			uiManager.InsertActionGroup (group, 0);
+			
+			string uiStr = "<ui><popup name='popup'>"
+				+ "<menuitem action='help'/>"
+				+ "<menuitem action='copy'/>"
+				+ "<menuitem action='jump'/>"
+				+ "<separator/>"
+				+ "<menu action='columns'>"
+				+ "<menuitem action='columnType' />"
+				+ "<menuitem action='columnValidity' />"
+				+ "<menuitem action='columnLine' />"
+				+ "<menuitem action='columnDescription' />"
+				+ "<menuitem action='columnFile' />"
+				+ "<menuitem action='columnProject' />"
+				+ "<menuitem action='columnPath' />"
+				+ "</menu>"
+				+ "</popup></ui>";
 
-				uiManager.AddUiFromString (uiStr);
-				menu = (Menu)uiManager.GetWidget ("/popup");
-				menu.ShowAll ();
+			uiManager.AddUiFromString (uiStr);
+			menu = (Menu)uiManager.GetWidget ("/popup");
+			menu.ShowAll ();
 
-				menu.Shown += delegate (object o, EventArgs args)
-				{
-					columnType.Active = view.Columns[VisibleColumns.Type].Visible;
-					columnValidity.Active = view.Columns[VisibleColumns.Marked].Visible;
-					columnLine.Active = view.Columns[VisibleColumns.Line].Visible;
-					columnDescription.Active = view.Columns[VisibleColumns.Description].Visible;
-					columnFile.Active = view.Columns[VisibleColumns.File].Visible;
-					columnProject.Active = view.Columns[VisibleColumns.Project].Visible;
-					columnPath.Active = view.Columns[VisibleColumns.Path].Visible;
-					help.Sensitive = copy.Sensitive = jump.Sensitive =
-						view.Selection != null &&
-						view.Selection.CountSelectedRows () > 0 &&
-						(columnType.Active ||
+			menu.Shown += delegate {
+				columnType.Active = view.Columns[VisibleColumns.Type].Visible;
+				columnValidity.Active = view.Columns[VisibleColumns.Marked].Visible;
+				columnLine.Active = view.Columns[VisibleColumns.Line].Visible;
+				columnDescription.Active = view.Columns[VisibleColumns.Description].Visible;
+				columnFile.Active = view.Columns[VisibleColumns.File].Visible;
+				columnProject.Active = view.Columns[VisibleColumns.Project].Visible;
+				columnPath.Active = view.Columns[VisibleColumns.Path].Visible;
+				help.Sensitive = copy.Sensitive = jump.Sensitive =
+					view.Selection != null &&
+					view.Selection.CountSelectedRows () > 0 &&
+					(columnType.Active ||
 						columnValidity.Active ||
 						columnLine.Active ||
 						columnDescription.Active ||
 						columnFile.Active ||
 						columnPath.Active);
-				};
-			}
-		}
-
-
-		[GLib.ConnectBefore]
-		void OnButtonPressed (object o, ButtonPressEventArgs args)
-		{
-			if (args.Event.Button == 3)
-				menu.Popup ();
-		}
-
-		void OnPopupMenu (object o, PopupMenuArgs args)
-		{
-			menu.Popup ();
+			};
+			
+			return menu;
 		}
 
 		Task SelectedTask
@@ -416,6 +426,12 @@ namespace MonoDevelop.Ide.Gui.Pads
 					return model.GetValue (iter, DataColumns.Task) as Task;
 				return null; // no one selected
 			}
+		}
+
+		[CommandHandler (EditCommands.Copy)]
+		protected void OnCopy ()
+		{
+			OnTaskCopied (null, null);
 		}
 
 		void OnTaskCopied (object o, EventArgs args)
@@ -563,9 +579,10 @@ namespace MonoDevelop.Ide.Gui.Pads
 			if (task == null)
 				return;
 			
-			string tmpPath = GetPath (task);
-			string fileName;
+			string tmpPath = "";
+			string fileName = "";
 			try {
+				tmpPath = GetPath (task);
 				fileName = Path.GetFileName (tmpPath);
 			} catch (Exception) { 
 				fileName =  tmpPath;
@@ -666,8 +683,7 @@ namespace MonoDevelop.Ide.Gui.Pads
 		{
 			Clear();
 
-			foreach (Task t in TaskService.Errors)
-				AddTask (t);
+			AddTasks (TaskService.Errors);
 		}
 
 		private void Clear()
@@ -757,21 +773,13 @@ namespace MonoDevelop.Ide.Gui.Pads
 			msgBtn.Image.Show ();
 		}
 		
-		public event EventHandler<TaskEventArgs> TaskToggled;
-		protected virtual void OnTaskToggled (TaskEventArgs e)
-		{
-			EventHandler<TaskEventArgs> handler = this.TaskToggled;
-			if (handler != null)
-				handler (this, e);
-		}
-		
 		private void ItemToggled (object o, ToggledArgs args)
 		{
 			Gtk.TreeIter iter;
-			if (store.GetIterFromString(out iter, args.Path)) {
-				Task task = (Task) store.GetValue(iter, DataColumns.Task);
+			if (store.GetIterFromString (out iter, args.Path)) {
+				Task task = (Task)store.GetValue (iter, DataColumns.Task);
 				task.Completed = !task.Completed;
-				OnTaskToggled (new TaskEventArgs (task));
+				TaskService.FireTaskToggleEvent (this, new TaskEventArgs (task));
 			}
 		}
 
@@ -807,15 +815,22 @@ namespace MonoDevelop.Ide.Gui.Pads
 		
 		void HandleLogBtnToggled (object sender, EventArgs e)
 		{
-			if (!outputView.Visible && initialLogShow) {
-				double relPos = PropertyService.Get<double> (logSeparatorPositionPropertyName, 0.5d);
-				int pos = (int) (control.Allocation.Width * relPos);
-				if (pos < 30) pos = 30;
-				control.Position = pos;
-				initialLogShow = false;
-			}
+			var visible = logBtn.Active;
+			PropertyService.Set (outputViewVisiblePropertyName, visible);
+			outputView.Visible = visible;
 			
-			outputView.Visible = logBtn.Active;
+			if (initialLogShow && visible && control.IsRealized) {
+				initialLogShow = false;
+				SetInitialOutputViewSize (control.Allocation.Width);
+			}
+		}
+		
+		void SetInitialOutputViewSize (int controlWidth)
+		{
+			double relPos = PropertyService.Get<double> (logSeparatorPositionPropertyName, 0.5d);
+			int pos = (int) (controlWidth * relPos);
+			pos = Math.Max (30, Math.Min (pos, controlWidth - 30));
+			control.Position = pos;
 		}
 	}
 	

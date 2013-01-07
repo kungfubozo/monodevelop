@@ -129,7 +129,7 @@ namespace Mono.TextEditor.Vi
 					statusText = value + " recording";
 				}
 			}
-		
+	
 		}
 		
 		protected virtual string RunExCommand (string command)
@@ -148,7 +148,7 @@ namespace Mono.TextEditor.Vi
 						return "Jumped to beginning of document.";
 					}
 					
-					Data.Caret.Line = line - 1;
+					Data.Caret.Line = line;
 					Editor.ScrollToCaret ();
 					return string.Format ("Jumped to line {0}.", line);
 				}
@@ -419,7 +419,7 @@ namespace Mono.TextEditor.Vi
 						return;
 						
 					case 'x':
-						if (Data.Caret.Column == Data.Document.GetLine (Data.Caret.Line).EditableLength + 1)
+						if (Data.Caret.Column == Data.Document.GetLine (Data.Caret.Line).Length + 1)
 							return;
 						Status = string.Empty;
 						if (!Data.IsSomethingSelected)
@@ -915,7 +915,7 @@ namespace Mono.TextEditor.Vi
 		public string RegexReplace (System.Text.RegularExpressions.Match match)
 		{
 			string line = null;
-			ISegment segment = null;
+			var segment = TextSegment.Invalid;
 
 			if (Data.IsSomethingSelected) {
 				// Operate on selection
@@ -923,7 +923,9 @@ namespace Mono.TextEditor.Vi
 				segment = Data.SelectionRange;
 			} else {
 				// Operate on current line
-				segment = Data.Document.GetLine (Caret.Line);
+				var lineSegment = Data.Document.GetLine (Caret.Line);
+				if (lineSegment != null)
+					segment = lineSegment;
 				line = Data.Document.GetTextBetween (segment.Offset, segment.EndOffset);
 			}
 

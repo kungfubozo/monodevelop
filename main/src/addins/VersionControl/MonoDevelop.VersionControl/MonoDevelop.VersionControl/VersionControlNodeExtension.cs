@@ -39,7 +39,32 @@ namespace MonoDevelop.VersionControl
 		{
 			VersionControlService.FileStatusChanged += Monitor;
 		}
-		
+
+		protected override void Initialize ()
+		{
+			base.Initialize ();
+			IdeApp.CommandService.ApplicationFocusIn += HandleApplicationFocusIn;
+		}
+
+		public override void Dispose ()
+		{
+			IdeApp.CommandService.ApplicationFocusIn -= HandleApplicationFocusIn;
+			base.Dispose ();
+		}
+
+		void HandleApplicationFocusIn (object sender, EventArgs e)
+		{
+			// This way of keeping the version control state in sync with what happens
+			// outside of MonoDevelop is too slow when many nodes are expanded. We need
+			// a better way.
+			return;
+			foreach (var ob in filePaths.Values) {
+				ITreeBuilder tb = Context.GetTreeBuilder (ob.Object);
+				if (tb != null)
+					tb.Update ();
+			}
+		}
+
 		public override void BuildNode (ITreeBuilder builder, object dataObject, ref string label, ref Gdk.Pixbuf icon, ref Gdk.Pixbuf closedIcon)
 		{
 			if (!builder.Options["ShowVersionControlOverlays"])
@@ -53,7 +78,7 @@ namespace MonoDevelop.VersionControl
 				// ClearDirCache (ce.BaseDirectory); // Why?
 				Repository rep = VersionControlService.GetRepository (ce);
 				if (rep != null)
-					AddFolderOverlay (rep, ce.BaseDirectory, ref icon, ref closedIcon, dataObject);
+					AddFolderOverlay (rep, ce.BaseDirectory, ref icon, ref closedIcon, false);
 				return;
 			} else if (dataObject is ProjectFolder) {
 				ProjectFolder ce = (ProjectFolder) dataObject;
@@ -61,7 +86,7 @@ namespace MonoDevelop.VersionControl
 					// ClearDirCache (ce.Path); // Why?
 					Repository rep = VersionControlService.GetRepository (ce.ParentWorkspaceObject);
 					if (rep != null)
-						AddFolderOverlay (rep, ce.Path, ref icon, ref closedIcon, dataObject);
+						AddFolderOverlay (rep, ce.Path, ref icon, ref closedIcon, true);
 				}
 				return;
 			}
@@ -104,7 +129,7 @@ namespace MonoDevelop.VersionControl
 				AddOverlay (ref icon, overlay);
 		}
 		
-		void AddFolderOverlay (Repository rep, string folder, ref Gdk.Pixbuf icon, ref Gdk.Pixbuf closedIcon, object dataObject)
+		void AddFolderOverlay (Repository rep, string folder, ref Gdk.Pixbuf icon, ref Gdk.Pixbuf closedIcon, bool skipVersionedOverlay)
 		{
 			Gdk.Pixbuf overlay = null;
 			VersionInfo vinfo = GetVersionInfo (rep, folder, dataObject, false);
@@ -118,7 +143,8 @@ namespace MonoDevelop.VersionControl
 			} else if (!vinfo.IsVersioned) {
 				overlay = VersionControlService.LoadOverlayIconForStatus (VersionStatus.Unversioned);
 			} else if (vinfo.IsVersioned && !vinfo.HasLocalChanges) {
-				overlay = VersionControlService.overlay_controled;
+				if (!skipVersionedOverlay)
+					overlay = VersionControlService.overlay_controled;
 			} else {
 				overlay = VersionControlService.LoadOverlayIconForStatus (vinfo.Status);
 			}

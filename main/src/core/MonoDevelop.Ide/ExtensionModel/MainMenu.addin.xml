@@ -160,7 +160,7 @@
 	</ItemSet>
 
 	<ItemSet id = "Project" _label = "_Project">
-		<CommandItem id = "MonoDevelop.Ide.Commands.ProjectCommands.ExportProject" />
+		<CommandItem id = "MonoDevelop.Ide.Commands.ProjectCommands.ExportSolution" />
 		<CommandItem id = "MonoDevelop.Ide.Commands.ProjectCommands.AddReference" />
 		<SeparatorItem id = "ExportSeparator" />
 		<CommandItem id = "MonoDevelop.Ide.Commands.ProjectCommands.CustomCommandList" />
@@ -188,6 +188,8 @@
 		<CommandItem id = "MonoDevelop.Ide.Commands.ProjectCommands.Build" />
 		<CommandItem id = "MonoDevelop.Ide.Commands.ProjectCommands.Rebuild" />
 		<CommandItem id = "MonoDevelop.Ide.Commands.ProjectCommands.Clean" />
+		<SeparatorItem id = "Separator1" />
+		<CommandItem id = "MonoDevelop.Ide.Commands.ProjectCommands.Stop" />
 	</ItemSet>
 
 	<ItemSet id = "Run" _label = "_Run">
@@ -204,6 +206,7 @@
 		<SeparatorItem id ="AddinManagerSeparator" /> 
 		<CommandItem id = "MonoDevelop.Ide.Commands.ToolCommands.ToolList" />
 		<CommandItem id = "MonoDevelop.Ide.Commands.ToolCommands.InstrumentationViewer" />
+		<CommandItem id = "MonoDevelop.Ide.Commands.EditCommands.InsertGuid" />
 		<SeparatorItem id = "OptionsSection" />
 		<Condition id="Platform" value="windows">
 			<CommandItem id = "MonoDevelop.Ide.Commands.EditCommands.MonodevelopPreferences" />
@@ -252,4 +255,3 @@
 </Extension>
 
 </ExtensionModel>
-	

@@ -94,12 +94,10 @@ namespace MonoDevelop.VersionControl.Views
 			}
 		}
 
-		protected BlameWidget (IntPtr ptr) : base (ptr)
-		{
-		}
-
 		public BlameWidget (VersionControlDocumentInfo info)
 		{
+			GtkWorkarounds.FixContainerLeak (this);
+			
 			this.info = info;
 			var sourceEditor = info.Document.GetContent<MonoDevelop.SourceEditor.SourceEditorView> ();
 			
@@ -135,26 +133,11 @@ namespace MonoDevelop.VersionControl.Views
 			editor.Document.FoldTreeUpdated += delegate {
 				QueueDraw ();
 			};
-			editor.ButtonPressEvent += OnPopupMenu;
+			editor.DoPopupMenu = ShowPopup;
 			Show ();
 		}
 		
-		void OnPopupMenu (object sender, Gtk.ButtonPressEventArgs args)
-		{
-			if (args.Event.Button == 3) {
-				int textEditorXOffset = (int)args.Event.X - (int)editor.TextViewMargin.XOffset;
-				if (textEditorXOffset < 0)
-					return;
-				this.menuPopupLocation = new Cairo.Point ((int)args.Event.X, (int)args.Event.Y);
-				DocumentLocation loc = editor.PointToLocation (textEditorXOffset, (int)args.Event.Y);
-				if (!editor.IsSomethingSelected || !editor.SelectionRange.Contains (editor.Document.LocationToOffset (loc)))
-					editor.Caret.Location = loc;
-				
-				this.ShowPopup ();
-			}
-		}
-		
-		void ShowPopup ()
+		void ShowPopup (EventButton evt)
 		{
 			CommandEntrySet cset = IdeApp.CommandService.CreateCommandEntrySet ("/MonoDevelop/VersionControl/BlameView/ContextMenu");
 			Gtk.Menu menu = IdeApp.CommandService.CreateMenu (cset);
@@ -162,21 +145,12 @@ namespace MonoDevelop.VersionControl.Views
 				this.QueueDraw ();
 			};
 			
-			menu.Popup (null, null, new Gtk.MenuPositionFunc (PositionPopupMenu), 0, Gtk.Global.CurrentEventTime);
-		}
-		
-		Cairo.Point menuPopupLocation;
-		void PositionPopupMenu (Menu menu, out int x, out int y, out bool pushIn)
-		{
-			this.GdkWindow.GetOrigin (out x, out y);
-			x += this.menuPopupLocation.X;
-			y += this.menuPopupLocation.Y;
-			Requisition request = menu.SizeRequest ();
-			Gdk.Rectangle geometry = DesktopService.GetUsableMonitorGeometry (Screen, Screen.GetMonitorAtPoint (x, y));
-			
-			y = Math.Max (geometry.Top, Math.Min (y, geometry.Bottom - request.Height));
-			x = Math.Max (geometry.Left, Math.Min (x, geometry.Right - request.Width));
-			pushIn = true;
+			if (evt != null) {
+				GtkWorkarounds.ShowContextMenu (menu, this, evt);
+			} else {
+				var pt = editor.LocationToPoint (editor.Caret.Location);
+				GtkWorkarounds.ShowContextMenu (menu, editor, new Gdk.Rectangle (pt.X, pt.Y, 1, (int)editor.LineHeight));
+			}
 		}
 		
 		void HandleAdjustmentChanged (object sender, EventArgs e)
@@ -254,30 +228,24 @@ namespace MonoDevelop.VersionControl.Views
 			editor.SizeAllocate (new Rectangle (childRectangle.X, childRectangle.Top, childRectangle.Width - overviewWidth, childRectangle.Height));
 		
 			if (hScrollBar.Visible) {
-				hScrollBar.SizeAllocate (new Rectangle (childRectangle.X, childRectangle.Bottom, childRectangle.Width, hheight));
+				hScrollBar.SizeAllocate (new Rectangle (childRectangle.X, childRectangle.Y + childRectangle.Height, childRectangle.Width, hheight));
 				hScrollBar.Value = System.Math.Max (System.Math.Min (hAdjustment.Upper - hAdjustment.PageSize, hScrollBar.Value), hAdjustment.Lower);
 			}
 		}
 		
-		static double GetWheelDelta (Scrollbar scrollbar, ScrollDirection direction)
-		{
-			double delta = System.Math.Pow (scrollbar.Adjustment.PageSize, 2.0 / 3.0);
-			if (direction == ScrollDirection.Up || direction == ScrollDirection.Left)
-				delta = -delta;
-			if (scrollbar.Inverted)
-				delta = -delta;
-			return delta;
-		}
-		
 		protected override bool OnScrollEvent (EventScroll evnt)
 		{
-			Scrollbar scrollWidget = (evnt.Direction == ScrollDirection.Up || evnt.Direction == ScrollDirection.Down) ? (Scrollbar)vScrollBar : hScrollBar;
-			if (scrollWidget.Visible) {
-				double newValue = scrollWidget.Adjustment.Value + GetWheelDelta (scrollWidget, evnt.Direction);
-				newValue = System.Math.Max (System.Math.Min (scrollWidget.Adjustment.Upper  - scrollWidget.Adjustment.PageSize, newValue), scrollWidget.Adjustment.Lower);
-				scrollWidget.Adjustment.Value = newValue;
-			}
-			return base.OnScrollEvent (evnt);
+			var alloc = Allocation;
+			double dx, dy;
+			evnt.GetPageScrollPixelDeltas (alloc.Width, alloc.Height, out dx, out dy);
+			
+			if (dx != 0.0 && hScrollBar.Visible)
+				hAdjustment.AddValueClamped (dx);
+			
+			if (dy != 0.0 && vScrollBar.Visible)
+				vAdjustment.AddValueClamped (dy);
+			
+			return (dx != 0.0 || dy != 0.0) || base.OnScrollEvent (evnt);
 		}
 		
 		protected override void OnSizeRequested (ref Gtk.Requisition requisition)
@@ -367,14 +335,14 @@ namespace MonoDevelop.VersionControl.Views
 				sb.Append (ch);
 			}
 			
-			Document doc = new Document ();
+			var doc = new TextDocument ();
 			doc.Text = sb.ToString ();
 			for (int i = 1; i <= doc.LineCount; i++) {
 				string text = doc.GetLineText (i).Trim ();
 				int idx = text.IndexOf (':');
 				if (text.StartsWith ("*") && idx >= 0 && idx < text.Length - 1) {
-					int offset = doc.GetLine (i).EndOffset;
-					msg = text.Substring (idx + 1) + doc.GetTextAt (offset, doc.Length - offset);
+					int offset = doc.GetLine (i).EndOffsetIncludingDelimiter;
+					msg = text.Substring (idx + 1) + doc.GetTextAt (offset, doc.TextLength - offset);
 					break;
 				}
 			}
@@ -467,13 +435,14 @@ namespace MonoDevelop.VersionControl.Views
 			uint grabTime;
 			protected override bool OnButtonPressEvent (EventButton evnt)
 			{
-				if (evnt.Button == 3) {
+				if (evnt.TriggersContextMenu ()) {
 					CommandEntrySet opset = new CommandEntrySet ();
 					opset.AddItem (BlameCommands.ShowDiff);
 					opset.AddItem (BlameCommands.ShowLog);
 					opset.AddItem (Command.Separator);
 					opset.AddItem (BlameCommands.CopyRevision);
-					IdeApp.CommandService.ShowContextMenu (opset, this);
+					IdeApp.CommandService.ShowContextMenu (this, evnt, opset, this);
+					return true;
 				} else {
 					if (evnt.X < leftSpacer) {
 						grabTime = evnt.Time;
@@ -510,8 +479,8 @@ namespace MonoDevelop.VersionControl.Views
 						var rev = widget.info.History.FirstOrDefault (h => h.ToString () == highlightAnnotation.Revision);
 						if (rev == null)
 							return;
-						diffView.ComparisonWidget.SetRevision (diffView.ComparisonWidget.OriginalEditor, rev.GetPrevious ());
-						diffView.ComparisonWidget.SetRevision (diffView.ComparisonWidget.DiffEditor, rev);
+						diffView.ComparisonWidget.SetRevision (diffView.ComparisonWidget.DiffEditor, rev.GetPrevious ());
+						diffView.ComparisonWidget.SetRevision (diffView.ComparisonWidget.OriginalEditor, rev);
 						break;
 					}
 					i++;
@@ -591,11 +560,11 @@ namespace MonoDevelop.VersionControl.Views
 			/// <summary>
 			/// Marks necessary lines modified when text is replaced
 			/// </summary>
-			private void EditorDocumentTextReplacing (object sender, ReplaceEventArgs e)
+			private void EditorDocumentTextReplacing (object sender, DocumentChangeEventArgs e)
 			{
-				int  startLine = widget.Editor.Document.OffsetToLineNumber (e.Offset),
-				     endLine = widget.Editor.Document.OffsetToLineNumber (e.Offset + Math.Max (e.Count, e.Value != null ? e.Value.Length : 0)),
-				     lineCount = 0;
+				int startLine = widget.Editor.Document.OffsetToLineNumber (e.Offset),
+					endLine = widget.Editor.Document.OffsetToLineNumber (e.Offset + Math.Max (e.RemovalLength, e.InsertionLength)),
+					lineCount = 0;
 				string[] tokens = null;
 				
 				if (startLine < endLine) {
@@ -606,14 +575,14 @@ namespace MonoDevelop.VersionControl.Views
 					
 					if (lineCount > 0)
 						annotations.RemoveRange (startLine - 1, lineCount);
-					if (!string.IsNullOrEmpty (e.Value)) {
+					if (!string.IsNullOrEmpty (e.InsertedText.Text)) {
 						for (int i=0; i<lineCount; ++i)
 							annotations.Insert (startLine - 1, locallyModified);
 					}
 					return;
-				} else if (0 == e.Count) {
-						// insert
-						tokens = e.Value.Split (new string[]{Environment.NewLine}, StringSplitOptions.None);
+				} else if (0 == e.RemovalLength) {
+					// insert
+					tokens = e.InsertedText.Text.Split (new string[]{Environment.NewLine}, StringSplitOptions.None);
 						lineCount = tokens.Length - 1;
 						for (int i=0; i<lineCount; ++i) {
 							annotations.Insert (Math.Min (startLine, annotations.Count), locallyModified);

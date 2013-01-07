@@ -1,10 +1,11 @@
 // 
 // SoftDebuggerBacktrace.cs
 //  
-// Author:
-//       Lluis Sanchez Gual <lluis@novell.com>
+// Authors: Lluis Sanchez Gual <lluis@novell.com>
+//          Jeffrey Stedfast <jeff@xamarin.com>
 // 
 // Copyright (c) 2009 Novell, Inc (http://www.novell.com)
+// Copyright (c) 2012 Xamarin Inc. (http://www.xamarin.com)
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -25,6 +26,8 @@
 // THE SOFTWARE.
 
 using System;
+using System.Linq;
+using System.Text;
 using System.Collections.Generic;
 using Mono.Debugging.Client;
 using Mono.Debugging.Backend;
@@ -34,6 +37,18 @@ using Mono.Debugging.Evaluation;
 
 namespace Mono.Debugging.Soft
 {
+	internal class SoftDebuggerStackFrame : Mono.Debugging.Client.StackFrame {
+		public Mono.Debugger.Soft.StackFrame StackFrame {
+			get; private set;
+		}
+		
+		public SoftDebuggerStackFrame (Mono.Debugger.Soft.StackFrame frame, string addressSpace, SourceLocation location, string language, bool isExternalCode, bool hasDebugInfo, bool isDebuggerHidden, string fullModuleName, string fullTypeName)
+			: base (frame.ILOffset, addressSpace, location, language, isExternalCode, hasDebugInfo, isDebuggerHidden, fullModuleName, fullTypeName)
+		{
+			StackFrame = frame;
+		}
+	}
+	
 	public class SoftDebuggerBacktrace: BaseBacktrace
 	{
 		MDB.StackFrame[] frames;
@@ -61,11 +76,14 @@ namespace Mono.Debugging.Soft
 		public override DC.StackFrame[] GetStackFrames (int firstIndex, int lastIndex)
 		{
 			ValidateStack ();
-			if (lastIndex == -1)
+
+			if (lastIndex < 0)
 				lastIndex = frames.Length - 1;
+
 			List<DC.StackFrame> list = new List<DC.StackFrame> ();
 			for (int n = firstIndex; n <= lastIndex && n < frames.Length; n++)
-				list.Add (CreateStackFrame (frames [n]));
+				list.Add (CreateStackFrame (frames[n], n));
+
 			return list.ToArray ();
 		}
 		
@@ -76,21 +94,100 @@ namespace Mono.Debugging.Soft
 			}
 		}
 		
-		DC.StackFrame CreateStackFrame (MDB.StackFrame frame)
+		DC.StackFrame CreateStackFrame (MDB.StackFrame frame, int frameIndex)
 		{
 			MDB.MethodMirror method = frame.Method;
 			MDB.TypeMirror type = method.DeclaringType;
-			string methodName = method.Name;
-			if (type != null)
-				methodName = type.FullName + "." + methodName;
-			var location = new DC.SourceLocation (methodName, SoftDebuggerSession.NormalizePath (frame.FileName), frame.LineNumber);
-			var lang = frame.Method != null ? "Managed" : "Native";
-			return new DC.StackFrame (frame.ILOffset, method.FullName, location, lang, session.IsExternalCode (frame), true, type.Module.FullyQualifiedName, type.FullName);
+			string fileName = frame.FileName;
+			string typeFullName = null;
+			string typeFQN = null;
+			string methodName;
+			
+			if (fileName != null)
+				fileName = SoftDebuggerSession.NormalizePath (fileName);
+			
+			if (method.VirtualMachine.Version.AtLeast (2, 12) && method.IsGenericMethod) {
+				StringBuilder name = new StringBuilder (method.Name);
+				
+				name.Append ('<');
+				
+				if (method.VirtualMachine.Version.AtLeast (2, 15)) {
+					bool first = true;
+					
+					foreach (var argumentType in method.GetGenericArguments ()) {
+						if (!first)
+							name.Append (", ");
+						
+						name.Append (session.Adaptor.GetDisplayTypeName (argumentType.FullName));
+						first = false;
+					}
+				}
+				
+				name.Append ('>');
+				
+				methodName = name.ToString ();
+			} else {
+				methodName = method.Name;
+			}
+			
+			// Compiler generated anonymous/lambda methods
+			bool special_method = false;
+			if (methodName [0] == '<' && methodName.Contains (">m__")) {
+				int nidx = methodName.IndexOf (">m__") + 2;
+				methodName = "AnonymousMethod" + methodName.Substring (nidx, method.Name.Length - nidx);
+				special_method = true;
+			}
+			
+			if (type != null) {
+				string typeDisplayName = session.Adaptor.GetDisplayTypeName (type.FullName);
+				
+				if (SoftDebuggerAdaptor.IsGeneratedType (type)) {
+					// The user-friendly method name is embedded in the generated type name
+					var mn = SoftDebuggerAdaptor.GetNameFromGeneratedType (type);
+					
+					// Strip off the generated type name
+					int dot = typeDisplayName.LastIndexOf ('.');
+					var tname = typeDisplayName.Substring (0, dot);
+
+					// Keep any type arguments
+					int targs = typeDisplayName.LastIndexOf ('<');
+					if (targs > dot + 1)
+						mn += typeDisplayName.Substring (targs, typeDisplayName.Length - targs);
+
+					typeDisplayName = tname;
+					
+					if (special_method)
+						typeDisplayName += "." + mn;
+					else
+						methodName = mn;
+				}
+				
+				methodName = typeDisplayName + "." + methodName;
+				
+				typeFQN = type.Module.FullyQualifiedName;
+				typeFullName = type.FullName;
+			}
+
+			bool hidden = false;
+			if (session.VirtualMachine.Version.AtLeast (2, 21)) {
+				var ctx = GetEvaluationContext (frameIndex, session.EvaluationOptions);
+				var hiddenAttr = session.Adaptor.GetType (ctx, "System.Diagnostics.DebuggerHiddenAttribute") as MDB.TypeMirror;
+			
+				hidden = method.GetCustomAttributes (hiddenAttr, true).Any ();
+			}
+
+			var location = new DC.SourceLocation (methodName, fileName, frame.LineNumber);
+			var external = session.IsExternalCode (frame);
+
+			return new SoftDebuggerStackFrame (frame, method.FullName, location, "Managed", external, true, hidden, typeFQN, typeFullName);
 		}
 		
 		protected override EvaluationContext GetEvaluationContext (int frameIndex, EvaluationOptions options)
 		{
 			ValidateStack ();
+			if (frameIndex >= frames.Length)
+				return null;
+			
 			MDB.StackFrame frame = frames [frameIndex];
 			return new SoftEvaluationContext (session, frame, options);
 		}

@@ -1,9 +1,10 @@
 // GdbBacktrace.cs
 //
-// Author:
-//   Lluis Sanchez Gual <lluis@novell.com>
+// Authors: Lluis Sanchez Gual <lluis@novell.com>
+//          Jeffrey Stedfast <jeff@xamarin.com>
 //
 // Copyright (c) 2008 Novell, Inc (http://www.novell.com)
+// Copyright (c) 2012 Xamarin Inc. (http://www.xamarin.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -33,8 +34,6 @@ using Mono.Debugging.Backend;
 
 namespace MonoDevelop.Debugger.Gdb
 {
-	
-	
 	class GdbBacktrace: IBacktrace, IObjectValueSource
 	{
 		int fcount;

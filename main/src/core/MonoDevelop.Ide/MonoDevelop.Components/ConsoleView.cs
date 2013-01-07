@@ -29,6 +29,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using MonoDevelop.Core;
 using Gtk;
 
 namespace MonoDevelop.Components
@@ -42,8 +43,6 @@ namespace MonoDevelop.Components
 		
 		bool inBlock = false;
 		string blockText = "";
-	
-		bool auto_indent;
 		
 		TextView textView;
 	
@@ -58,13 +57,32 @@ namespace MonoDevelop.Components
 			
 			textView.WrapMode = Gtk.WrapMode.Word;
 			textView.KeyPressEvent += TextViewKeyPressEvent;
-	
+			textView.PopulatePopup += TextViewPopulatePopup;
+			
 			// The 'Freezer' tag is used to keep everything except
 			// the input line from being editable
 			TextTag tag = new TextTag ("Freezer");
 			tag.Editable = false;
 			Buffer.TagTable.Add (tag);
 			Prompt (false);
+		}
+
+		void TextViewPopulatePopup (object o, PopulatePopupArgs args)
+		{
+			MenuItem item = new MenuItem (GettextCatalog.GetString ("Clear"));
+			SeparatorMenuItem sep = new SeparatorMenuItem ();
+			
+			item.Activated += ClearActivated;
+			item.Show ();
+			sep.Show ();
+			
+			args.Menu.Add (sep);
+			args.Menu.Add (item);
+		}
+
+		void ClearActivated (object sender, EventArgs e)
+		{
+			Clear ();
 		}
 		
 		public void SetFont (Pango.FontDescription font)
@@ -73,6 +91,8 @@ namespace MonoDevelop.Components
 		}
 		
 		public string PromptString { get; set; }
+		
+		public bool AutoIndent { get; set; }
 
 		public string PromptMultiLineString { get; set; }
 		
@@ -108,14 +128,14 @@ namespace MonoDevelop.Components
 					} else {
 						blockText += "\n" + InputLine;
 						string whiteSpace = null;
-						if (auto_indent) {
+						if (AutoIndent) {
 							System.Text.RegularExpressions.Regex r = new System.Text.RegularExpressions.Regex (@"^(\s+).*");
 							whiteSpace = r.Replace (InputLine, "$1");
 							if (InputLine.EndsWith (BlockStart))
 								whiteSpace += "\t";
 						}
 						Prompt (true, true);
-						if (auto_indent)
+						if (AutoIndent)
 							InputLine += whiteSpace;
 					}
 				} else {
@@ -124,7 +144,7 @@ namespace MonoDevelop.Components
 						inBlock = true;
 						blockText = InputLine;
 						Prompt (true, true);
-						if (auto_indent)
+						if (AutoIndent)
 							InputLine += "\t";
 						return true;
 					}

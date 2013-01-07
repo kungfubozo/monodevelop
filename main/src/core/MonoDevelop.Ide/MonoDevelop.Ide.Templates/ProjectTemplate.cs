@@ -45,7 +45,6 @@ using Mono.Addins;
 using MonoDevelop.Ide.Codons;
 using MonoDevelop.Projects;
 using MonoDevelop.Ide.Gui;
-using MonoDevelop.Projects.CodeGeneration;
 
 namespace MonoDevelop.Ide.Templates
 {
@@ -287,7 +286,7 @@ namespace MonoDevelop.Ide.Templates
 		{
 			//Template can match all CodeDom .NET languages with a "*"
 			if (list.Contains ("*")) {
-				foreach (ILanguageBinding lb in LanguageBindingService.LanguageBindings) {
+				foreach (var lb in LanguageBindingService.LanguageBindings) {
 					IDotNetLanguageBinding dnlang = lb as IDotNetLanguageBinding;
 					if (dnlang != null && dnlang.GetCodeDomProvider () != null)
 						list.Add (dnlang.Language);
@@ -298,9 +297,16 @@ namespace MonoDevelop.Ide.Templates
 
 		public bool HasItemFeatures (SolutionFolder parentFolder, ProjectCreateInformation cinfo)
 		{
-			ISolutionItemDescriptor sid = solutionDescriptor.EntryDescriptors [0];
-			SolutionEntityItem sampleItem = sid.CreateItem (cinfo, languagename);
-			return (SolutionItemFeatures.GetFeatures (parentFolder, sampleItem).Length > 0);
+			// Disable solution item features. The project creation flow is awkward with
+			// tacking on additional features that are otherwise accessible through other
+			// means. It's especially awkward because there aren't many "features" to
+			// begin with. Want GTK? Create a new GTK project through templates.
+
+			return false;
+
+			// ISolutionItemDescriptor sid = solutionDescriptor.EntryDescriptors [0];
+			// SolutionEntityItem sampleItem = sid.CreateItem (cinfo, languagename);
+			// return (SolutionItemFeatures.GetFeatures (parentFolder, sampleItem).Length > 0);
 		}
 
 	}

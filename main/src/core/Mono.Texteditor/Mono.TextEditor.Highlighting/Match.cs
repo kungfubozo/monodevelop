@@ -50,7 +50,7 @@ namespace Mono.TextEditor.Highlighting
 			}
 		}
 		
-		public virtual bool GetIsValid (ColorSheme style)
+		public virtual bool GetIsValid (ColorScheme style)
 		{
 			return style.GetChunkStyle (Color) != null;
 		}
@@ -118,7 +118,7 @@ namespace Mono.TextEditor.Highlighting
 			return false;
 		}
 		
-		public override bool GetIsValid (ColorSheme style)
+		public override bool GetIsValid (ColorScheme style)
 		{
 			return true;
 		}
@@ -147,10 +147,8 @@ namespace Mono.TextEditor.Highlighting
 				return i - matchOffset;
 			if (i < text.Length && text[i] == '.') {
 				i++;
-				if (i >= text.Length) 
+				if (i >= text.Length || !char.IsDigit (text[i])) 
 					return (i - 1) - matchOffset;
-				if (!Char.IsDigit (text[i]))
-					return -1;
 				i++;
 				while (i < text.Length && Char.IsDigit (text[i]))
 					i++;

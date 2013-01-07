@@ -41,21 +41,28 @@ namespace MonoDevelop.MacDev.PlistEditor
 	{
 		PObjectContainer pobject;
 		IPListDisplayWidget widget;
+		Gtk.Widget control;
 		
-		public override Gtk.Widget Control { get { return (Gtk.Widget)widget; } }
+		public override Gtk.Widget Control { get { return control; } }
 		
 		public PListEditorViewContent (IPlistEditingHandler handler, Project proj)
 		{
 			if (handler != null) {
 				widget =  new PListEditorWidget (handler, proj);
+				control = (Gtk.Widget) widget;
 			} else {
 				widget = new CustomPropertiesWidget ();
+				var csw =  new MonoDevelop.Components.CompactScrolledWindow ();
+				csw.Show ();
+				csw.AddWithViewport ((Gtk.Widget)widget);
+				control = csw;
 			}
 		}
 		
 		public override void Load (string fileName)
 		{
 			ContentName = fileName;
+
 			if (pobject == null) {
 				var dict = new PDictionary ();
 				if (dict.Reload (fileName)) {
@@ -81,10 +88,11 @@ namespace MonoDevelop.MacDev.PlistEditor
 		
 		public override void Save (string fileName)
 		{
-			this.IsDirty = false;
 			ContentName = fileName;
+
 			try {
 				pobject.Save (fileName);
+				this.IsDirty = false;
 			} catch (Exception e) {
 				MessageService.ShowException (e, GettextCatalog.GetString ("Error while writing plist"));
 			}

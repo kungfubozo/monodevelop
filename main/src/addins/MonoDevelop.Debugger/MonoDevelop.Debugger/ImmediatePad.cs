@@ -36,29 +36,38 @@ namespace MonoDevelop.Debugger
 {
 	public class ImmediatePad: IPadContent
 	{
+		Pango.FontDescription customFont;
 		ConsoleView view;
+		bool disposed;
 		
 		public void Initialize (IPadWindow container)
 		{
+			var fontName = IdeApp.Preferences.CustomOutputPadFont;
+
+			if (string.IsNullOrEmpty (fontName))
+				fontName = DesktopService.DefaultMonospaceFont;
+
+			customFont = Pango.FontDescription.FromString (fontName);
+
 			view = new ConsoleView ();
 			view.ConsoleInput += OnViewConsoleInput;
-			Pango.FontDescription font = Pango.FontDescription.FromString (DesktopService.DefaultMonospaceFont);
-			font.Size = (font.Size * 8) / 10;
-			view.SetFont (font);
+			view.SetFont (customFont);
 			view.ShadowType = Gtk.ShadowType.None;
 			view.ShowAll ();
-			
-			DockItemToolbar toolbar = container.GetToolbar (Gtk.PositionType.Right);
-			DockToolButton buttonClear = new DockToolButton ("gtk-clear");
-			buttonClear.Clicked += ButtonClearClicked;
-			buttonClear.TooltipText = GettextCatalog.GetString ("Clear");
-			toolbar.Add (buttonClear);
-			toolbar.ShowAll ();
+
+			IdeApp.Preferences.CustomOutputPadFontChanged += HandleCustomOutputPadFontChanged;
 		}
-		
-		void ButtonClearClicked (object sender, EventArgs e)
+
+		void HandleCustomOutputPadFontChanged (object sender, EventArgs e)
 		{
-			view.Clear ();
+			if (customFont != null) {
+				customFont.Dispose ();
+				customFont = null;
+			}
+
+			customFont = Pango.FontDescription.FromString (IdeApp.Preferences.CustomOutputPadFont);
+
+			view.SetFont (customFont);
 		}
 
 		void OnViewConsoleInput (object sender, ConsoleInputEventArgs e)
@@ -70,8 +79,10 @@ namespace MonoDevelop.Debugger
 			} else {
 				EvaluationOptions ops = EvaluationOptions.DefaultOptions;
 				ops.AllowMethodEvaluation = true;
+				ops.AllowToStringCalls = true;
 				ops.AllowTargetInvoke = true;
 				ops.EvaluationTimeout = 20000;
+				ops.EllipsizeStrings = false;
 				var ff = DebuggingService.CurrentFrame;
 				string tt = e.Text;
 				ValidationResult vres = ff.ValidateExpression (tt, ops);
@@ -141,6 +152,12 @@ namespace MonoDevelop.Debugger
 		
 		public void Dispose ()
 		{
+			if (!disposed) {
+				IdeApp.Preferences.CustomOutputPadFontChanged -= HandleCustomOutputPadFontChanged;
+				if (customFont != null)
+					customFont.Dispose ();
+				disposed = true;
+			}
 		}
 	}
 }

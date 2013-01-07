@@ -1,5 +1,5 @@
 
-EXTRA_DIST = MonoDevelop.Debugger.Gdb.make rules.make configure Makefile.include
+EXTRA_DIST = MonoDevelop.Debugger.Gdb.make rules.make configure Makefile.include monodevelop-debugger-gdb.spec.in
 
 all: all-recursive
 
@@ -58,7 +58,6 @@ dist: $(CONFIG_MAKE)
 		esac \
 	done
 	(make dist-local distdir=$(PACKAGE)-$(VERSION))
-	make
 	make post-dist-hook "distsir=$$distdir"
 	tar czvf $(PACKAGE)-$(VERSION).tar.gz $(PACKAGE)-$(VERSION)
 	rm -rf $(PACKAGE)-$(VERSION)

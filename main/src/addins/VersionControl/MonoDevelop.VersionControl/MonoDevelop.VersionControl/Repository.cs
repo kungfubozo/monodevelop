@@ -151,9 +151,14 @@ namespace MonoDevelop.VersionControl
 		// Returns the versioning status of a file or directory
 		public VersionInfo GetVersionInfo (FilePath localPath, bool getRemoteStatus)
 		{
-			VersionInfo vi = OnGetVersionInfo (new FilePath[] { localPath }, getRemoteStatus).FirstOrDefault ();
-			if (vi != null)
-				vi.Init (this);
+			VersionInfo[] infos = OnGetVersionInfo (new FilePath[] { localPath }, getRemoteStatus).ToArray ();
+			if (infos.Length != 1) {
+				var names = infos;
+				LoggingService.LogError ("VersionControl returned {0} items for {1}", infos.Length, localPath);
+				LoggingService.LogError ("The infos were: {0}", string.Join (" ::: ", infos.Select (i => i.LocalPath)));
+			}
+			VersionInfo vi = infos.Single ();
+			vi.Init (this);
 			return vi;
 		}
 		
@@ -378,6 +383,11 @@ namespace MonoDevelop.VersionControl
 			throw new System.NotSupportedException ();
 		}
 		
+		public virtual DiffInfo GenerateDiff (FilePath baseLocalPath, VersionInfo versionInfo)
+		{
+			return null;
+		}
+		
 		// Returns a dif description between local files and the remote files.
 		// baseLocalPath is the root path of the diff. localPaths is optional and
 		// it can be a list of files to compare.
@@ -412,6 +422,18 @@ namespace MonoDevelop.VersionControl
 			return new DiffInfo [0];
 		}
 
+		/// <summary>
+		/// Returns the text for a file at a particular revision. If the file is binary, 'null' is returned
+		/// </summary>
+		/// <returns>
+		/// The text at revision or 'null' if the file is binary.
+		/// </returns>
+		/// <param name='repositoryPath'>
+		/// Repository path.
+		/// </param>
+		/// <param name='revision'>
+		/// Revision.
+		/// </param>
 		public abstract string GetTextAtRevision (FilePath repositoryPath, Revision revision);
 
 		static protected DiffInfo[] GenerateUnifiedDiffInfo (string diffContent, FilePath basePath, FilePath[] localPaths)

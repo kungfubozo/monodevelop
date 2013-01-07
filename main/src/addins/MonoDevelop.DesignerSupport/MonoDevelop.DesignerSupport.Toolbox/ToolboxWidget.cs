@@ -32,6 +32,7 @@ using System.Collections.ObjectModel;
 using Gtk;
 using Pango;
 using Gdk;
+using Mono.TextEditor;
 
 namespace MonoDevelop.DesignerSupport.Toolbox
 {
@@ -400,6 +401,12 @@ namespace MonoDevelop.DesignerSupport.Toolbox
 			}
 			return false;
 		}
+
+		protected override void OnUnrealized ()
+		{
+			HideTooltipWindow ();
+			base.OnUnrealized ();
+		}
 		
 		protected override bool OnLeaveNotifyEvent (Gdk.EventCrossing evnt)		
 		{
@@ -417,12 +424,14 @@ namespace MonoDevelop.DesignerSupport.Toolbox
 			return base.OnScrollEvent (evnt);
 		}
 		
+		public Action<Gdk.EventButton> DoPopupMenu { get; set; }
+		
 		protected override bool OnButtonPressEvent (Gdk.EventButton e)
 		{
 			this.GrabFocus ();
 			HideTooltipWindow ();
 			if (this.mouseOverItem is Category) {
-				if (e.Button == 1) {
+				if (!e.TriggersContextMenu () && e.Button == 1) {
 					Category mouseOverCateogry = (Category)this.mouseOverItem;
 					mouseOverCateogry.IsExpanded = !mouseOverCateogry.IsExpanded;
 				}
@@ -432,9 +441,25 @@ namespace MonoDevelop.DesignerSupport.Toolbox
 				this.SelectedItem = mouseOverItem;
 				this.QueueDraw ();
 			}
-			if (e.Type == EventType.TwoButtonPress && this.SelectedItem != null) 
+			if (e.TriggersContextMenu ()) {
+				if (DoPopupMenu != null) {
+					DoPopupMenu (null);
+					return true;
+				}
+			} else if (e.Type == EventType.TwoButtonPress && this.SelectedItem != null) { 
 				this.OnActivateSelectedItem (EventArgs.Empty);
+				return true;
+			}
 			return base.OnButtonPressEvent (e);
+		}
+		
+		protected override bool OnPopupMenu ()
+		{
+			if (DoPopupMenu != null) {
+				DoPopupMenu (null);
+				return true;
+			}
+			return base.OnPopupMenu ();
 		}
 		
 		protected override bool OnMotionNotifyEvent (Gdk.EventMotion e)
@@ -754,6 +779,10 @@ namespace MonoDevelop.DesignerSupport.Toolbox
 				                             Allocation.Height);
 				if (ypos < Allocation.Height)
 					this.vAdjustement.Value = 0;
+				if (vAdjustement.Value + vAdjustement.PageSize > vAdjustement.Upper)
+					vAdjustement.Value = vAdjustement.Upper - vAdjustement.PageSize;
+				if (vAdjustement.Value < 0)
+					vAdjustement.Value = 0;
 			}
 		}
 		
@@ -893,6 +922,10 @@ namespace MonoDevelop.DesignerSupport.Toolbox
 			set {
 				isSorted = value;
 			}
+		}
+		
+		public int Priority {
+			get; set;
 		}
 		
 		public Category (string text) : base (text)

@@ -28,6 +28,8 @@ using System;
 using System.Collections.Generic;
 using MonoDevelop.Ide;
 using Gtk;
+using Mono.TextEditor;
+using MonoDevelop.Ide.TypeSystem;
 
 namespace MonoDevelop.Components
 {
@@ -52,17 +54,14 @@ namespace MonoDevelop.Components
 			hBox = new HBox ();
 			list = new ListWidget (this);
 			list.SelectItem += delegate {
-				DataProvider.ActivateItem (list.Selection);
-				Destroy ();
-			};
-			
-			list.ScrollEvent += delegate(object o, ScrollEventArgs args) {
-				if (args.Event.Direction == Gdk.ScrollDirection.Up) {
-					vScrollbar.Value--;
-				} else if (args.Event.Direction == Gdk.ScrollDirection.Down) {
-					vScrollbar.Value++;
+				var sel = list.Selection;
+				if (sel >= 0 && sel < DataProvider.IconCount) {
+					DataProvider.ActivateItem (sel);
+					Destroy ();
 				}
 			};
+			
+			list.ScrollEvent += HandleListScrollEvent;
 			list.SizeAllocated += delegate {
 				QueueResize ();
 			};
@@ -77,6 +76,33 @@ namespace MonoDevelop.Components
 			hBox.PackStart (vScrollbar, false, false, 0);
 			Add (hBox);
 			ShowAll ();
+		}
+
+		void HandleListScrollEvent (object o, ScrollEventArgs args)
+		{
+			if (!vScrollbar.Visible)
+				return;
+			
+			var adj = vScrollbar.Adjustment;
+			var alloc = Allocation;
+			
+			//This widget is a special case because it's always aligned to items as it scrolls.
+			//Although this means we can't use the pixel deltas for true smooth scrolling, we 
+			//can still make use of the effective scrolling velocity by basing the calculation 
+			//on pixels and rounding to the nearest item.
+			
+			double dx, dy;
+			args.Event.GetPageScrollPixelDeltas (0, alloc.Height, out dx, out dy);
+			if (dy == 0)
+				return;
+			
+			var itemDelta = dy / (alloc.Height / adj.PageSize);
+			double discreteItemDelta = System.Math.Round (itemDelta);
+			if (discreteItemDelta == 0.0 && dy != 0.0)
+				discreteItemDelta = dy > 0? 1.0 : -1.0;
+			
+			adj.AddValueClamped (discreteItemDelta);
+			args.RetVal = true;
 		}
 
 		void HandleListPageChanged (object sender, EventArgs e)
@@ -285,13 +311,10 @@ namespace MonoDevelop.Components
 				}
 				
 				set {
-					if (value < 0)
-						value = 0;
-					if (value >= win.DataProvider.IconCount)
-						value = win.DataProvider.IconCount - 1;
+					var newValue = Math.Max (0, Math.Min (value, win.DataProvider.IconCount - 1));
 					
-					if (value != selection) {
-						selection = value;
+					if (newValue != selection) {
+						selection = newValue;
 						UpdatePage ();
 						
 						if (SelectionChanged != null)
@@ -423,9 +446,16 @@ namespace MonoDevelop.Components
 					layout.GetPixelSize (out wi, out he);
 					if (wi > Allocation.Width) {
 						int idx, trail;
-						if (layout.XyToIndex ((int)((Allocation.Width - xpos - iconWidth - 2) * Pango.Scale.PangoScale), 0, out idx, out trail) && idx > 3) {
+						if (layout.XyToIndex (
+							(int)((Allocation.Width - xpos - iconWidth - 2) * Pango.Scale.PangoScale),
+							0,
+							out idx,
+							out trail
+						) && idx > 3) {
+							text = AmbienceService.UnescapeText (text);
 							text = text.Substring (0, idx - 3) + "...";
-							layout.SetText (text);
+							text = AmbienceService.EscapeText (text);
+							layout.SetMarkup (text);
 							layout.GetPixelSize (out wi, out he);
 						}
 					}

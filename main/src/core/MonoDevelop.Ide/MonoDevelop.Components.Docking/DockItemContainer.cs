@@ -31,6 +31,7 @@
 using System;
 using Gtk;
 using Mono.Unix;
+using Mono.TextEditor;
 
 namespace MonoDevelop.Components.Docking
 {
@@ -198,21 +199,20 @@ namespace MonoDevelop.Components.Docking
 		
 		void HeaderButtonPress (object ob, Gtk.ButtonPressEventArgs args)
 		{
-			if (args.Event.Button == 1) {
+			if (args.Event.TriggersContextMenu ()) {
+				item.ShowDockPopupMenu (args.Event.Time);
+			} else if (args.Event.Button == 1) {
 				frame.ShowPlaceholder ();
 				header.GdkWindow.Cursor = fleurCursor;
 				frame.Toplevel.KeyPressEvent += HeaderKeyPress;
 				frame.Toplevel.KeyReleaseEvent += HeaderKeyRelease;
 				allowPlaceholderDocking = true;
 			}
-			else if (args.Event.Button == 3) {
-				item.ShowDockPopupMenu (args.Event.Time);
-			}
 		}
 		
 		void HeaderButtonRelease (object ob, Gtk.ButtonReleaseEventArgs args)
 		{
-			if (args.Event.Button == 1) {
+			if (!args.Event.TriggersContextMenu () && args.Event.Button == 1) {
 				frame.DockInPlaceholder (item);
 				frame.HidePlaceholder ();
 				if (header.GdkWindow != null)
@@ -272,9 +272,13 @@ namespace MonoDevelop.Components.Docking
 				cr.Pattern = solidPattern;
 				cr.FillPreserve ();
 				solidPattern.Destroy ();
+				
+				cr.NewPath ();
+				cr.LineWidth = 1d;
+				cr.Color = (HslColor) frame.Style.Dark (StateType.Normal);
+				cr.Rectangle (rect.X + 0.5d, rect.Y + 0.5d, rect.Width, rect.Height);
+				cr.Stroke ();
 			}
-			
-			header.GdkWindow.DrawRectangle (frame.Style.DarkGC (Gtk.StateType.Normal), false, rect);
 			
 			foreach (Widget child in header.Children)
 				header.PropagateExpose (child, a.Event);
@@ -346,6 +350,12 @@ namespace MonoDevelop.Components.Docking
 			base.OnAdded (widget);
 			child = widget;
 		}
+		
+		protected override void OnRemoved (Widget widget)
+		{
+			base.OnRemoved (widget);
+			child = null;
+		}
 
 		protected override void OnSizeRequested (ref Requisition requisition)
 		{
@@ -376,13 +386,15 @@ namespace MonoDevelop.Components.Docking
 
 		protected override bool OnExposeEvent (Gdk.EventExpose evnt)
 		{
-			Gdk.Rectangle rect;
+			Gdk.Rectangle rect = Allocation;
+			
+			//Gdk.Rectangle.Right and Bottom are inconsistent
+			int right = rect.X + rect.Width, bottom = rect.Y + rect.Height;
 			
 			if (GradientBackround) {
-				rect = new Gdk.Rectangle (Allocation.X, Allocation.Y, Allocation.Width, Allocation.Height);
 				HslColor gcol = Style.Background (Gtk.StateType.Normal);
 				
-				using (Cairo.Context cr = Gdk.CairoHelper.Create (GdkWindow)) {
+				using (Cairo.Context cr = Gdk.CairoHelper.Create (evnt.Window)) {
 					cr.NewPath ();
 					cr.MoveTo (rect.X, rect.Y);
 					cr.RelLineTo (rect.Width, 0);
@@ -390,7 +402,7 @@ namespace MonoDevelop.Components.Docking
 					cr.RelLineTo (-rect.Width, 0);
 					cr.RelLineTo (0, -rect.Height);
 					cr.ClosePath ();
-					Cairo.Gradient pat = new Cairo.LinearGradient (rect.X, rect.Y, rect.X, rect.Bottom);
+					Cairo.Gradient pat = new Cairo.LinearGradient (rect.X, rect.Y, rect.X, bottom);
 					Cairo.Color color1 = gcol;
 					pat.AddColorStop (0, color1);
 					gcol.L -= 0.1;
@@ -403,20 +415,29 @@ namespace MonoDevelop.Components.Docking
 			
 			bool res = base.OnExposeEvent (evnt);
 			
-			Gdk.GC borderColor = Style.DarkGC (Gtk.StateType.Normal);
-			
-			rect = Allocation;
-			for (int n=0; n<topMargin; n++)
-				GdkWindow.DrawLine (borderColor, rect.X, rect.Y + n, rect.Right - 1, rect.Y + n);
-			
-			for (int n=0; n<bottomMargin; n++)
-				GdkWindow.DrawLine (borderColor, rect.X, rect.Bottom - n - 1, rect.Right - 1, rect.Bottom - n - 1);
-			
-			for (int n=0; n<leftMargin; n++)
-				GdkWindow.DrawLine (borderColor, rect.X + n, rect.Y, rect.X + n, rect.Bottom - 1);
-			
-			for (int n=0; n<rightMargin; n++)
-				GdkWindow.DrawLine (borderColor, rect.Right - n - 1, rect.Y, rect.Right - n - 1, rect.Bottom - 1);
+			using (Cairo.Context cr = Gdk.CairoHelper.Create (evnt.Window)) {
+				cr.Color = (HslColor) Style.Dark (Gtk.StateType.Normal);
+				
+				double y = rect.Y + topMargin / 2d;
+				cr.LineWidth = topMargin;
+				cr.Line (rect.X, y, right, y);
+				cr.Stroke ();
+				
+				y = bottom - bottomMargin / 2d;
+				cr.LineWidth = bottomMargin;
+				cr.Line (rect.X, y, right, y);
+				cr.Stroke ();
+				
+				double x = rect.X + leftMargin / 2d;
+				cr.LineWidth = leftMargin;
+				cr.Line (x, rect.Y, x, bottom);
+				cr.Stroke ();
+				
+				x = right - rightMargin / 2d;
+				cr.LineWidth = rightMargin;
+				cr.Line (x, rect.Y, x, bottom);
+				cr.Stroke ();
+			}
 			
 			return res;
 		}

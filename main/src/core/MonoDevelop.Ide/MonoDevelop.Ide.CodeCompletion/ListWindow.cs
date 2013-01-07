@@ -34,6 +34,9 @@ using System.Linq;
 using System.Text;
 using System.Collections.Generic;
 using MonoDevelop.Core.Text;
+using ICSharpCode.NRefactory.Completion;
+using Mono.TextEditor;
+using MonoDevelop.Ide.Gui.Content;
 
 namespace MonoDevelop.Ide.CodeCompletion
 {
@@ -53,9 +56,11 @@ namespace MonoDevelop.Ide.CodeCompletion
 		ListWidget list;
 		Widget footer;
 		VBox vbox;
-
-		StringBuilder word = new StringBuilder();
-		int curPos;
+		
+		public CompletionTextEditorExtension Extension {
+			get;
+			set;
+		}		
 		
 		public List<int> FilteredItems {
 			get {
@@ -113,16 +118,15 @@ namespace MonoDevelop.Ide.CodeCompletion
 			}
 		}
 
-		protected void Reset (bool clearWord)
+		/// <summary>
+		/// This method is used to set the completion window to it's inital state.
+		/// This is required for re-using the window object.
+		/// </summary>
+		protected virtual void ResetState ()
 		{
-			if (clearWord) {
-				word = new StringBuilder ();
-				curPos = 0;
-			}
-
-			list.Reset ();
-			if (DataProvider != null)
-				ResetSizes ();
+			HideWhenWordDeleted = false;
+			endOffset = -1;
+			list.ResetState ();
 		}
 		
 		protected int curXPos, curYPos;
@@ -164,14 +168,14 @@ namespace MonoDevelop.Ide.CodeCompletion
 
 		public string CurrentCompletionText {
 			get {
-				if (list.SelectionIndex != -1 && list.AutoSelect)
-					return DataProvider.GetCompletionText (list.SelectionIndex);
+				if (list.SelectedItem != -1 && list.AutoSelect)
+					return DataProvider.GetCompletionText (list.SelectedItem);
 				return null;
 			}
 		}
 
-		public int SelectionIndex {
-			get { return list.SelectionIndex; }
+		public int SelectedItem {
+			get { return list.SelectedItem; }
 		}
 		
 		public bool AutoSelect {
@@ -197,18 +201,31 @@ namespace MonoDevelop.Ide.CodeCompletion
 			}
 		}
 		
-		public string PartialWord {
-			get { return word.ToString (); }
-			set {
-				string newword = value;
-				if (newword.Trim ().Length == 0)
-					return;
-				if (word.ToString () != newword) {
-					word = new StringBuilder (newword);
-					curPos = newword.Length;
-					UpdateWordSelection ();
-				}
+		public bool CloseOnSquareBrackets {
+			get {
+				return list.CloseOnSquareBrackets;
 			}
+			set {
+				list.CloseOnSquareBrackets = value;
+			}
+		}
+		
+		protected int StartOffset {
+			get;
+			set;
+		}
+		
+		public ICompletionWidget CompletionWidget {
+			get;
+			set;
+		}
+		
+		int endOffset = -1;
+		public string PartialWord {
+			get {
+				return CompletionWidget.GetText (StartOffset, Math.Max (StartOffset, endOffset > 0 ? endOffset : CompletionWidget.CaretOffset)); 
+			}
+			
 		}
 	
 		public string CurrentPartialWord {
@@ -219,12 +236,7 @@ namespace MonoDevelop.Ide.CodeCompletion
 
 		public bool IsUniqueMatch {
 			get {
-/*				int pos = list.Selection + 1;
-				if (DataProvider.ItemCount > pos && 
-					DataProvider.GetText (pos).ToLower ().StartsWith (CurrentPartialWord.ToLower ()) || 
-					!(DataProvider.GetText (list.Selection).ToLower ().StartsWith (CurrentPartialWord.ToLower ())))
-					return false;
-				*/
+				list.FilterWords ();
 				return list.filteredItems.Count == 1;
 			}
 		}
@@ -249,18 +261,67 @@ namespace MonoDevelop.Ide.CodeCompletion
 			private set;
 		}
 
-		public KeyActions ProcessKey (Gdk.Key key, char keyChar, Gdk.ModifierType modifier)
+		public KeyActions PostProcessKey (Gdk.Key key, char keyChar, Gdk.ModifierType modifier)
+		{
+			if (StartOffset > CompletionWidget.CaretOffset)
+				return KeyActions.CloseWindow | KeyActions.Process;
+			if (HideWhenWordDeleted && StartOffset >= CompletionWidget.CaretOffset)
+				return KeyActions.CloseWindow | KeyActions.Process;
+			switch (key) {
+			case Gdk.Key.BackSpace:
+				ResetSizes ();
+				UpdateWordSelection ();
+				return KeyActions.Process;
+			}
+			
+			
+			const string commitChars = " <>()[]{}=+-*/%~&|!";
+			if (keyChar == '[' && CloseOnSquareBrackets)
+				return KeyActions.Process | KeyActions.CloseWindow;
+			
+			if (char.IsLetterOrDigit (keyChar) || keyChar == '_') {
+				ResetSizes ();
+				UpdateWordSelection ();
+				return KeyActions.Process;
+			}
+			
+			if (char.IsPunctuation (keyChar) || commitChars.Contains (keyChar)) {
+				bool hasMismatches;
+				var curword = PartialWord;
+				int match = FindMatchedEntry (curword, out hasMismatches);
+				if (match >= 0 && System.Char.IsPunctuation (keyChar)) {
+					string text = DataProvider.GetCompletionText (FilteredItems [match]);
+					if (!text.ToUpper ().StartsWith (curword.ToUpper ()))
+						match = -1;	 
+				}
+				if (match >= 0 && !hasMismatches && keyChar != '<') {
+					ResetSizes ();
+					UpdateWordSelection ();
+					return KeyActions.Process;
+				}
+				
+				endOffset = CompletionWidget.CaretOffset - 1;
+				if (CompleteWithSpaceOrPunctuation && list.SelectionEnabled) {
+					return KeyActions.Complete | KeyActions.Process | KeyActions.CloseWindow;
+				}
+				return KeyActions.CloseWindow | KeyActions.Process;
+			}
+			
+			return KeyActions.Process;
+		}
+		
+		public KeyActions PreProcessKey (Gdk.Key key, char keyChar, Gdk.ModifierType modifier)
 		{
 			switch (key) {
 			case Gdk.Key.Home:
 				if ((modifier & ModifierType.ShiftMask) == ModifierType.ShiftMask)
 					return KeyActions.Process;
-				List.Selection = 0;
+				List.SelectionFilterIndex = 0;
 				return KeyActions.Ignore;
 			case Gdk.Key.End:
 				if ((modifier & ModifierType.ShiftMask) == ModifierType.ShiftMask)
 					return KeyActions.Process;
-				List.Selection = List.filteredItems.Count - 1;
+				List.SelectionFilterIndex = List.filteredItems.Count - 1;
 				return KeyActions.Ignore;
 				
 			case Gdk.Key.Up:
@@ -274,7 +335,7 @@ namespace MonoDevelop.Ide.CodeCompletion
 					List.MoveToCategory (-1);
 					return KeyActions.Ignore;
 				}
-				if (SelectionEnabled && list.filteredItems.Count < 2)
+				if (SelectionEnabled && list.filteredItems.Count < 1)
 					return KeyActions.CloseWindow | KeyActions.Process;
 				if (!SelectionEnabled /*&& !CompletionWindowManager.ForceSuggestionMode*/) {
 					AutoCompleteEmptyMatch = AutoSelect = true;
@@ -283,6 +344,19 @@ namespace MonoDevelop.Ide.CodeCompletion
 				}
 				return KeyActions.Ignore;
 
+			case Gdk.Key.Tab:
+				//tab always completes current item even if selection is disabled
+				if (!AutoSelect)
+					AutoSelect = true;
+				goto case Gdk.Key.Return;
+
+			case Gdk.Key.Return:
+			case Gdk.Key.ISO_Enter:
+			case Gdk.Key.Key_3270_Enter:
+			case Gdk.Key.KP_Enter:
+				endOffset = CompletionWidget.CaretOffset;
+				WasShiftPressed = (modifier & ModifierType.ShiftMask) == ModifierType.ShiftMask;
+				return (!AutoSelect ? KeyActions.Process : (KeyActions.Complete | KeyActions.Ignore)) | KeyActions.CloseWindow;
 			case Gdk.Key.Down:
 				if ((modifier & Gdk.ModifierType.ShiftMask) == Gdk.ModifierType.ShiftMask) {
 					if (!SelectionEnabled /*&& !CompletionWindowManager.ForceSuggestionMode*/)
@@ -294,7 +368,7 @@ namespace MonoDevelop.Ide.CodeCompletion
 					List.MoveToCategory (1);
 					return KeyActions.Ignore;
 				}
-				if (SelectionEnabled && list.filteredItems.Count < 2)
+				if (SelectionEnabled && list.filteredItems.Count < 1)
 					return KeyActions.CloseWindow | KeyActions.Process;
 				
 				if (!SelectionEnabled /*&& !CompletionWindowManager.ForceSuggestionMode*/) {
@@ -325,17 +399,6 @@ namespace MonoDevelop.Ide.CodeCompletion
 				//curPos--;
 				return KeyActions.Process;
 
-			case Gdk.Key.BackSpace:
-				if (curPos == 0 || (modifier & Gdk.ModifierType.ControlMask) != 0)
-					return KeyActions.CloseWindow | KeyActions.Process;
-				curPos--;
-				word.Remove (curPos, 1);
-				ResetSizes ();
-				UpdateWordSelection ();
-				if (HideWhenWordDeleted && word.Length == 0)
-					return KeyActions.CloseWindow | KeyActions.Process;
-				return KeyActions.Process;
-
 			case Gdk.Key.Right:
 				//if (curPos == word.Length) return KeyActions.CloseWindow | KeyActions.Process;
 				//curPos++;
@@ -346,18 +409,6 @@ namespace MonoDevelop.Ide.CodeCompletion
 			case Gdk.Key.Scroll_Lock:
 				return KeyActions.Ignore;
 
-			case Gdk.Key.Tab:
-				//tab always completes current item even if selection is disabled
-				if (!AutoSelect)
-					AutoSelect = true;
-				goto case Gdk.Key.Return;
-
-			case Gdk.Key.Return:
-			case Gdk.Key.ISO_Enter:
-			case Gdk.Key.Key_3270_Enter:
-			case Gdk.Key.KP_Enter:
-				WasShiftPressed = (modifier & ModifierType.ShiftMask) == ModifierType.ShiftMask;
-				return (!list.AutoSelect ? KeyActions.Process : (KeyActions.Complete | KeyActions.Ignore)) | KeyActions.CloseWindow;
 
 			case Gdk.Key.Escape:
 				return KeyActions.CloseWindow | KeyActions.Ignore;
@@ -378,7 +429,7 @@ namespace MonoDevelop.Ide.CodeCompletion
 			if (keyChar == ' ' && (modifier & ModifierType.ShiftMask) == ModifierType.ShiftMask)
 				return KeyActions.CloseWindow | KeyActions.Process;
 			
-			//don't input letters/punctuation etc when non-shift modifiers are active
+	/*		//don't input letters/punctuation etc when non-shift modifiers are active
 			bool nonShiftModifierActive = ((Gdk.ModifierType.ControlMask | Gdk.ModifierType.MetaMask
 				| Gdk.ModifierType.Mod1Mask | Gdk.ModifierType.SuperMask)
 				& modifier) != 0;
@@ -386,40 +437,10 @@ namespace MonoDevelop.Ide.CodeCompletion
 				if (modifier.HasFlag (Gdk.ModifierType.ControlMask) && char.IsLetterOrDigit ((char)key))
 					return KeyActions.Process | KeyActions.CloseWindow;
 				return KeyActions.Ignore;
-			}
-			const string commitChars = " <>()[]{}=+-*/%~&|!";
-			if (System.Char.IsLetterOrDigit (keyChar) || keyChar == '_') {
-				word.Insert (curPos, keyChar);
-				ResetSizes ();
-				UpdateWordSelection ();
-				curPos++;
-				return KeyActions.Process;
-			} else if (System.Char.IsPunctuation (keyChar) || commitChars.Contains (keyChar)) {
-				//punctuation is only accepted if it actually matches an item in the list
-				word.Insert (curPos, keyChar);
+			}*/
+			
 
-				bool hasMismatches;
-				int match = FindMatchedEntry (CurrentPartialWord, out hasMismatches);
-				if (match >= 0 && System.Char.IsPunctuation (keyChar)) {
-					string text = DataProvider.GetCompletionText (FilteredItems [match]);
-					if (!text.ToUpper ().StartsWith (word.ToString ().ToUpper ()))
-						match =-1;	 
-				}
-				if (match >= 0 && !hasMismatches && keyChar != '<') {
-					ResetSizes ();
-					UpdateWordSelection ();
-					curPos++;
-					return KeyActions.Process;
-				} else {
-					word.Remove (curPos, 1);
-				}
-				
-				if (CompleteWithSpaceOrPunctuation && list.SelectionEnabled)
-					return KeyActions.Complete | KeyActions.Process | KeyActions.CloseWindow;
-				return KeyActions.CloseWindow | KeyActions.Process;
-			}
-
-			return KeyActions.CloseWindow | KeyActions.Process;
+			return KeyActions.Process;
 		}
 		
 		protected bool HideWhenWordDeleted {
@@ -493,11 +514,9 @@ namespace MonoDevelop.Ide.CodeCompletion
 			
 			int idx = -1;
 			var matcher = CompletionMatcher.CreateCompletionMatcher (partialWord);
-			
 			string bestWord = null;
 			int bestRank = int.MinValue;
 			int bestIndex = 0;
-			
 			if (!string.IsNullOrEmpty (partialWord)) {
 				for (int i = 0; i < list.filteredItems.Count; i++) {
 					int index = list.filteredItems[i];
@@ -512,7 +531,6 @@ namespace MonoDevelop.Ide.CodeCompletion
 					}
 				}
 			}
-			
 			if (bestWord != null) {
 				idx = bestIndex;
 				hasMismatches = false;
@@ -565,13 +583,13 @@ namespace MonoDevelop.Ide.CodeCompletion
 		void SelectEntry (int n)
 		{
 			if (n >= 0)
-				list.Selection = n;
+				list.SelectionFilterIndex = n;
 		}
 
 		public virtual void SelectEntry (string s)
 		{
-			list.FilterWords ();
-			/* // disable this, because we select now the last selected entry by default (word history mode)
+			/*list.FilterWords ();
+			 // disable this, because we select now the last selected entry by default (word history mode)
 			//when the list is empty, disable the selection or users get annoyed by it accepting
 			//the top entry automatically
 			if (string.IsNullOrEmpty (s)) {
@@ -593,14 +611,29 @@ namespace MonoDevelop.Ide.CodeCompletion
 
 		void OnScrolled (object o, ScrollEventArgs args)
 		{
-			switch (args.Event.Direction) {
-			case ScrollDirection.Up:
-				scrollbar.Value--; 
-				break;
-			case ScrollDirection.Down:
-				scrollbar.Value++; 
-				break;
-			}
+			if (!scrollbar.Visible)
+				return;
+			
+			var adj = scrollbar.Adjustment;
+			var alloc = Allocation;
+			
+			//This widget is a special case because it's always aligned to items as it scrolls.
+			//Although this means we can't use the pixel deltas for true smooth scrolling, we 
+			//can still make use of the effective scrolling velocity by basing the calculation 
+			//on pixels and rounding to the nearest item.
+			
+			double dx, dy;
+			args.Event.GetPageScrollPixelDeltas (0, alloc.Height, out dx, out dy);
+			if (dy == 0)
+				return;
+			
+			var itemDelta = dy / (alloc.Height / adj.PageSize);
+			double discreteItemDelta = System.Math.Round (itemDelta);
+			if (discreteItemDelta == 0.0 && dy != 0.0)
+				discreteItemDelta = dy > 0? 1.0 : -1.0;
+			
+			adj.AddValueClamped (discreteItemDelta);
+			args.RetVal = true;
 		}
 
 		void OnSelectionChanged (object o, EventArgs args)
