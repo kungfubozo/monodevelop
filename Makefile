@@ -78,7 +78,7 @@ dist: update_submodules remove-stale-tarballs dist-recursive
 	@cd tarballs && rm -rf monodevelop-$(PACKAGE_VERSION)
 
 run:
-	cd main && $(MAKE) run
+	cd main && $(MAKE) runmd
 
 run-sgen:
 	cd main && $(MAKE) run-sgen
