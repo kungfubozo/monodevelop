@@ -7,8 +7,8 @@
        description = "A MonoDevelop addin for using version control systems like Subversion"
        category    = "Version Control"
        flags = "Hidden"
-       version   = "3.1.1">
-
+       version   = "4.0.1">
+ 
 	<Runtime>
 		<Import file="comment.png" />
 		<Import file="menu_add.png" />
@@ -24,9 +24,9 @@
 	</Runtime>
 
 	<Dependencies>
-	    <Addin id="Core" version="3.1.1"/>
-	    <Addin id="Ide" version="3.1.1"/>
-	    <Addin id="SourceEditor2" version="3.1.1"/>
+	    <Addin id="Core" version="4.0.1"/>
+	    <Addin id="Ide" version="4.0.1"/>
+	    <Addin id="SourceEditor2" version="4.0.1"/>
 	</Dependencies>
 
 	<ExtensionPoint path = "/MonoDevelop/VersionControl/VersionControlSystems" name = "Version control systems">
@@ -216,7 +216,7 @@
 	</Extension>
 
 	<Extension path = "/MonoDevelop/Ide/MainMenu">
-		<ItemSet id = "VersionControl" _label = "Versio_n Control" insertafter = "Run" >
+		<ItemSet id = "VersionControl" _label = "_Version Control" insertafter = "Run" >
 			<CommandItem id = "MonoDevelop.VersionControl.Commands.Checkout" />
 			<CommandItem id = "MonoDevelop.VersionControl.Commands.Publish"/>
 			<SeparatorItem/>

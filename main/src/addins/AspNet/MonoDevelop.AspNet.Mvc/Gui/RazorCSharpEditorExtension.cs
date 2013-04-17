@@ -58,6 +58,8 @@ namespace MonoDevelop.AspNet.Mvc.Gui
 		ICompletionWidget defaultCompletionWidget;
 		Document defaultDocument;
 
+		RazorSyntaxMode syntaxMode;
+
 		UnderlyingDocument HiddenDoc	{
 			get { return hiddenInfo.UnderlyingDocument; }
 		}
@@ -84,10 +86,18 @@ namespace MonoDevelop.AspNet.Mvc.Gui
 			{
 				OnCompletionContextChanged (CompletionWidget, EventArgs.Empty);
 			};
+			syntaxMode = new RazorSyntaxMode (Document);
+			defaultDocument.Editor.Document.SyntaxMode = syntaxMode;
+
 		}
 
 		public override void Dispose ()
 		{
+			if (syntaxMode != null) {
+				defaultDocument.Editor.Document.SyntaxMode = null;
+				syntaxMode.Dispose ();
+				syntaxMode = null;
+			}
 			defaultDocument.Editor.Document.TextReplacing -= UnderlyingDocument_TextReplacing;
 			base.Dispose ();
 		}
@@ -520,7 +530,7 @@ namespace MonoDevelop.AspNet.Mvc.Gui
 			return base.GetCurrentParameterIndex (startOffset);
 		}
 
-		public override IParameterDataProvider HandleParameterCompletion (CodeCompletionContext completionContext,
+		public override ParameterDataProvider HandleParameterCompletion (CodeCompletionContext completionContext,
 			char completionChar)
 		{
 			if (hiddenInfo != null && isInCSharpContext) {

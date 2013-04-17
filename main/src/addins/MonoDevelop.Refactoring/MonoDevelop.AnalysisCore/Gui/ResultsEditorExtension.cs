@@ -61,6 +61,7 @@ namespace MonoDevelop.AnalysisCore.Gui
 				CancelTask ();
 				disposed = true;
 			}
+			markers.Clear ();
 			base.Dispose ();
 		}
 		
@@ -92,7 +93,12 @@ namespace MonoDevelop.AnalysisCore.Gui
 		{
 			if (src != null) {
 				src.Cancel ();
-				oldTask.Wait ();
+				try {
+					oldTask.Wait ();
+				} catch (TaskCanceledException) {
+				} catch (AggregateException ex) {
+					ex.Handle (e => e is TaskCanceledException);
+				}
 			}
 		}
 		
@@ -153,7 +159,7 @@ namespace MonoDevelop.AnalysisCore.Gui
 			
 			public void Update ()
 			{
-				if (!QuickTaskStrip.EnableFancyFeatures)
+				if (!QuickTaskStrip.EnableFancyFeatures || cancellationToken.IsCancellationRequested)
 					return;
 				ext.tasks.Clear ();
 				GLib.Idle.Add (IdleHandler);
@@ -186,10 +192,22 @@ namespace MonoDevelop.AnalysisCore.Gui
 					var currentResult = (Result)enumerator.Current;
 					
 					if (currentResult.InspectionMark != IssueMarker.None) {
-						var marker = new ResultMarker (currentResult);
-						marker.IsVisible = currentResult.Underline;
-						editor.Document.AddMarker (marker.Line, marker);
-						ext.markers.Enqueue (marker);
+						int start = editor.LocationToOffset (currentResult.Region.Begin);
+						int end = editor.LocationToOffset (currentResult.Region.End);
+
+						if (currentResult.InspectionMark == IssueMarker.GrayOut) {
+							var marker = new GrayOutMarker (currentResult, TextSegment.FromBounds (start, end));
+							marker.IsVisible = currentResult.Underline;
+							editor.Document.AddMarker (marker);
+							ext.markers.Enqueue (marker);
+							editor.Parent.TextViewMargin.RemoveCachedLine (editor.GetLineByOffset (start));
+							editor.Parent.QueueDraw ();
+						} else {
+							var marker = new ResultMarker (currentResult, TextSegment.FromBounds (start, end));
+							marker.IsVisible = currentResult.Underline;
+							editor.Document.AddMarker (marker);
+							ext.markers.Enqueue (marker);
+						}
 					}
 					
 					ext.tasks.Add (new QuickTask (currentResult.Message, currentResult.Region.Begin, currentResult.Level));
@@ -206,20 +224,16 @@ namespace MonoDevelop.AnalysisCore.Gui
 		
 		public IList<Result> GetResultsAtOffset (int offset, CancellationToken token = default (CancellationToken))
 		{
-			var location = Editor.Document.OffsetToLocation (offset);
-			var line = Editor.GetLineByOffset (offset);
+//			var location = Editor.Document.OffsetToLocation (offset);
+//			var line = Editor.GetLineByOffset (offset);
 			
 			var list = new List<Result> ();
-			foreach (var marker in line.Markers) {
+			foreach (var marker in Editor.Document.GetTextSegmentMarkersAt (offset)) {
 				if (token.IsCancellationRequested)
 					break;
 				var resultMarker = marker as ResultMarker;
-				if (resultMarker == null || resultMarker.Line != location.Line)
-					continue;
-				int cs = resultMarker.ColStart, ce = resultMarker.ColEnd;
-				if ((cs >= 0 && cs > location.Column) || (ce >= 0 && ce < location.Column))
-					continue;
-				list.Add (resultMarker.Result);
+				if (resultMarker != null)
+					list.Add (resultMarker.Result);
 			}
 			return list;
 		}

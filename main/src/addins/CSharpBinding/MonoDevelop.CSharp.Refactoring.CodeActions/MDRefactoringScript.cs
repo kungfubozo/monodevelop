@@ -118,6 +118,10 @@ namespace MonoDevelop.CSharp.Refactoring.CodeActions
 			mode.StartMode ();
 			mode.Exited += delegate(object s, InsertionCursorEventArgs iCArgs) {
 				if (iCArgs.Success) {
+					if (iCArgs.InsertionPoint.LineAfter == NewLineInsertion.None && 
+					    iCArgs.InsertionPoint.LineBefore == NewLineInsertion.None && nodes.Count () > 1) {
+						iCArgs.InsertionPoint.LineAfter = NewLineInsertion.BlankLine;
+					}
 					foreach (var node in nodes.Reverse ()) {
 						var output = OutputNode (CodeGenerationService.CalculateBodyIndentLevel (declaringType), node);
 						var offset = document.Editor.LocationToOffset (iCArgs.InsertionPoint.Location);
@@ -167,6 +171,10 @@ namespace MonoDevelop.CSharp.Refactoring.CodeActions
 				mode.StartMode ();
 				mode.Exited += delegate(object s, InsertionCursorEventArgs iCArgs) {
 					if (iCArgs.Success) {
+						if (iCArgs.InsertionPoint.LineAfter == NewLineInsertion.None && 
+						    iCArgs.InsertionPoint.LineBefore == NewLineInsertion.None && nodes.Count () > 1) {
+							iCArgs.InsertionPoint.LineAfter = NewLineInsertion.BlankLine;
+						}
 						foreach (var node in nodes.Reverse ()) {
 							var output = OutputNode (CodeGenerationService.CalculateBodyIndentLevel (declaringType), node);
 							var offset = loadedDocument.Editor.LocationToOffset (iCArgs.InsertionPoint.Location);
@@ -249,7 +257,7 @@ namespace MonoDevelop.CSharp.Refactoring.CodeActions
 			
 			var content = context.Document.Editor.Text;
 			
-			var types = new List<TypeDeclaration> (context.Unit.GetTypes ());
+			var types = new List<EntityDeclaration> (context.Unit.GetTypes ());
 			types.Sort ((x, y) => y.StartLocation.CompareTo (x.StartLocation));
 
 			foreach (var removeType in types) {

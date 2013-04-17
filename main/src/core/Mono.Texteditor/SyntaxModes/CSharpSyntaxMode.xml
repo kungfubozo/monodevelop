@@ -39,17 +39,17 @@
 		<End>*/</End>
 	</Span>
 	
-	<Span color = "string.other" rule="String" stopateol = "false" escape='""'>
+	<Span color = "string.other" rule="VerbatimString" stopateol = "false" escape='""'>
 		<Begin>@"</Begin>
 		<End>"</End>
 	</Span>
 
-	<Span color = "string.double" rule="String" stopateol = "true" escape='\'>
+	<Span color = "string.double" rule="String" stopateol = "true">
 		<Begin>"</Begin>
 		<End>"</End>
 	</Span>
 
-	<Span color = "string.single" rule="String" stopateol = "true" escape="\">
+	<Span color = "string.single" rule="String" stopateol = "true">
 		<Begin>&apos;</Begin>
 		<End>&apos;</End>
 	</Span>
@@ -110,6 +110,10 @@
 		<Word>orderby</Word>
 		<Word>select</Word>
 		<Word>let</Word>
+		<Word>ascending</Word>
+		<Word>join</Word>
+		<Word>on</Word>
+		<Word>equals</Word>
 	</Keywords>
 	
 	<Keywords color = "keyword.exceptions">
@@ -127,6 +131,8 @@
 	
 	<Keywords color = "keyword.modifier">
 		<Word>abstract</Word>
+		<Word>async</Word>
+		<Word>await</Word>
 		<Word>const</Word>
 		<Word>event</Word>
 		<Word>extern</Word>
@@ -149,19 +155,18 @@
 		<Word>char</Word>
 		<Word>decimal</Word>
 		<Word>double</Word>
-		<Word>enum</Word>
 		<Word>float</Word>
 		<Word>int</Word>
 		<Word>long</Word>
 		<Word>sbyte</Word>
 		<Word>short</Word>
-		<Word>struct</Word>
 		<Word>uint</Word>
 		<Word>ushort</Word>
 		<Word>ulong</Word>
 		<Word>object</Word>
 		<Word>string</Word>
 		<Word>var</Word>
+		<Word>dynamic</Word>
 	</Keywords>
 	
 	<Keywords color = "constant.language.void">
@@ -184,6 +189,8 @@
 		<Word>class</Word>
 		<Word>interface</Word>
 		<Word>delegate</Word>
+		<Word>enum</Word>
+		<Word>struct</Word>
 	</Keywords>
 	
 	<Keywords color = "keyword.parameter">
@@ -235,44 +242,33 @@
 	</Rule>
 	
 	<Rule name = "String">
+		<Delimiters></Delimiters>
+		<Match color ="string.escape">\\(['"\\abfnrtv]|x[0-9a-fA-F]{2,4}|0\d\d)</Match>
+	</Rule>
+	
+	<Rule name = "VerbatimString">
+		<Delimiters></Delimiters>
+		<Match color ="string.escape">""</Match>
 	</Rule>
 	
 	<Rule name = "XmlDocumentation">
-		<Span color = "comment" rule = "XmlDocumentationTag" stopateol = "true" >
-			<Begin>&lt;</Begin>
+	
+		<Span tagColor = "comment" rule = "XmlDocumentationTag">
+			<Begin>&lt;/</Begin>
 			<End>&gt;</End>
 		</Span>
+		
+		<Span tagColor = "comment" rule = "XmlDocumentationTag">
+			<Begin>&lt;</Begin>
+			<Exit>&gt;</Exit>
+			<End>/&gt;</End>
+		</Span>
+		
 	</Rule>
 
 	<Rule name = "XmlDocumentationTag">
-		<Span color = "string" stopateol = "true" escape="\" rule="String" >
-			<Begin>"</Begin>
-			<End>"</End>
-		</Span>
-		<Keywords color="comment.keyword">
-			<Word>c</Word>
-			<Word>code</Word>
-			<Word>example</Word>
-			<Word>exception</Word>
-			<Word>list</Word>
-			<Word>para</Word>
-			<Word>param</Word>
-			<Word>paramref</Word>
-			<Word>permission</Word>
-			<Word>remarks</Word>
-			<Word>returns</Word>
-			<Word>see</Word>
-			<Word>seealso</Word>
-			<Word>summary</Word>
-			<Word>value</Word>
-			<Word>type</Word>
-			<Word>name</Word>
-			<Word>cref</Word>
-			<Word>item</Word>
-			<Word>term</Word>
-			<Word>description</Word>
-			<Word>listheader</Word>
-		</Keywords>
+		
+
 	</Rule>
 	
 	<Keywords color="keyword.type">

@@ -38,7 +38,7 @@ using MonoDevelop.Ide.Gui.Components;
 
 namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 {
-	public class ProjectReferenceFolderNodeBuilder: TypeNodeBuilder
+	class ProjectReferenceFolderNodeBuilder: TypeNodeBuilder
 	{
 		ProjectReferenceEventHandler addedHandler;
 		ProjectReferenceEventHandler removedHandler;
@@ -116,7 +116,7 @@ namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 		}
 	}
 	
-	public class ProjectReferenceFolderNodeCommandHandler: NodeCommandHandler
+	class ProjectReferenceFolderNodeCommandHandler: NodeCommandHandler
 	{
 		public override bool CanDropNode (object dataObject, DragOperation operation)
 		{
@@ -133,10 +133,8 @@ namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 				ProjectReference pr = new ProjectReference (project);
 				DotNetProject p = CurrentNode.GetParentDataItem (typeof(DotNetProject), false) as DotNetProject;
 				// Circular dependencies are not allowed.
-				if (ProjectReferencesProject (project, p.Name)) {
-					MessageService.ShowError (GettextCatalog.GetString ("Cyclic project references are not allowed."));
+				if (HasCircularReference (project, p.Name))
 					return;
-				}
 
 				// If the reference already exists, bail out
 				if (ProjectReferencesProject (p, project.Name))
@@ -180,7 +178,13 @@ namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 				// Check for cyclic referencies
 				if (pref.ReferenceType == ReferenceType.Project) {
 					DotNetProject pdest = p.ParentSolution.FindProjectByName (pref.Reference) as DotNetProject;
-					if (pdest == null || ProjectReferencesProject (pdest, p.Name))
+					if (pdest == null)
+						return;
+					if (HasCircularReference (pdest, p.Name))
+						return;
+
+					// The reference is already there
+					if (ProjectReferencesProject (p, pdest.Name))
 						return;
 				}
 				p.References.Add ((ProjectReference) pref.Clone ());
@@ -202,7 +206,15 @@ namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 				CurrentNode.Expanded = true;
 			}
 		}
-		
+
+		bool HasCircularReference (DotNetProject project, string targetProject)
+		{
+			bool result = ProjectReferencesProject (project, targetProject);
+			if (result)
+				MessageService.ShowError (GettextCatalog.GetString ("Cyclic project references are not allowed."));
+			return result;
+		}
+
 		bool ProjectReferencesProject (DotNetProject project, string targetProject)
 		{
 			if (project.Name == targetProject)

@@ -48,6 +48,7 @@ namespace MonoDevelop.CSharp.Highlighting
 	{
 		public readonly List<TextSegment> UsagesSegments = new List<TextSegment> ();
 			
+		CSharpSyntaxMode syntaxMode;
 		TextEditorData textEditorData;
 
 		public override void Initialize ()
@@ -55,9 +56,12 @@ namespace MonoDevelop.CSharp.Highlighting
 			base.Initialize ();
 			
 			textEditorData = base.Document.Editor;
+			textEditorData.SelectionSurroundingProvider = new CSharpSelectionSurroundingProvider ();
 			textEditorData.Caret.PositionChanged += HandleTextEditorDataCaretPositionChanged;
 			textEditorData.Document.TextReplaced += HandleTextEditorDataDocumentTextReplaced;
 			textEditorData.SelectionChanged += HandleTextEditorDataSelectionChanged;
+			syntaxMode = new CSharpSyntaxMode (Document);
+			textEditorData.Document.SyntaxMode = syntaxMode;
 		}
 
 		void HandleTextEditorDataSelectionChanged (object sender, EventArgs e)
@@ -72,6 +76,12 @@ namespace MonoDevelop.CSharp.Highlighting
 		
 		public override void Dispose ()
 		{
+			if (syntaxMode != null) {
+				textEditorData.Document.SyntaxMode = null;
+				syntaxMode.Dispose ();
+				syntaxMode = null;
+			}
+
 			textEditorData.SelectionChanged -= HandleTextEditorDataSelectionChanged;
 			textEditorData.Caret.PositionChanged -= HandleTextEditorDataCaretPositionChanged;
 			textEditorData.Document.TextReplaced -= HandleTextEditorDataDocumentTextReplaced;
@@ -165,6 +175,8 @@ namespace MonoDevelop.CSharp.Highlighting
 				if (references != null) {
 					bool alphaBlend = false;
 					foreach (var r in references) {
+						if (r == null)
+							continue;
 						var marker = GetMarker (r.Region.BeginLine);
 						
 						usages.Add (r.Region.Begin);
@@ -243,7 +255,7 @@ namespace MonoDevelop.CSharp.Highlighting
 		}
 
 		
-		public class UsageMarker : TextMarker, IBackgroundMarker
+		public class UsageMarker : TextLineMarker, IBackgroundMarker
 		{
 			List<TextSegment> usages = new List<TextSegment> ();
 
@@ -259,7 +271,7 @@ namespace MonoDevelop.CSharp.Highlighting
 			public bool DrawBackground (TextEditor editor, Cairo.Context cr, TextViewMargin.LayoutWrapper layout, int selectionStart, int selectionEnd, int startOffset, int endOffset, double y, double startXPos, double endXPos, ref bool drawBg)
 			{
 				drawBg = false;
-				if (selectionStart >= 0 || editor.CurrentMode is TextLinkEditMode)
+				if (selectionStart >= 0 || editor.CurrentMode is TextLinkEditMode || editor.TextViewMargin.SearchResultMatchCount > 0)
 					return true;
 				foreach (var usage in Usages) {
 					int markerStart = usage.Offset;

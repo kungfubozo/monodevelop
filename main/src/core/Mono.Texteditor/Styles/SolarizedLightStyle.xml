@@ -29,7 +29,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 -->
 
- <EditorStyle name="Solarized_Light" _description="Solarized color stlye">
+ <EditorStyle name="Solarized Light" _description="An artful, light scheme that's easy on the eyes.">
  
 	<!-- solarized palette -->
 	
@@ -51,21 +51,45 @@ THE SOFTWARE.
 	<Color name="green" value="#859900"/>
 	
 	<!-- color styles -->
-	<Style name="text" color="base00" bgColor="base3">
-		<Style name="background" color="base3">
-			<Style name="readonly" color="base2"/>
-			<Style name="searchresult-main" color="base03"/>
-			<Style name="searchresult" color="base03"/>
+	<Style name="text" color="base00" bgColor="base2">
+		<Style name="background" color="base2">
+			<Style name="readonly" color="base3"/>
+			<Style name="searchresult-main" color="base3"/>
+			<Style name="searchresult" color="base3"/>
 		</Style>
-		<Style name="selection" color="base2" bgColor="base0"/>
-		<Style name="selection.inactive" color="base3" bgColor="base1"/>
+		<Style name="selection" bgColor="base02"/>
+		<Style name="selection.inactive" bgColor="base3"/>
 		<Style name="link" color="base00"/>
 		<Style name="punctuation" color="base00"/>
-		<Style name="preprocessor" color="red">
-			<Style name="keyword" color="red" weight="Bold"/>
+		<Style name="preprocessor" color="orange">
+			<Style name="keyword" weight="italic"/>
 		</Style>
-		<Style name="markup" color="blue">
-			<Style name="tag"/>
+	</Style>
+	
+	<Style name="xml" color="base00" bgColor="base2">
+		 <Style name="tag" color="base00"/>
+		 <Style name="name" color="blue"/>
+		 <Style name="attribute" color="base00"/>
+		 <Style name="cdata" color="cyan"/>
+	</Style>
+	
+	<Style name="tooltip" color="black" bgColor="#feffe9">
+		<Style name="border" color="base1"/>
+		<Style name="pager">
+			<Style name="text" color="base00"/>
+			<Style name="top" color="base2"/>
+			<Style name="bottom" color="base2"/>
+			<Style name="triangle" color="base00"/>
+		</Style>
+	</Style>
+	
+	<Style name="completion" color="#434343" bgColor="#F0F6F8">
+		<Style name="highlight" color="#BA3373"/>
+		<Style name="selection" color="#f8fcfc" bgColor="#dff4f0">
+			<Style name="border" color="#C9C9C9"/>
+		</Style>
+		<Style name="selection.inactive" color="#f9f9f9" bgColor="#e6e6e6">
+			<Style name="border" color="#bebebe"/>
 		</Style>
 	</Style>
 	
@@ -87,17 +111,13 @@ THE SOFTWARE.
 	</Style>
 	
 	<Style name="marker">
-		<Style name="line" color="base2"/>
+		<Style name="line" color="base3"/>
 		<Style name="line.changed" color="green"/>
 		<Style name="line.dirty" color="yellow"/>
 	
 		<Style name="ruler" color="base1"/>
-		<Style name="whitespace" color="base1"> 
-			<Style name="eol" color="base1"/> 
-		</Style>
-		<Style name="invalidline" color="base1"/>
-		<Style name="bracket" color="orange" bgColor="base2"/>
-		<Style name="usages" color="orange" bgColor="base2"/>
+		<Style name="bracket" color="base1" bgColor="base3"/>
+		<Style name="usages" color="base3" bgColor="base3"/>
 		
 		<Style name="bookmark.color1" color="base3"/>
 		<Style name="bookmark.color2" color="blue"/>
@@ -106,14 +126,6 @@ THE SOFTWARE.
 			<Style name="warning" color="orange"/>
 			<Style name="warning" color="orange"/>
 		</Style>
-<!--
-		<Style name="template">
-			<Style name="primary_template" color="aluminium2" bgColor="Zombie"/>
-			<Style name="primary_highlighted_template" color="Zombie" bgColor="Lawn"/>
-			
-			<Style name="secondary_template" color="aluminium2" bgColor="white"/>
-			<Style name="secondary_highlighted_template" color="aluminium3" bgColor="aluminium1"/>
-		</Style>-->
 	</Style>
 	
 	<Style name="bubble">
@@ -121,37 +133,33 @@ THE SOFTWARE.
 		<Style name="error" color="red" bgColor="base2"/>
 	</Style>
 
-	<Style name="linenumber" color="base1" bgColor="base2">
-		<Style name="highlight" color="base0"/>
-	</Style>
+	<Style name="linenumber" color="base00" bgColor="base2"/>
 	
 	<Style name="iconbar" color="base2"/>
 	<Style name="iconbar.separator" color="base3"/>
 
-	<Style name="fold" color="base0" bgColor="base2"/>
-	<Style name="fold.highlight" color="base1"/>
-	<Style name="fold.togglemarker" color="base1"/>
+	<Style name="fold" color="base01" bgColor="base3"/>
+	<Style name="fold.margin" color="base01" bgColor="base3" />
 	
-	<Style name="comment" color="base0">
-		<Style name="keyword" color="magenta"/>
+	<Style name="comment" color="base01">
+		<Style name="keyword" weight="italic"/>
 	</Style>
 	
-	<Style name="constant" color="cyan">
-		<Style name="language.void" color = "cyan"/>
+	<Style name="constant" color="violet">
+		<Style name="language.void" color = "yellow"/>
 	</Style>
 	
 	<Style name="string" color="cyan" />
+	<Style name="string.escape" color="lightcyan" />
 	
 	<Style name="keyword" color="green">
-		<Style name="namespace" color="yellow"/>
+		<Style name="access" color="violet"/> 
 		<Style name="type" color="yellow"/>
-		<Style name="modifier" color="yellow"/>
 		
-		<Style name="declaration" color="yellow"/>
-		<Style name="access" color="yellow"/>
-		<Style name="semantic.type" color="blue"/>
-		<Style name="semantic.field" color="violet"/>
-		<Style name="semantic.property" color="violet"/>
+		<Style name="semantic.type" color="yellow"/>
+		<Style name="semantic.field" color="blue"/>
+		<Style name="semantic.property" color="blue"/>
+		<Style name="semantic.method" color="blue"/>
 		<Style name="semantic.error" color="red"/>
 	</Style>
 </EditorStyle>

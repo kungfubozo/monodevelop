@@ -389,7 +389,15 @@ namespace Mono.Debugging.Soft
 
 		public override ValueReference GetIndexerReference (EvaluationContext ctx, object target, object[] indices)
 		{
-			TypeMirror targetType = GetValueType (ctx, target) as TypeMirror;
+			object valueType = GetValueType (ctx, target);
+			TypeMirror targetType = null;
+
+			if (valueType is Type)
+				targetType = (TypeMirror) ForceLoadType (ctx, ((Type) valueType).FullName);
+			else if (valueType is TypeMirror)
+				targetType = (TypeMirror) valueType;
+			else
+				return null;
 			
 			Value[] values = new Value [indices.Length];
 			TypeMirror[] types = new TypeMirror [indices.Length];
@@ -457,9 +465,9 @@ namespace Mono.Debugging.Soft
 		
 		static bool IsHoistedThisReference (FieldInfoMirror field)
 		{
-			// mcs is "<>f__this"
+			// mcs is "<>f__this" or "$this" (if in an async compiler generated type)
 			// csc is "<>4__this"
-			return field.Name.StartsWith ("<>") && field.Name.EndsWith ("__this");
+			return (field.Name.StartsWith ("<>") && field.Name.EndsWith ("__this")) || field.Name == "$this";
 		}
 		
 		static bool IsClosureReferenceField (FieldInfoMirror field)
@@ -1032,6 +1040,12 @@ namespace Mono.Debugging.Soft
 			return val is ArrayMirror;
 		}
 
+		public override bool IsValueType (object type)
+		{
+			TypeMirror t = type as TypeMirror;
+			return t != null && t.IsValueType;
+		}
+
 		public override bool IsClass (object type)
 		{
 			TypeMirror t = type as TypeMirror;
@@ -1138,24 +1152,27 @@ namespace Mono.Debugging.Soft
 			}
 			return default(T);
 		}
-		
-		bool IsTypeLoaded (EvaluationContext gctx, string typeName)
+
+		public override bool IsTypeLoaded (EvaluationContext gctx, string typeName)
 		{
 			SoftEvaluationContext ctx = (SoftEvaluationContext) gctx;
 			
 			return ctx.Session.GetType (typeName) != null;
 		}
 		
-		bool IsTypeLoaded (EvaluationContext ctx, TypeMirror tm)
+		public override bool IsTypeLoaded (EvaluationContext ctx, object type)
 		{
+			TypeMirror tm = (TypeMirror) type;
+			
 			return IsTypeLoaded (ctx, tm.FullName);
 		}
 		
-		bool ForceLoadType (EvaluationContext gctx, TypeMirror tm)
+		public override bool ForceLoadType (EvaluationContext gctx, object type)
 		{
 			SoftEvaluationContext ctx = (SoftEvaluationContext) gctx;
+			TypeMirror tm = (TypeMirror) type;
 
-			if (IsTypeLoaded (ctx, tm))
+			if (IsTypeLoaded (ctx, type))
 				return true;
 
 			if (!ctx.Options.AllowTargetInvoke)
@@ -1163,7 +1180,7 @@ namespace Mono.Debugging.Soft
 
 			MethodMirror cctor = OverloadResolve (ctx, ".cctor", tm, new TypeMirror[0], false, true, false);
 			if (cctor == null)
-				return false;
+				return true;
 
 			try {
 				tm.InvokeMethod (ctx.Thread, cctor, new Value[0], InvokeOptions.DisableBreakpoints | InvokeOptions.SingleThreaded);
@@ -1174,22 +1191,6 @@ namespace Mono.Debugging.Soft
 			}
 
 			return true;
-		}
-		
-		public override object ForceLoadType (EvaluationContext ctx, string typeName)
-		{
-			TypeMirror tm = (TypeMirror) GetType (ctx, typeName);
-
-			if (tm == null || IsTypeLoaded (ctx, tm))
-				return tm;
-
-			if (!ctx.Options.AllowTargetInvoke)
-				return null;
-
-			if (ForceLoadType (ctx, tm))
-				return tm;
-
-			return null;
 		}
 		
 		static T BuildAttribute<T> (CustomAttributeDataMirror attr)
