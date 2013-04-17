@@ -30,6 +30,8 @@ namespace MonoDevelop.Ide.CodeCompletion
 {
 	public abstract class ParameterDataProvider : IParameterDataProvider
 	{
+		public ParameterDataProvider (){}
+
 		public ParameterDataProvider (int startOffset)
 		{
 			this.startOffset = startOffset;
