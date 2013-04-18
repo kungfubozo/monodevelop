@@ -19,7 +19,7 @@ sub main {
 	prepare_sources();
 	build_monodevelop();
 	build_debugger();
-	build_monodevelop_hg();
+	# build_monodevelop_hg();
 	finalize_monodevelop();
 	build_boo();
 	build_boo_extensions();
@@ -55,14 +55,14 @@ sub prepare_sources {
 		printf ("Pulling latest boo-md-addins . . .\n");
 		chdir "$root/boo-md-addins";
 		system ("git pull") && die ("failed to update boo-md-addins");
-		chdir "$root/monodevelop-hg";
-		system ("hg pull --update") && die ("failed to update monodevelop-hg");
+		# chdir "$root/monodevelop-hg";
+		# system ("hg pull --update") && die ("failed to update monodevelop-hg");
 	}
 	chdir $root;
 
 	# Check sources
 	die ("Must grab Unity MonoDevelop Soft Debugger source from github first") if !-d "MonoDevelop.Debugger.Soft.Unity";
-	die ("Must grab monodevelop-hg source from bitbucket first") if !-d "monodevelop-hg";
+	# die ("Must grab monodevelop-hg source from bitbucket first") if !-d "monodevelop-hg";
 	die ("Must grab Boo implementation") if !-d "boo";
 	die ("Must grab Boo extensions") if !-d "boo-extensions";
 	die ("Must grab Boo MD addins implementation") if !-d "boo-md-addins";
@@ -101,8 +101,8 @@ sub finalize_monodevelop {
 	# Unity utilities
 	copy "$root/MonoDevelop.Debugger.Soft.Unity/obj/Release/UnityUtilities.dll", "$dest" or die ("Failed to copy UnityUtilities");	
 	# monodevelop-hg
-	copy "$root/monodevelop-hg/monodevelop-hg/bin/Release/MonoDevelop.VersionControl.Mercurial.dll", "$dest/VersionControl" or die ("Failed to copy monodevelop-hg");	
-	copy "$root/monodevelop-hg/monodevelop-hg/bin/Release/Mercurial.dll", "$dest/VersionControl" or die ("Failed to copy monodevelop-hg");	
+	# copy "$root/monodevelop-hg/monodevelop-hg/bin/Release/MonoDevelop.VersionControl.Mercurial.dll", "$dest/VersionControl" or die ("Failed to copy monodevelop-hg");	
+	# copy "$root/monodevelop-hg/monodevelop-hg/bin/Release/Mercurial.dll", "$dest/VersionControl" or die ("Failed to copy monodevelop-hg");	
 }
 
 sub build_boo {
