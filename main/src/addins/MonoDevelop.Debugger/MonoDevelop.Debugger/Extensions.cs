@@ -47,7 +47,10 @@ namespace MonoDevelop.Debugger
 			if (opers.CurrentRunOperation != null && !opers.CurrentRunOperation.IsCompleted)
 				return opers.CurrentRunOperation;
 
-			ExecutionContext context = new ExecutionContext (DebuggingService.GetExecutionHandler (), IdeApp.Workbench.ProgressMonitors);
+			string oldLayout = IdeApp.Workbench.CurrentLayout;
+			IdeApp.Workbench.CurrentLayout = "Debug";
+
+			ExecutionContext context = new ExecutionContext (DebuggingService.GetExecutionHandler (), IdeApp.Workbench.ProgressMonitors, IdeApp.Workspace.ActiveExecutionTarget);
 
 			IAsyncOperation op = opers.Execute (entry, context);
 			SwitchToDebugLayout (op);
@@ -88,10 +91,8 @@ namespace MonoDevelop.Debugger
 			if (opers.CurrentRunOperation != null && !opers.CurrentRunOperation.IsCompleted)
 				return opers.CurrentRunOperation;
 			
-			IAsyncOperation oper = DebuggingService.AttachToProcess (debugger, proc);
-			SwitchToDebugLayout (oper);
-			
-			opers.CurrentRunOperation = oper;
+			opers.CurrentRunOperation = DebuggingService.AttachToProcess (debugger, proc);
+			SwitchToDebugLayout (opers.CurrentRunOperation);
 			return opers.CurrentRunOperation;
 		}
 

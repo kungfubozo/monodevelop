@@ -292,7 +292,11 @@ namespace MonoDevelop.Projects.Formats.MSBuild
 			if (globalGroup == null)
 				globalGroup = p.AddNewPropertyGroup (false);
 			
-			string itemGuid = globalGroup.GetPropertyValue ("ProjectGuid").ToUpper ();
+			string itemGuid = globalGroup.GetPropertyValue ("ProjectGuid");
+			if (itemGuid == null)
+				throw new UserException ("Project file doesn't have a valid ProjectGuid");
+
+			itemGuid = itemGuid.ToUpper ();
 			string projectTypeGuids = globalGroup.GetPropertyValue ("ProjectTypeGuids");
 			string itemType = globalGroup.GetPropertyValue ("ItemType");
 
@@ -413,7 +417,7 @@ namespace MonoDevelop.Projects.Formats.MSBuild
 				: projectLoadMonitor.ShouldMigrateProject ();
 			if (migrationType == MigrationType.Ignore) {
 				if (st.IsMigrationRequired) {
-					monitor.ReportError (string.Format ("MonoDevelop cannot open the project '{0}' unless it is migrated.", Path.GetFileName (fileName)), null);
+					monitor.ReportError (string.Format ("{1} cannot open the project '{0}' unless it is migrated.", Path.GetFileName (fileName), BrandingService.ApplicationName), null);
 					throw new Exception ("The user choose not to migrate the project");
 				} else
 					return null;

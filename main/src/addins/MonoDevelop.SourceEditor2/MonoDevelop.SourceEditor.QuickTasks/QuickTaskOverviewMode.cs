@@ -64,7 +64,7 @@ namespace MonoDevelop.SourceEditor.QuickTasks
 			this.parentStrip = parent;
 			Events |= EventMask.ButtonPressMask | EventMask.ButtonReleaseMask | EventMask.ButtonMotionMask | EventMask.PointerMotionMask | EventMask.LeaveNotifyMask;
 			vadjustment = this.parentStrip.VAdjustment;
-			
+
 			vadjustment.ValueChanged += RedrawOnUpdate;
 			vadjustment.Changed += RedrawOnUpdate;
 			parentStrip.TaskProviderUpdated += RedrawOnUpdate;
@@ -461,8 +461,8 @@ namespace MonoDevelop.SourceEditor.QuickTasks
 		
 		protected void DrawLeftBorder (Cairo.Context cr)
 		{
-			cr.MoveTo (0.5, 1.5);
-			cr.LineTo (0.5, Allocation.Height - 1);
+			cr.MoveTo (0.5, 0);
+			cr.LineTo (0.5, Allocation.Height);
 			if (TextEditor.ColorStyle != null) {
 				var col = (HslColor)TextEditor.ColorStyle.Default.CairoBackgroundColor;
 				col.L *= 0.88;
@@ -539,14 +539,15 @@ namespace MonoDevelop.SourceEditor.QuickTasks
 					cr.Pattern = grad;
 				}
 				cr.Fill ();
-				
+
+				/*
 				cr.Color = (HslColor)Style.Dark (State);
 				cr.MoveTo (-0.5, 0.5);
 				cr.LineTo (Allocation.Width, 0.5);
 
 				cr.MoveTo (-0.5, Allocation.Height - 0.5);
 				cr.LineTo (Allocation.Width, Allocation.Height - 0.5);
-				cr.Stroke ();
+				cr.Stroke ();*/
 
 				if (TextEditor == null)
 					return true;
@@ -555,8 +556,10 @@ namespace MonoDevelop.SourceEditor.QuickTasks
 					DrawSearchResults (cr);
 					DrawSearchIndicator (cr);
 				} else {
-					var severity = DrawQuickTasks (cr);
-					DrawIndicator (cr, severity);
+					if (!Debugger.DebuggingService.IsDebugging) {
+						var severity = DrawQuickTasks (cr);
+						DrawIndicator (cr, severity);
+					}
 				}
 				DrawCaret (cr);
 				

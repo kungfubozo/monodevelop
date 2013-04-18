@@ -56,7 +56,7 @@ namespace MonoDevelop.Ide.Gui
 	/// <summary>
 	/// This is the basic interface to the workspace.
 	/// </summary>
-	public class Workbench
+	public sealed class Workbench
 	{
 		List<Document> documents = new List<Document> ();
 		List<Pad> pads;
@@ -77,7 +77,7 @@ namespace MonoDevelop.Ide.Gui
 				monitor.Step (1);
 				
 				Counters.Initialization.Trace ("Initializing Workspace");
-				workbench.InitializeWorkspace ();
+				workbench.InitializeWorkspace();
 				monitor.Step (1);
 				
 				Counters.Initialization.Trace ("Initializing Layout");
@@ -89,10 +89,10 @@ namespace MonoDevelop.Ide.Gui
 				IdeApp.Workspace.StoringUserPreferences += OnStoringWorkspaceUserPreferences;
 				IdeApp.Workspace.LoadingUserPreferences += OnLoadingWorkspaceUserPreferences;
 				
-				IdeApp.CommandService.ApplicationFocusOut += delegate(object o, EventArgs args) {
+				IdeApp.FocusOut += delegate(object o, EventArgs args) {
 					SaveFileStatus ();
 				};
-				IdeApp.CommandService.ApplicationFocusIn += delegate(object o, EventArgs args) {
+				IdeApp.FocusIn += delegate(object o, EventArgs args) {
 					CheckFileStatus ();
 				};
 				
@@ -115,7 +115,7 @@ namespace MonoDevelop.Ide.Gui
 			workbench.Memento = memento;
 			Counters.Initialization.Trace ("Making Visible");
 			RootWindow.Visible = true;
-			workbench.CurrentLayout = "Default";
+			workbench.CurrentLayout = "Solution";
 			
 			// now we have an layout set notify it
 			Counters.Initialization.Trace ("Setting layout");
@@ -182,14 +182,16 @@ namespace MonoDevelop.Ide.Gui
 		/// </summary>
 		public bool HasToplevelFocus {
 			get {
-				var toplevel = Gtk.Window.ListToplevels ().Where (x => x.HasToplevelFocus).FirstOrDefault ();
+				var windows = Gtk.Window.ListToplevels ();
+				if (windows.Any (w => w.Modal && w.Visible))
+					return false;
+				var toplevel = windows.FirstOrDefault (x => x.HasToplevelFocus);
 				if (toplevel == null)
 					return false;
 				if (toplevel == RootWindow)
 					return true;
-				//FIXME: don't depend on type name string
-				var c = toplevel.Child;
-				return c != null && c.GetType ().FullName.StartsWith ("MonoDevelop.Components.Docking");
+				var dock = toplevel as MonoDevelop.Components.Docking.DockFloatingWindow;
+				return dock != null && dock.DockParent == RootWindow;
 			}
 		}
 		
@@ -240,12 +242,36 @@ namespace MonoDevelop.Ide.Gui
 				return workbench.StatusBar.MainContext;
 			}
 		}
+
+		public void ShowCommandBar (string barId)
+		{
+			workbench.Toolbar.ShowCommandBar (barId);
+		}
 		
+		public void HideCommandBar (string barId)
+		{
+			workbench.Toolbar.HideCommandBar (barId);
+		}
+
+		internal MonoDevelop.Components.MainToolbar.MainToolbar Toolbar {
+			get {
+				return workbench.Toolbar;
+			}
+		}
+
 		public Pad GetPad<T> ()
 		{
-			foreach (Pad pad in Pads)
-				if (typeof(T).IsInstanceOfType (pad.Content))
+			foreach (Pad pad in Pads) {
+				object content;
+				try {
+					content = pad.Content;
+				} catch (Exception e) {
+					LoggingService.LogError ("Error while creating pad " + pad.Title + " content.", e);
+					continue;
+				}
+				if (typeof(T).IsInstanceOfType (content))
 					return pad;
+			}
 			return null;
 		}		
 		
@@ -376,7 +402,7 @@ namespace MonoDevelop.Ide.Gui
 							vcFound = doc.Window.ViewContent;
 						//if found, select window and jump to line
 						if (vcFound != null) {
-							IEditableTextBuffer ipos = vcFound.GetContent<IEditableTextBuffer> ();
+							IEditableTextBuffer ipos = (IEditableTextBuffer) vcFound.GetContent (typeof(IEditableTextBuffer));
 							if (line >= 1 && ipos != null) {
 								ipos.SetCaretTo (
 									line,
@@ -400,7 +426,7 @@ namespace MonoDevelop.Ide.Gui
 				Counters.OpenDocumentTimer.Trace ("Initializing monitor");
 				IProgressMonitor pm = ProgressMonitors.GetStatusProgressMonitor (
 					GettextCatalog.GetString ("Opening {0}", uniqueName),
-					Stock.OpenFileIcon,
+					Stock.StatusSolutionOperation,
 					true
 				);
 				var openFileInfo = new FileOpenInformation () {
@@ -514,6 +540,10 @@ namespace MonoDevelop.Ide.Gui
 				parentWindow,
 				properties,
 				"/MonoDevelop/Ide/GlobalOptionsDialog");
+
+			ops.Title = Platform.IsWindows
+				? GettextCatalog.GetString ("Options")
+				: GettextCatalog.GetString ("Preferences");
 
 			try {
 				if (panelId != null)
@@ -698,9 +728,11 @@ namespace MonoDevelop.Ide.Gui
 		void OnWindowClosed (object sender, WorkbenchWindowEventArgs args)
 		{
 			IWorkbenchWindow window = (IWorkbenchWindow) sender;
+			var doc = FindDocument (window);
 			window.Closing -= OnWindowClosing;
 			window.Closed -= OnWindowClosed;
-			documents.Remove (FindDocument (window)); 
+			documents.Remove (doc); 
+			OnDocumentClosed (doc);
 		}
 		
 		// When looking for the project to which the file belongs, look first
@@ -879,7 +911,7 @@ namespace MonoDevelop.Ide.Gui
 			FilePath baseDir = args.Item.BaseDirectory;
 			IViewContent currentView = null;
 			
-			using (IProgressMonitor pm = ProgressMonitors.GetStatusProgressMonitor (GettextCatalog.GetString ("Loading workspace documents"), Stock.OpenFileIcon, true)) {
+			using (IProgressMonitor pm = ProgressMonitors.GetStatusProgressMonitor (GettextCatalog.GetString ("Loading workspace documents"), Stock.StatusSolutionOperation, true)) {
 				string currentFileName = prefs.ActiveDocument != null ? baseDir.Combine (prefs.ActiveDocument).FullPath : null;
 				
 				foreach (DocumentUserPrefs doc in prefs.Files.Distinct (new DocumentUserPrefsFilenameComparer ())) {
@@ -1048,14 +1080,31 @@ namespace MonoDevelop.Ide.Gui
 			public DateTime TimeUtc;
 		}
 		
-		protected virtual void OnDocumentOpened (DocumentEventArgs e)
+		void OnDocumentOpened (DocumentEventArgs e)
 		{
-			EventHandler<DocumentEventArgs> handler = this.DocumentOpened;
-			if (handler != null)
-				handler (this, e);
+			try {
+				EventHandler<DocumentEventArgs> handler = this.DocumentOpened;
+				if (handler != null)
+					handler (this, e);
+			} catch (Exception ex) {
+				LoggingService.LogError ("Exception while opening documents", ex);
+			}
+		}
+
+		void OnDocumentClosed (Document doc)
+		{
+			try {
+				var e = new DocumentEventArgs (doc);
+				EventHandler<DocumentEventArgs> handler = this.DocumentClosed;
+				if (handler != null)
+					handler (this, e);
+			} catch (Exception ex) {
+				LoggingService.LogError ("Exception while closing documents", ex);
+			}
 		}
 
 		public event EventHandler<DocumentEventArgs> DocumentOpened;
+		public event EventHandler<DocumentEventArgs> DocumentClosed;
 
 		public void ReparseOpenDocuments ()
 		{
@@ -1132,7 +1181,7 @@ namespace MonoDevelop.Ide.Gui
 				
 				Counters.OpenDocumentTimer.Trace ("Loading file");
 				
-				IEncodedTextContent etc = newContent.GetContent<IEncodedTextContent> ();
+				IEncodedTextContent etc = (IEncodedTextContent) newContent.GetContent (typeof(IEncodedTextContent));
 				try {
 					if (fileInfo.Encoding != null && etc != null)
 						etc.Load (fileName, fileInfo.Encoding);
@@ -1163,7 +1212,7 @@ namespace MonoDevelop.Ide.Gui
 			DisplayBindingService.AttachSubWindows (newContent.WorkbenchWindow);
 			newContent.WorkbenchWindow.DocumentType = binding.Name;
 			
-			IEditableTextBuffer ipos = newContent.GetContent<IEditableTextBuffer> ();
+			IEditableTextBuffer ipos = (IEditableTextBuffer) newContent.GetContent (typeof(IEditableTextBuffer));
 			if (fileInfo.Line > 0 && ipos != null) {
 				if (newContent.Control.IsRealized) {
 					JumpToLine ();
@@ -1182,7 +1231,7 @@ namespace MonoDevelop.Ide.Gui
                 
 		public bool JumpToLine ()
 		{
-			IEditableTextBuffer ipos = newContent.GetContent<IEditableTextBuffer> ();
+			IEditableTextBuffer ipos = (IEditableTextBuffer) newContent.GetContent (typeof(IEditableTextBuffer));
 			ipos.SetCaretTo (Math.Max(1, fileInfo.Line), Math.Max(1, fileInfo.Column), fileInfo.Options.HasFlag (OpenDocumentOptions.HighlightCaretLine));
 			return false;
 		}

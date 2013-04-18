@@ -43,10 +43,12 @@ using MonoDevelop.Ide.Gui;
 
 namespace MonoDevelop.AspNet.Mvc
 {
-	public class RazorSyntaxMode : SyntaxMode
+	public class RazorSyntaxMode : SyntaxMode, IDisposable
 	{
-		public RazorSyntaxMode ()
+		public RazorSyntaxMode (Document doc)
 		{
+			this.guiDocument = doc;
+			guiDocument.DocumentParsed += HandleDocumentParsed; 
 			ResourceXmlProvider provider = new ResourceXmlProvider (typeof (IXmlProvider).Assembly, "RazorSyntaxMode.xml");
 			using (XmlReader reader = provider.Open ()) {
 				SyntaxMode baseMode = SyntaxMode.Read (reader);
@@ -61,6 +63,14 @@ namespace MonoDevelop.AspNet.Mvc
 			}
 		}
 
+		#region IDisposable implementation
+
+		public void Dispose ()
+		{
+			guiDocument.DocumentParsed -= HandleDocumentParsed;
+		}
+
+		#endregion
 		enum State
 		{
 			None,
@@ -128,21 +138,21 @@ namespace MonoDevelop.AspNet.Mvc
 				if ((!symbol.Keyword.HasValue && prevSymbol.Type == CSharpSymbolType.LessThan && (Char.IsLetterOrDigit (c) || c == '/'))
 					|| (prevSymbol.Type == CSharpSymbolType.Slash && currentState == State.InTag)) {
 					currentState = State.InTag;
-					chunks.Last ().Style = "text.markup";
-					return "text.markup";
+					chunks.Last ().Style = "xml.name";
+					return "xml.name";
 				}
 				if (symbol.Type == CSharpSymbolType.GreaterThan && currentState == State.InTag) {
 					currentState = State.None;
 					if (prevSymbol.Type == CSharpSymbolType.Slash)
-						chunks.Last ().Style = "text.markup";
-					return "text.markup";
+						chunks.Last ().Style = "xml.name";
+					return "xml.name";
 				}
 			}
 			if (symbol.Type == CSharpSymbolType.RightBrace || symbol.Type == CSharpSymbolType.RightParenthesis)
 				return GetStyleForEndBracket (symbol, off);
 			// Text in html tags
 			if ((symbol.Keyword.HasValue || symbol.Type == CSharpSymbolType.IntegerLiteral || symbol.Type == CSharpSymbolType.RealLiteral)
-				&& EnsureGuiDocumentSet () && IsInHtmlContext (symbol, off))
+				&& IsInHtmlContext (symbol, off))
 				return "text";
 
 			return GetStyleForCSharpSymbol (symbol);
@@ -167,25 +177,11 @@ namespace MonoDevelop.AspNet.Mvc
 			return GetStyleForCSharpSymbol (symbol);
 		}
 
-		bool EnsureGuiDocumentSet ()
+		void HandleDocumentParsed (object sender, EventArgs e)
 		{
-			if (guiDocument == null) {
-				try {
-					if (!File.Exists (Document.FileName))
-						return false;
-					guiDocument = IdeApp.Workbench.GetDocument (Document.FileName);
-					guiDocument.DocumentParsed += (sender, e) =>
-					{
-						var parsedDoc = (sender as Document).ParsedDocument as RazorCSharpParsedDocument;
-						if (parsedDoc != null)
-							currentSpans = parsedDoc.PageInfo.Spans.ToList ();
-					};
-				} catch (Exception) {
-					guiDocument = null;
-					return false;
-				}
-			}
-			return true;
+			var parsedDoc = (sender as Document).ParsedDocument as RazorCSharpParsedDocument;
+			if (parsedDoc != null)
+				currentSpans = parsedDoc.PageInfo.Spans.ToList ();
 		}
 
 		bool IsInHtmlContext (CSharpSymbol symbol, int off)

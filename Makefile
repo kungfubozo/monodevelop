@@ -6,7 +6,7 @@ all: update_submodules all-recursive
 
 update_submodules:
 	if test -d ".git"; then \
-		git submodule update --init --recursive; \
+		git submodule update --init --recursive || exit 1; \
 	fi
 
 top_srcdir=.
@@ -46,7 +46,7 @@ distclean: distclean-recursive
 remove-stale-tarballs:
 	rm -rf tarballs
 
-dist: remove-stale-tarballs dist-recursive
+dist: update_submodules remove-stale-tarballs dist-recursive
 	mkdir -p tarballs
 	for t in $(SUBDIRS); do \
 		if test -e $$t/*.tar.gz; then \
@@ -78,7 +78,10 @@ dist: remove-stale-tarballs dist-recursive
 	@cd tarballs && rm -rf monodevelop-$(PACKAGE_VERSION)
 
 run:
-	cd main && $(MAKE) run
+	cd main && $(MAKE) runmd
+
+run-sgen:
+	cd main && $(MAKE) run-sgen
 
 run-gdb:
 	cd main && $(MAKE) run-gdb

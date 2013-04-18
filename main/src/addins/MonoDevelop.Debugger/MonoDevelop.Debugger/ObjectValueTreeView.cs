@@ -251,19 +251,23 @@ namespace MonoDevelop.Debugger
 			base.OnShown ();
 			AdjustColumnSizes ();
 		}
-		
-		
+
+		protected override void OnRealized ()
+		{
+			base.OnRealized ();
+			AdjustColumnSizes ();
+		}
+
 		void OnColumnWidthChanged (object o, GLib.NotifyArgs args)
 		{
 			if (!columnSizesUpdating && allowStoreColumnSizes) {
 				StoreColumnSizes ();
 			}
 		}
-		
-		
+
 		void AdjustColumnSizes ()
 		{
-			if (!IsRealized || !Visible || Allocation.Width == 0 || columnSizesUpdating || compact)
+			if (!Visible || Allocation.Width <= 0 || columnSizesUpdating || compact)
 				return;
 			
 			columnSizesUpdating = true;
@@ -508,7 +512,7 @@ namespace MonoDevelop.Debugger
 			
 			if (AllowAdding)
 				store.AppendValues (createMsg, "", "", null, true, true, null, disabledColor, disabledColor);
-			
+
 			LoadState ();
 		}
 		
@@ -759,20 +763,22 @@ namespace MonoDevelop.Debugger
 			string stic = (flags & ObjectValueFlags.Global) != 0 ? "static-" : string.Empty;
 			
 			switch (flags & ObjectValueFlags.OriginMask) {
-				case ObjectValueFlags.Property: source = "property"; break;
-				case ObjectValueFlags.Type: source = "class"; stic = string.Empty; break;
-				case ObjectValueFlags.Literal: return "md-literal";
-				case ObjectValueFlags.Namespace: return "md-name-space";
-				case ObjectValueFlags.Group: return "md-open-resource-folder";
-				default: source = "field"; break;
+			case ObjectValueFlags.Property: source = "property"; break;
+			case ObjectValueFlags.Type: source = "class"; stic = string.Empty; break;
+			case ObjectValueFlags.Literal: return "md-literal";
+			case ObjectValueFlags.Namespace: return "md-name-space";
+			case ObjectValueFlags.Group: return "md-open-resource-folder";
+			case ObjectValueFlags.Field: source = "field"; break;
+			default: return "md-empty";
 			}
+
 			string access;
 			switch (flags & ObjectValueFlags.AccessMask) {
-				case ObjectValueFlags.Private: access = "private-"; break;
-				case ObjectValueFlags.Internal: access = "internal-"; break;
-				case ObjectValueFlags.InternalProtected:
-				case ObjectValueFlags.Protected: access = "protected-"; break;
-				default: access = string.Empty; break;
+			case ObjectValueFlags.Private: access = "private-"; break;
+			case ObjectValueFlags.Internal: access = "internal-"; break;
+			case ObjectValueFlags.InternalProtected:
+			case ObjectValueFlags.Protected: access = "protected-"; break;
+			default: access = string.Empty; break;
 			}
 			
 			return "md-" + access + stic + source;
@@ -783,7 +789,7 @@ namespace MonoDevelop.Debugger
 			if (!restoringState) {
 				if (!allowExpanding)
 					return true;
-			
+
 				if (GetRowExpanded (path))
 					return true;
 
@@ -872,6 +878,9 @@ namespace MonoDevelop.Debugger
 					return;
 				
 				int i = valueNames.IndexOf (exp);
+				if (i == -1)
+					return;
+
 				if (args.NewText.Length != 0)
 					valueNames [i] = args.NewText;
 				else
@@ -947,41 +956,67 @@ namespace MonoDevelop.Debugger
 			editing = true;
 			editEntry = (Gtk.Entry) args.Editable;
 			editEntry.KeyPressEvent += OnEditKeyPress;
+			editEntry.KeyReleaseEvent += HandleChanged;
 			if (StartEditing != null)
 				StartEditing (this, EventArgs.Empty);
 		}
-		
+
+		void HandleChanged (object sender, EventArgs e)
+		{
+			Gtk.Entry entry = (Gtk.Entry)sender;
+			if (!wasHandled) {
+				string text = ctx == null ? editEntry.Text : editEntry.Text.Substring (Math.Max (0, Math.Min (ctx.TriggerOffset, editEntry.Text.Length)));
+				CompletionWindowManager.UpdateWordSelection (text);
+				CompletionWindowManager.PostProcessKeyEvent (key, keyChar, modifierState);
+				PopupCompletion (entry);
+			}
+		}
+
 		void OnEndEditing ()
 		{
 			editing = false;
 			editEntry.KeyPressEvent -= OnEditKeyPress;
+			editEntry.KeyReleaseEvent -= HandleChanged;
+
 			CompletionWindowManager.HideWindow ();
 			currentCompletionData = null;
 			if (EndEditing != null)
 				EndEditing (this, EventArgs.Empty);
 		}
-		
+		bool wasHandled = false;
+		CodeCompletionContext ctx;
+		Gdk.Key key;
+		char keyChar;
+		Gdk.ModifierType modifierState;
+		uint keyValue;
+
 		[GLib.ConnectBeforeAttribute]
 		void OnEditKeyPress (object s, Gtk.KeyPressEventArgs args)
 		{
-			Gtk.Entry entry = (Gtk.Entry)s;
-			
+			wasHandled = false;
+			key = args.Event.Key;
+			keyChar =  (char)args.Event.Key;
+			modifierState = args.Event.State;
+			keyValue = args.Event.KeyValue;
 			if (currentCompletionData != null) {
-				bool ret = CompletionWindowManager.PreProcessKeyEvent (args.Event.Key, (char)args.Event.Key, args.Event.State);
-				CompletionWindowManager.PostProcessKeyEvent (args.Event.Key, (char)args.Event.Key, args.Event.State);
-				args.RetVal = ret;
+				wasHandled  = CompletionWindowManager.PreProcessKeyEvent (key, keyChar, modifierState);
+				args.RetVal = wasHandled ;
 			}
-			
+		}
+
+		void PopupCompletion (Entry entry)
+		{
 			Gtk.Application.Invoke (delegate {
-				char c = (char)Gdk.Keyval.ToUnicode (args.Event.KeyValue);
+				char c = (char)Gdk.Keyval.ToUnicode (keyValue);
 				if (currentCompletionData == null && IsCompletionChar (c)) {
 					string exp = entry.Text.Substring (0, entry.CursorPosition);
 					currentCompletionData = GetCompletionData (exp);
 					if (currentCompletionData != null) {
 						DebugCompletionDataList dataList = new DebugCompletionDataList (currentCompletionData);
-						CodeCompletionContext ctx = ((ICompletionWidget)this).CreateCodeCompletionContext (entry.CursorPosition - currentCompletionData.ExpressionLenght);
+						ctx = ((ICompletionWidget)this).CreateCodeCompletionContext (entry.CursorPosition - currentCompletionData.ExpressionLength);
 						CompletionWindowManager.ShowWindow (null, c, dataList, this, ctx);
-					} else
+					}
+					else
 						currentCompletionData = null;
 				}
 			});
@@ -1033,25 +1068,36 @@ namespace MonoDevelop.Debugger
 			case Gdk.Key.Delete:
 			case Gdk.Key.KP_Delete:
 			case Gdk.Key.BackSpace:
-				TreePath path;
-				TreeViewColumn column;
-				TreeIter iter;
-				ObjectValue val;
-				string expression;
-				
-				// Get the expression and value at the cursor
-				GetCursor (out path, out column);
-				Model.GetIter (out iter, path);
-				val = (ObjectValue)store.GetValue (iter, ObjectCol);
-				expression = GetFullExpression (iter);
-				
-				// Lookup and remove
-				if (val != null && values.Contains (val)) {
-					RemoveValue (val);
-					return true;
-				} else if (!string.IsNullOrEmpty (expression) && valueNames.Contains (expression)) {
-					RemoveExpression (expression);
-					return true;
+				if (Selection.CountSelectedRows () > 0) {
+					List<TreeRowReference> selected = new List<TreeRowReference> ();
+					bool deleted = false;
+					string expression;
+					ObjectValue val;
+					TreeIter iter;
+
+					// get a list of the selected rows (in reverse order so that we delete children before parents)
+					foreach (var path in Selection.GetSelectedRows ())
+						selected.Insert (0, new TreeRowReference (Model, path));
+
+					foreach (var row in selected) {
+						if (!Model.GetIter (out iter, row.Path))
+							continue;
+
+						val = (ObjectValue)store.GetValue (iter, ObjectCol);
+						expression = GetFullExpression (iter);
+
+						// Lookup and remove
+						if (val != null && values.Contains (val)) {
+							RemoveValue (val);
+							deleted = true;
+						} else if (!string.IsNullOrEmpty (expression) && valueNames.Contains (expression)) {
+							RemoveExpression (expression);
+							deleted = true;
+						}
+					}
+
+					if (deleted)
+						return true;
 				}
 				break;
 			}
@@ -1323,11 +1369,13 @@ namespace MonoDevelop.Debugger
 			}
 		}
 		
-		EventHandler completionContextChanged;
-		
-		event EventHandler ICompletionWidget.CompletionContextChanged {
-			add { completionContextChanged += value; }
-			remove { completionContextChanged -= value; }
+		public event EventHandler CompletionContextChanged;
+
+		protected virtual void OnCompletionContextChanged (EventArgs e)
+		{
+			EventHandler handler = this.CompletionContextChanged;
+			if (handler != null)
+				handler (this, e);
 		}
 		
 		string ICompletionWidget.GetText (int startOffset, int endOffset)
@@ -1372,7 +1420,7 @@ namespace MonoDevelop.Debugger
 			c.TriggerOffset = triggerOffset;
 			c.TriggerLineOffset = c.TriggerOffset;
 			c.TriggerTextHeight = editEntry.SizeRequest ().Height;
-			c.TriggerWordLength = currentCompletionData.ExpressionLenght;
+			c.TriggerWordLength = currentCompletionData.ExpressionLength;
 			
 			int x, y;
 			int tx, ty;
@@ -1483,6 +1531,7 @@ namespace MonoDevelop.Debugger
 			IsSorted = false;
 			foreach (CompletionItem it in data.Items)
 				Add (new DebugCompletionData (it));
+			AutoSelect =true;
 		}
 		public bool AutoSelect { get; set; }
 		public string DefaultCompletionString {

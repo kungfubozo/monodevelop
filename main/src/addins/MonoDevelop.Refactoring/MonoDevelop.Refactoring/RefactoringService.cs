@@ -195,13 +195,16 @@ namespace MonoDevelop.Refactoring
 				var result = new List<MonoDevelop.CodeActions.CodeAction> ();
 				try {
 					var editor = doc.Editor;
-					if (editor != null) {
-						string disabledNodes = PropertyService.Get ("ContextActions." + editor.Document.MimeType, "") ?? "";
-						foreach (var provider in contextActions.Where (fix => disabledNodes.IndexOf (fix.IdString) < 0)) {
-							try {
-								result.AddRange (provider.GetActions (doc, loc, cancellationToken));
-							} catch (Exception ex) {
-								LoggingService.LogError ("Error in context action provider " + provider.Title, ex);
+					if (editor != null && doc.ParsedDocument != null) {
+						var ctx = doc.ParsedDocument.CreateRefactoringContext (doc, cancellationToken);
+						if (ctx != null) {
+							string disabledNodes = PropertyService.Get ("ContextActions." + editor.Document.MimeType, "") ?? "";
+							foreach (var provider in contextActions.Where (fix => disabledNodes.IndexOf (fix.IdString) < 0)) {
+								try {
+									result.AddRange (provider.GetActions (doc, ctx, loc, cancellationToken));
+								} catch (Exception ex) {
+									LoggingService.LogError ("Error in context action provider " + provider.Title, ex);
+								}
 							}
 						}
 					}

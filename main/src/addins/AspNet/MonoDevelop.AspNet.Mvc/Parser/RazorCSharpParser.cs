@@ -51,7 +51,7 @@ using MonoDevelop.Projects;
 
 namespace MonoDevelop.AspNet.Mvc.Parser
 {
-	public class RazorCSharpParser : AbstractTypeSystemParser
+	public class RazorCSharpParser : TypeSystemParser
 	{
 		RazorEditorParserFixed.RazorEditorParser editorParser;
 		DocumentParseCompleteEventArgs capturedArgs;
@@ -195,7 +195,7 @@ namespace MonoDevelop.AspNet.Mvc.Parser
 			var webConfigMap = new WebConfigurationFileMap ();
 			if (aspProject != null) {
 				var vdm = new VirtualDirectoryMapping (aspProject.BaseDirectory.Combine ("Views"), true, "web.config");
-				webConfigMap.VirtualDirectories.Add ("/", vdm);
+			webConfigMap.VirtualDirectories.Add ("/", vdm);
 			}
 			Configuration configuration;
 			try {

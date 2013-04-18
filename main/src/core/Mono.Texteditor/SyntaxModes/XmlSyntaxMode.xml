@@ -37,40 +37,55 @@
 	
 	<Span color = "text.preprocessor" rule = "Comment">
 		<Begin>&amp;</Begin>
-		<Exit flags="CancelSpan"> |	</Exit>
+	
 		<End>;</End>
 	</Span>
 	
-	<Span tagColor = "keyword.declaration" color = "text.markup" rule = "InTag">
+	<Span tagColor = "keyword.declaration" color = "xml" rule = "InTag">
 		<Begin>&lt;!DOCTYPE</Begin>
 		<End>&gt;</End>
 	</Span>
 	
-	<Span tagColor = "keyword.exceptions" color = "comment" rule = "Comment">
+	<Span tagColor = "xml.cdata" color = "xml.cdata" rule = "Comment">
 		<Begin>&lt;![CDATA[</Begin>
 		<End>]]&gt;</End>
 	</Span>
 	
-	<Span color = "text.markup" rule = "InJavascript" >
+	<Span color = "xml" rule = "InJavascript" >
 		<Begin>&lt;script</Begin>
 		<End>&lt;/script&gt;</End>
 	</Span>
 	
 	<!-- processing instructions -->
-	<Span tagColor = "keyword.declaration" color = "text.markup" rule = "InTag">
+	<Span tagColor = "keyword.declaration" color = "xml.tag" rule = "InTag">
 		<Begin>&lt;?</Begin>
 		<End>?&gt;</End>
 	</Span>
 	
-	<Span color = "text.markup" rule = "InTag">
-		<Begin>&lt;</Begin>
+	<Span tagColor = "xml.tag" color = "xml.name" rule = "InTag">
+		<Begin>&lt;/</Begin>
 		<End>&gt;</End>
 	</Span>
 	
+	<Span tagColor = "xml.tag" color = "xml.name" rule = "InTag">
+		<Begin>&lt;</Begin>
+		<Exit>&gt;</Exit>
+		<End>/&gt;</End>
+	</Span>
+	
 	<Rule name = "Comment">
+		<Span color = "text.preprocessor">
+			<Begin>&amp;</Begin>
+			<End>;</End>
+		</Span>
 	</Rule>
 	
 	<Rule name = "InTag">
+		<Span color = "text.preprocessor">
+			<Begin>&amp;</Begin>
+			<End>;</End>
+		</Span>
+	
 		<Span color = "string" rule="InLiteral">
 			<Begin>&quot;</Begin>
 			<Exit>&lt;</Exit>
@@ -84,7 +99,10 @@
 		</Span>
 		
 		<!-- attributes -->
-		<Match color = "keyword.type">[A-Za-z0-9_]+(:[A-Za-z0-9_]+)?[\s\n\r]*=</Match>
+		<Match expression="([A-Za-z0-9_]+[:[A-Za-z0-9_]+]?)([\s\n\r]*=)">
+			<Group color = "xml.attribute"/>
+			<Group color = "text"/>
+		</Match>
 	</Rule>
 	
 	<Rule name = "InLiteral">

@@ -232,7 +232,7 @@ namespace MonoDevelop.Platform
 		}
 	}
 	
-	class GtkWin32Proxy : IWin32Window
+	public class GtkWin32Proxy : IWin32Window
 	{
 		public GtkWin32Proxy (Gtk.Window gtkWindow)
 		{

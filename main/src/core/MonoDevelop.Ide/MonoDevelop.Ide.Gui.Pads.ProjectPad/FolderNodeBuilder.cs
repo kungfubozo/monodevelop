@@ -50,7 +50,7 @@ using MonoDevelop.Ide.Projects;
 
 namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 {
-	public abstract class FolderNodeBuilder: TypeNodeBuilder
+	abstract class FolderNodeBuilder: TypeNodeBuilder
 	{
 		public override void GetNodeAttributes (ITreeNavigator treeNavigator, object dataObject, ref NodeAttributes attributes)
 		{
@@ -136,7 +136,7 @@ namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 		}
 	}
 	
-	public abstract class FolderCommandHandler: NodeCommandHandler
+	abstract class FolderCommandHandler: NodeCommandHandler
 	{
 		// CommandHandlers are constantly re-created so it's not possible to cache data inside the instance
 		// Since 'AddExistingFolder' can only be run from the UI thread anyway we can safely just make this static.
@@ -354,7 +354,7 @@ namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 			bool move = operation == DragOperation.Move;
 			var opText = move ? GettextCatalog.GetString ("Moving files...") : GettextCatalog.GetString ("Copying files...");
 			
-			using (var monitor = IdeApp.Workbench.ProgressMonitors.GetStatusProgressMonitor (opText, MonoDevelop.Ide.Gui.Stock.CopyIcon, true)) {
+			using (var monitor = IdeApp.Workbench.ProgressMonitors.GetStatusProgressMonitor (opText, Stock.StatusSolutionOperation, true)) {
 				// If we drag and drop a node in the treeview corresponding to a directory, do not move
 				// the entire directory. We should only move the files which exist in the project. Otherwise
 				// we will need a lot of hacks all over the code to prevent us from incorrectly moving version
