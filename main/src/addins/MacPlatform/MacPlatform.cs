@@ -79,7 +79,7 @@ namespace MonoDevelop.MacIntegration
 			
 			Cocoa.InitMonoMac ();
 
-			CheckGtkVersion (2, 24, 14);
+			// CheckGtkVersion (2, 24, 14);
 
 			timer.Trace ("Installing App Event Handlers");
 			GlobalSetup ();
