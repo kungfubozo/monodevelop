@@ -36,7 +36,7 @@ namespace MonoDevelop.Ide.WelcomePage
 			LogoImage = Gdk.Pixbuf.LoadFromResource ("WelcomePage_Logo.png");
 			TopBorderImage = Gdk.Pixbuf.LoadFromResource ("WelcomePage_TopBorderRepeat.png");
 
-			var mainAlignment = new Gtk.Alignment (0.5f, 0.5f, 0f, 1f);
+			var mainAlignment = new Gtk.Alignment (0.5f, 0.5f, 1f, 1f);
 
 			var mainCol = new WelcomePageColumn ();
 			mainAlignment.Add (mainCol);
@@ -50,19 +50,20 @@ namespace MonoDevelop.Ide.WelcomePage
 				)
 			);
 			mainCol.PackStart (row1, false, false, 0);
+			mainCol.PackStart (new WelcomePageRecentProjectsList (GettextCatalog.GetString ("Solutions")), true, true, 0);
 
-			var row2 = new WelcomePageRow (
-				new WelcomePageColumn (
-				new WelcomePageRecentProjectsList (GettextCatalog.GetString ("Solutions"))
-				),
-				new WelcomePageColumn (
-					new WelcomePageNewsFeed (GettextCatalog.GetString ("Xamarin News"), "http://software.xamarin.com/Service/News", "NewsLinks")
-				),
-				new WelcomePageColumn (
-					new WelcomePageTipOfTheDaySection ()
-				)
-			);
-			mainCol.PackStart (row2, false, false, 0);
+//			var row2 = new WelcomePageRow (
+//				new WelcomePageColumn (
+//				new WelcomePageRecentProjectsList (GettextCatalog.GetString ("Solutions"))
+//				),
+//				new WelcomePageColumn (
+//					new WelcomePageNewsFeed (GettextCatalog.GetString ("Xamarin News"), "http://software.xamarin.com/Service/News", "NewsLinks")
+//				),
+//				new WelcomePageColumn (
+//					new WelcomePageTipOfTheDaySection ()
+//				)
+//			);
+//			mainCol.PackStart (row2, false, false, 0);
 
 			parent.Add (mainAlignment);
 		}
