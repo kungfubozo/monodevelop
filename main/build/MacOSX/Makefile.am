@@ -6,6 +6,7 @@ MAC_APP_LIB_DIR=$(MACOS)/lib/monodevelop
 ADDINS=$(MACOS)/lib/monodevelop/AddIns
 EXTRAS=$(top_srcdir)/../extras
 ARTIFACTS=$(top_srcdir)/../../artifacts
+DEPENDENCIES=$(top_srcdir)/../dependencies
 
 # In which commit did the MonoDevelop version change? 00000000 if uncommitted
 commit_of_last_version_change    := $(shell LANG=C git blame $(top_srcdir)/configure.in | grep AC_INIT | sed 's/ .*//')
@@ -27,7 +28,6 @@ MODERN_GTK_DIR=../../../../gtk
 CLEANFILES = render.exe
 #DISTCLEANFILES = 
 EXTRA_DIST = dmg-bg.png DS_Store Info.plist.in make-dmg-bundle.sh render.exe
-CURRENT=$(shell readlink /Library/Frameworks/Mono.framework/Versions/Current)
 
 all: app
 
@@ -172,9 +172,11 @@ mono-bundle: app
 
 # Copy system mono framework
 	echo "Copying system framework ($(CURRENT))"
-	rm -rf $(MAC_APP_DIR)/Contents/Frameworks/Mono.framework
+	rm -rf $(MAC_APP_DIR)/Contents/Frameworks/Mono.framework $(DEPENDENCIES)/Mono.framework
 	mkdir -p $(MAC_APP_DIR)/Contents/Frameworks/Mono.framework/Versions
-	cp -R /Library/Frameworks/Mono.framework/Versions/$(CURRENT) $(MAC_APP_DIR)/Contents/Frameworks/Mono.framework/Versions
+	unzip -d $(DEPENDENCIES) $(DEPENDENCIES)/Mono.framework-2.10.11.zip
+	CURRENT=$(shell readlink $(DEPENDENCIES)/Mono.framework/Versions/Current)
+	cp -R $(DEPENDENCIES)/Mono.framework/Versions/$(CURRENT) $(MAC_APP_DIR)/Contents/Frameworks/Mono.framework/Versions
 	ln -s Versions/Current/bin $(MAC_APP_DIR)/Contents/Frameworks/Mono.framework/Commands
 	ln -s Versions/Current/include $(MAC_APP_DIR)/Contents/Frameworks/Mono.framework/Headers
 	ln -s Versions/Current $(MAC_APP_DIR)/Contents/Frameworks/Mono.framework/Home
