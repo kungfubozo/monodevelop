@@ -201,6 +201,7 @@ mono-bundle: app
 	./copyToInputFile.sh $(BUNDLED_FRAMEWORK_DIR)/Versions/Current/etc/mono/config
 	./copyToInputFile.sh $(BUNDLED_FRAMEWORK_DIR)/Versions/Current/etc/pango/pango.modules
 	./copyToInputFile.sh $(BUNDLED_FRAMEWORK_DIR)/Versions/Current/etc/pango/pangorc
+	cp $(DEPENDENCIES)/gdk-pixbuf.loaders.in $(BUNDLED_FRAMEWORK_DIR)/Versions/Current/etc/gtk-2.0
 	rm -f $(MAC_APP_LIB_DIR)/bin/MonoDevelop.exe.config
 
 # Relocate launcher scripts
