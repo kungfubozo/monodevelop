@@ -6,7 +6,7 @@ MAC_APP_LIB_DIR=$(MACOS)/lib/monodevelop
 ADDINS=$(MACOS)/lib/monodevelop/AddIns
 EXTRAS=$(top_srcdir)/../extras
 ARTIFACTS=$(top_srcdir)/../../artifacts
-DEPENDENCIES=$(top_srcdir)/../dependencies
+DEPENDENCIES=$(top_srcdir)/../../dependencies
 
 # In which commit did the MonoDevelop version change? 00000000 if uncommitted
 commit_of_last_version_change    := $(shell LANG=C git blame $(top_srcdir)/configure.in | grep AC_INIT | sed 's/ .*//')
