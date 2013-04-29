@@ -38,7 +38,7 @@ find "${FINAL_INSTALL_DIR}" -name '*.loaders.in' -execdir "${DIR}/replacePath.sh
 
 # Move pango config and module files to $TMPDIR, since pango absolutely can't handle being in a subdir of a weird path
 cp "${MONO_FRAMEWORK_PATH}/etc/pango/pango.modules.in" "${MONO_FRAMEWORK_PATH}/etc/pango/pango.modules"
-sed -i'.orig' "s,/Library/Frameworks/Mono.framework/Versions/Current,${TMPDIR},g" "${MONO_FRAMEWORK_PATH}/etc/pango/pango.modules"
+sed -i'.orig' "s,/Library/Frameworks/Mono.framework/Versions/[^/]*/,${TMPDIR}/,g" "${MONO_FRAMEWORK_PATH}/etc/pango/pango.modules"
 mkdir -p "${TMPDIR}/etc/pango"
 mv "${MONO_FRAMEWORK_PATH}/etc/pango/pango.modules" "${TMPDIR}/etc/pango/pango.modules"
 
