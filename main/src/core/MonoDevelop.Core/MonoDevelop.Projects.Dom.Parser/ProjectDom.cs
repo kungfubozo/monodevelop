@@ -486,6 +486,9 @@ namespace MonoDevelop.Projects.Dom.Parser
 		
 		IEnumerable<IType> InternalGetSubclassesSafe (IType btype, bool includeReferences, IList<string> namespaces)
 		{
+			if (null == btype)
+				yield break;
+				
 			string decoratedName = btype.DecoratedFullName;
 			string genericName = decoratedName;
 			if (btype is InstantiatedType)
