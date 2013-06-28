@@ -32,7 +32,7 @@ namespace MonoDevelop.SourceEditor
 {
 	
 	
-	public class CompileErrorTooltipProvider: ITooltipProvider
+	public class CompileErrorTooltipProvider: TooltipProvider
 	{
 		
 		public CompileErrorTooltipProvider()
@@ -41,13 +41,20 @@ namespace MonoDevelop.SourceEditor
 
 		#region ITooltipProvider implementation 
 		
-		public TooltipItem GetItem (Mono.TextEditor.TextEditor editor, int offset)
+		public override TooltipItem GetItem (Mono.TextEditor.TextEditor editor, int offset)
 		{
-			ExtensibleTextEditor ed = (ExtensibleTextEditor) editor;
-			return new TooltipItem (ed.GetErrorInformationAt (offset), editor.Document.GetLineByOffset (offset));
+			var ed = editor as ExtensibleTextEditor;
+			if (ed == null)
+				return null;
+
+			string errorInformation = ed.GetErrorInformationAt (offset);
+			if (string.IsNullOrEmpty (errorInformation))
+				return null;
+
+			return new TooltipItem (errorInformation, editor.Document.GetLineByOffset (offset));
 		}
 		
-		public Gtk.Window CreateTooltipWindow (Mono.TextEditor.TextEditor editor, int offset, Gdk.ModifierType modifierState, TooltipItem item)
+		protected override Gtk.Window CreateTooltipWindow (Mono.TextEditor.TextEditor editor, int offset, Gdk.ModifierType modifierState, TooltipItem item)
 		{
 			LanguageItemWindow result = new LanguageItemWindow ((ExtensibleTextEditor) editor, modifierState, null, (string)item.Item, null);
 			if (result.IsEmpty)
@@ -55,19 +62,13 @@ namespace MonoDevelop.SourceEditor
 			return result;
 		}
 		
-		public void GetRequiredPosition (Mono.TextEditor.TextEditor editor, Gtk.Window tipWindow, out int requiredWidth, out double xalign)
+		protected override void GetRequiredPosition (Mono.TextEditor.TextEditor editor, Gtk.Window tipWindow, out int requiredWidth, out double xalign)
 		{
 			LanguageItemWindow win = (LanguageItemWindow) tipWindow;
 			requiredWidth = win.SetMaxWidth (win.Screen.Width);
 			xalign = 0.5;
 		}
-		
-		public bool IsInteractive (Mono.TextEditor.TextEditor editor, Gtk.Window tipWindow)
-		{
-			return false;
-		}
 
-		
 		#endregion 
 		
 	}

@@ -62,7 +62,8 @@ namespace MonoDevelop.Ide.Gui
 		
 		public Rectangle Bounds {
 			get {
-				return properties.Get ("bounds", new Rectangle(50, 50, Gdk.Screen.Default.Width - 100, Gdk.Screen.Default.Height - 150));
+				var geo = Gdk.Screen.Default.GetMonitorGeometry (0);
+				return properties.Get ("bounds", new Rectangle(geo.X + 50, geo.Y + 50, geo.Width - 100, geo.Height - 150));
 			}
 			set {
 				properties.Set ("bounds", value);
@@ -104,7 +105,24 @@ namespace MonoDevelop.Ide.Gui
 			this.properties = properties;
 		}
 	}
+	
+	class DocumentUserPrefsFilenameComparer : IEqualityComparer<DocumentUserPrefs>
+	{
+		public bool Equals (DocumentUserPrefs x, DocumentUserPrefs y)
+		{
+			if (x == null)
+				return y == null;
+			if (y == null)
+				return false;
+			return x.FileName == y.FileName;
+		}
 
+		public int GetHashCode (DocumentUserPrefs obj)
+		{
+			return obj == null || obj.FileName == null ? 0 : obj.FileName.GetHashCode ();
+		}
+	}
+	
 	[DataItem ("File")]
 	class DocumentUserPrefs
 	{

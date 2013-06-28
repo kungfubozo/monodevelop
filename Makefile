@@ -1,7 +1,13 @@
+include main/monodevelop_version
 
 EXTRA_DIST = configure
 
-all: all-recursive
+all: update_submodules all-recursive
+
+update_submodules:
+	if test -d ".git"; then \
+		git submodule update --init --recursive || exit 1; \
+	fi
 
 top_srcdir=.
 include $(top_srcdir)/config.make
@@ -16,8 +22,8 @@ CONFIG_MAKE=$(top_srcdir)/config.make
 	case $$2 in *=*) dk="exit 1" ;; *k*) dk=: ;; *) dk="exit 1" ;; esac; \
 	for dir in $(SUBDIRS); do \
 		case $$dir in \
-		.) make $*-local || { final_exit="exit 1"; $$dk; };;\
-		*) (cd $$dir && make $*) || { final_exit="exit 1"; $$dk; };;\
+		.) $(MAKE) $*-local || { final_exit="exit 1"; $$dk; };;\
+		*) (cd $$dir && $(MAKE) $*) || { final_exit="exit 1"; $$dk; };;\
 		esac \
 	done
 	$$final_exit
@@ -36,13 +42,14 @@ distcheck: distcheck-recursive
 
 distclean: distclean-recursive
 	rm -rf config.make local-config
-	
 
-dist: dist-recursive
+remove-stale-tarballs:
 	rm -rf tarballs
+
+dist: update_submodules remove-stale-tarballs dist-recursive
 	mkdir -p tarballs
 	for t in $(SUBDIRS); do \
-		if test -a $$t/*.tar.gz; then \
+		if test -e $$t/*.tar.gz; then \
 			mv -f $$t/*.tar.gz tarballs ;\
 		fi \
 	done
@@ -50,7 +57,7 @@ dist: dist-recursive
 		gunzip $$t ;\
 	done
 	for t in `ls tarballs/*.tar`; do \
- 		bzip2 $$t ;\
+		bzip2 $$t ;\
 	done
 	rm -rf specs
 	mkdir -p specs
@@ -59,18 +66,40 @@ dist: dist-recursive
 			cp -f $$t/*.spec specs ;\
 		fi \
 	done
+	@cd tarballs && for tb in `ls external`; do \
+		echo Decompressing $$tb; \
+		tar xvjf external/$$tb; \
+	done
+	@rm -rf tarballs/external	
+	@echo Decompressing monodevelop-$(PACKAGE_VERSION).tar.bz2
+	@cd tarballs && tar xvjf monodevelop-$(PACKAGE_VERSION).tar.bz2
+	@echo Generating merged tarball
+	@cd tarballs && tar -cjf monodevelop-$(PACKAGE_VERSION).tar.bz2 monodevelop-$(PACKAGE_VERSION)
+	@cd tarballs && rm -rf monodevelop-$(PACKAGE_VERSION)
 
 run:
-	cd main && make run
-	
+	cd main && $(MAKE) runmd
+
+run-sgen:
+	cd main && $(MAKE) run-sgen
+
+run-gdb:
+	cd main && $(MAKE) run-gdb
+
 test:
-	cd main/tests/UnitTests && make test fixture=$(fixture)
+	cd main && $(MAKE) test assembly=$(assembly)
 
 check-addins:
-	cd main && make check-addins
+	cd main && $(MAKE) check-addins
 
 app-dir:
-	cd main && make app-dir
+	cd main && $(MAKE) app-dir
 
-package-monomac:
-	(cd main; make package-monomac)
+reset-versions: reset-all
+check-versions: check-all
+
+reset-%:
+	@./version-checks --reset $*
+
+check-%:
+	@./version-checks --check $*

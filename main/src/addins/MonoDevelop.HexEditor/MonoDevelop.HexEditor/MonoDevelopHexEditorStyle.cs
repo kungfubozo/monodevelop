@@ -29,31 +29,30 @@ using Mono.TextEditor.Highlighting;
 using Mono.MHex.Rendering;
 using Gdk;
 using MonoDevelop.Core;
+using MonoDevelop.Ide;
 
 namespace MonoDevelop.HexEditor
 {
 	public class MonoDevelopHexEditorStyle : HexEditorStyle
 	{
-		ColorSheme colorStyle;
+		ColorScheme colorStyle;
 		Mono.MHex.HexEditor hexEditor;
 		
 		public MonoDevelopHexEditorStyle (Mono.MHex.HexEditor hexEditor)
 		{
 			this.hexEditor = hexEditor;
 			SetStyle ();
-			PropertyService.PropertyChanged += delegate(object sender, PropertyChangedEventArgs e) {
-				if (e.Key == "ColorScheme") {
-					SetStyle ();
-					this.hexEditor.Options.RaiseChanged ();
-					this.hexEditor.PurgeLayoutCaches ();
-					this.hexEditor.Repaint ();
-				}
+			IdeApp.Preferences.ColorSchemeChanged += delegate {
+				SetStyle ();
+				this.hexEditor.Options.RaiseChanged ();
+				this.hexEditor.PurgeLayoutCaches ();
+				this.hexEditor.Repaint ();
 			};
 		}
 		
 		void SetStyle ()
 		{
-			colorStyle = SyntaxModeService.GetColorStyle (hexEditor.Style, PropertyService.Get ("ColorScheme", "Default"));
+			colorStyle = SyntaxModeService.GetColorStyle (IdeApp.Preferences.ColorScheme);
 		}
 		
 		public override Color HexOffset {
@@ -70,7 +69,7 @@ namespace MonoDevelop.HexEditor
 		
 		public override Color HexOffsetHighlighted {
 			get {
-				return Mono.TextEditor.Highlighting.ColorSheme.ToGdkColor (colorStyle.LineNumberFgHighlighted);
+				return Mono.TextEditor.Highlighting.ColorScheme.ToGdkColor (colorStyle.LineMarker);
 			}
 		}
 		
@@ -100,25 +99,25 @@ namespace MonoDevelop.HexEditor
 		
 		public override Color IconBarBg {
 			get {
-				return Mono.TextEditor.Highlighting.ColorSheme.ToGdkColor (colorStyle.IconBarBg);
+				return Mono.TextEditor.Highlighting.ColorScheme.ToGdkColor (colorStyle.IconBarBg);
 			}
 		}
 		
 		public override Color IconBarSeperator {
 			get {
-				return Mono.TextEditor.Highlighting.ColorSheme.ToGdkColor (colorStyle.IconBarSeperator);
+				return Mono.TextEditor.Highlighting.ColorScheme.ToGdkColor (colorStyle.IconBarSeperator);
 			}
 		}
 		
 		public override Color BookmarkColor1 {
 			get {
-				return Mono.TextEditor.Highlighting.ColorSheme.ToGdkColor (colorStyle.BookmarkColor1);
+				return Mono.TextEditor.Highlighting.ColorScheme.ToGdkColor (colorStyle.BookmarkColor1);
 			}
 		}
 		
 		public override Color BookmarkColor2 {
 			get {
-				return Mono.TextEditor.Highlighting.ColorSheme.ToGdkColor (colorStyle.BookmarkColor2);
+				return Mono.TextEditor.Highlighting.ColorScheme.ToGdkColor (colorStyle.BookmarkColor2);
 			}
 		}
 		
@@ -136,7 +135,7 @@ namespace MonoDevelop.HexEditor
 		
 		public override Color HighlightOffset {
 			get {
-				return Mono.TextEditor.Highlighting.ColorSheme.ToGdkColor (colorStyle.SearchTextBg);
+				return Mono.TextEditor.Highlighting.ColorScheme.ToGdkColor (colorStyle.SearchTextBg);
 			}
 		}
 	}

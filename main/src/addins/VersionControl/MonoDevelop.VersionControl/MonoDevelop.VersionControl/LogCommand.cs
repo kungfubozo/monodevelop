@@ -39,7 +39,10 @@ namespace MonoDevelop.VersionControl
 		
 		static bool CanShow (VersionControlItem item)
 		{
-			return !item.IsDirectory && AddinManager.GetExtensionObjects<ILogViewHandler> (LogViewHandlers).Any (h => h.CanHandle (item));
+			// We want directories to be able to view the log for an entire directory
+			// by selecting it from the solution pane
+			return item.VersionInfo.IsVersioned
+				&& AddinManager.GetExtensionObjects<ILogViewHandler> (LogViewHandlers).Any (h => h.CanHandle (item, null));
 		}
 		
 		public static bool Show (VersionControlItemList items, bool test)
@@ -48,7 +51,10 @@ namespace MonoDevelop.VersionControl
 				return items.All (CanShow);
 			
 			foreach (var item in items) {
-				var document = IdeApp.Workbench.OpenDocument (item.Path, OpenDocumentOptions.Default | OpenDocumentOptions.OnlyInternalViewer);
+				Document document = null;
+				if (!item.IsDirectory)
+					document = IdeApp.Workbench.OpenDocument (item.Path, OpenDocumentOptions.Default | OpenDocumentOptions.OnlyInternalViewer);
+
 				if (document != null) {
 					document.Window.SwitchView (document.Window.FindView<ILogView> ());
 				} else {

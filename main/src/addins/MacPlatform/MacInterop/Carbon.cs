@@ -226,8 +226,10 @@ namespace MonoDevelop.MacInterop
 		}
 		
 		struct ProcessSerialNumber {
+#pragma warning disable 0169
 			ulong highLongOfPSN;
 			ulong lowLongOfPSN;
+#pragma warning restore 0169
 		}
 		
 		#endregion
@@ -376,6 +378,7 @@ namespace MonoDevelop.MacInterop
 		RotateWindowsBackward = 1919906914, // 'rotb'
 		RotateFloatingWindowsForward = 1920231031, // 'rtfw'
 		RotateFloatingWindowsBackward = 1920231010, // 'rtfb'
+		QuitAndCloseAllWindows = 1903520631, // 'qukw'
 		
 		//created automatically -- used for inserting before/after the default window list
 		WindowListSeparator = 2003592310, // 'wldv'

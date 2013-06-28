@@ -65,6 +65,8 @@ namespace Mono.TextEditor.Theatrics
 
 		public AnimatedWidget (Widget widget, uint duration, Easing easing, Blocking blocking, bool horizontal)
 		{
+			Mono.TextEditor.GtkWorkarounds.FixContainerLeak (this);
+			
 			this.horizontal = horizontal;
 			Widget = widget;
 			Duration = duration;
@@ -75,10 +77,6 @@ namespace Mono.TextEditor.Theatrics
 			Widget.Parent = this;
 			Widget.Destroyed += OnWidgetDestroyed;
 			ShowAll ();
-		}
-
-		protected AnimatedWidget (IntPtr raw) : base(raw)
-		{
 		}
 
 		public double Percent {
@@ -126,7 +124,6 @@ namespace Mono.TextEditor.Theatrics
 			attributes.WindowType = Gdk.WindowType.Child;
 			attributes.Wclass = Gdk.WindowClass.InputOutput;
 			attributes.EventMask = (int)Gdk.EventMask.ExposureMask;
-			
 			GdkWindow = new Gdk.Window (Parent.GdkWindow, attributes, 0);
 			GdkWindow.UserData = Handle;
 			GdkWindow.Background = Style.Background (State);
@@ -182,9 +179,9 @@ namespace Mono.TextEditor.Theatrics
 			if (canvas != null) {
 				GdkWindow.DrawDrawable (Style.BackgroundGC (State), canvas, 0, 0, widget_alloc.X, widget_alloc.Y, widget_alloc.Width, widget_alloc.Height);
 				return true;
-			} else {
-				return base.OnExposeEvent (evnt);
 			}
+
+			return base.OnExposeEvent (evnt);
 		}
 
 		protected override void ForAll (bool include_internals, Callback callback)

@@ -209,8 +209,8 @@ namespace MonoDevelop.Core.Execution
 						dict[kvp.Key] = kvp.Value;
 				
 				var p = externalConsoleHandler (command, arguments, workingDirectory, dict,
-				                                GettextCatalog.GetString ("MonoDevelop External Console"), 
-				                                console != null ? !console.CloseOnDispose : false);
+					GettextCatalog.GetString ("{0} External Console", BrandingService.ApplicationName),
+					console != null ? !console.CloseOnDispose : false);
 
 				if (p != null) {
 					if (exited != null) {
@@ -309,22 +309,22 @@ namespace MonoDevelop.Core.Execution
 				throw new ArgumentException ("The remote object type must implement IDisposable", "type");
 		}
 		
-		public IDisposable CreateExternalProcessObject (Type type, bool shared)
+		public IDisposable CreateExternalProcessObject (Type type, bool shared, IList<string> userAssemblyPaths = null)
 		{
 			CheckRemoteType (type);
 			ProcessHostController hc = GetHost (type.ToString(), shared, null);
-			return (IDisposable) hc.CreateInstance (type.Assembly.Location, type.FullName, GetRequiredAddins (type));
+			return (IDisposable) hc.CreateInstance (type.Assembly.Location, type.FullName, GetRequiredAddins (type), userAssemblyPaths);
 		}
-		
+
 		public IDisposable CreateExternalProcessObject (Type type, TargetRuntime runtime)
 		{
 			return CreateExternalProcessObject (type, runtime.GetExecutionHandler ());
 		}
-		
-		public IDisposable CreateExternalProcessObject (Type type, IExecutionHandler executionHandler)
+
+		public IDisposable CreateExternalProcessObject (Type type, IExecutionHandler executionHandler, IList<string> userAssemblyPaths = null)
 		{
 			CheckRemoteType (type);
-			return (IDisposable) GetHost (type.ToString(), false, executionHandler).CreateInstance (type.Assembly.Location, type.FullName, GetRequiredAddins (type));
+			return (IDisposable)GetHost (type.ToString (), false, executionHandler).CreateInstance (type.Assembly.Location, type.FullName, GetRequiredAddins (type), userAssemblyPaths);
 		}
 		
 		public IDisposable CreateExternalProcessObject (string assemblyPath, string typeName, bool shared, params string[] requiredAddins)

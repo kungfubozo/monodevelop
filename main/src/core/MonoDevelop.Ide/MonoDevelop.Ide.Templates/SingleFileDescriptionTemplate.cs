@@ -243,7 +243,7 @@ namespace MonoDevelop.Ide.Templates
 					fileName = fileName + defaultExtension;
 				}
 				else if (!string.IsNullOrEmpty  (language)) {
-					ILanguageBinding languageBinding = GetLanguageBinding (language);
+					var languageBinding = GetLanguageBinding (language);
 					fileName = languageBinding.GetFileName (fileName);
 				} 
 			}
@@ -266,8 +266,11 @@ namespace MonoDevelop.Ide.Templates
 			string mime = DesktopService.GetMimeTypeForUri (fileName);
 			CodeFormatter formatter = !string.IsNullOrEmpty (mime) ? CodeFormatterService.GetFormatter (mime) : null;
 			
-			if (formatter != null)
-				content = formatter.FormatText (policyParent != null ? policyParent.Policies : null, content);
+			if (formatter != null) {
+				var formatted = formatter.FormatText (policyParent != null ? policyParent.Policies : null, content);
+				if (formatted != null)
+					content = formatted;
+			}
 			
 			MemoryStream ms = new MemoryStream ();
 			byte[] data;
@@ -277,7 +280,7 @@ namespace MonoDevelop.Ide.Templates
 				ms.Write (data, 0, data.Length);
 			}
 			
-			Mono.TextEditor.Document doc = new Mono.TextEditor.Document ();
+			Mono.TextEditor.TextDocument doc = new Mono.TextEditor.TextDocument ();
 			doc.Text = content;
 			
 			TextStylePolicy textPolicy = policyParent != null ? policyParent.Policies.Get<TextStylePolicy> ("text/plain")
@@ -287,8 +290,8 @@ namespace MonoDevelop.Ide.Templates
 			
 			var tabToSpaces = textPolicy.TabsToSpaces? new string (' ', textPolicy.TabWidth) : null;
 			
-			foreach (Mono.TextEditor.LineSegment line in doc.Lines) {
-				var lineText = doc.GetTextAt (line.Offset, line.EditableLength);
+			foreach (Mono.TextEditor.DocumentLine line in doc.Lines) {
+				var lineText = doc.GetTextAt (line.Offset, line.Length);
 				if (tabToSpaces != null)
 					lineText = lineText.Replace ("\t", tabToSpaces);
 				data = System.Text.Encoding.UTF8.GetBytes (lineText);
@@ -357,6 +360,8 @@ namespace MonoDevelop.Ide.Templates
 			}
 			
 			tags ["Namespace"] = ns;
+			if (policyParent != null)
+				tags ["SolutionName"] = policyParent.Name;
 			if (project != null) {
 				tags ["ProjectName"] = project.Name;
 				tags ["SafeProjectName"] = CreateIdentifierName (project.Name);
@@ -402,7 +407,7 @@ namespace MonoDevelop.Ide.Templates
 		
 		protected ILanguageBinding GetLanguageBinding (string language)
 		{
-			ILanguageBinding binding = LanguageBindingService.GetBindingPerLanguageName (language);
+			var binding = LanguageBindingService.GetBindingPerLanguageName (language);
 			if (binding == null)
 				throw new InvalidOperationException ("Language '" + language + "' not found");
 			return binding;

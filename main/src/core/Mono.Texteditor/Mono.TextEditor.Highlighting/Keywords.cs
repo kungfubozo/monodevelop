@@ -38,12 +38,15 @@ namespace Mono.TextEditor.Highlighting
 		
 		public string Color {
 			get;
-			private set;
+			set;
 		}
 
 		public IEnumerable<string> Words {
 			get {
 				return words;
+			}
+			set {
+				words = new List<string> (value);
 			}
 		}
 
@@ -56,7 +59,7 @@ namespace Mono.TextEditor.Highlighting
 		{
 		}
 		
-		public virtual bool GetIsValid (ColorSheme style)
+		public virtual bool GetIsValid (ColorScheme style)
 		{
 			if (style.GetChunkStyle (Color) == null) {
 				System.Console.WriteLine("color:" + Color + " not found.");

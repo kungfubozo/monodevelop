@@ -148,7 +148,7 @@ namespace MonoDevelop.AnalysisCore
 			
 			analysisTreeCache [treeType] = tree = BuildTree (treeType);
 
-#if DEBUG
+#if DEBUG_ANALYSIS_TREE
 			if (tree != null)
 				Console.WriteLine (tree.GetTreeStructure ());
 #endif

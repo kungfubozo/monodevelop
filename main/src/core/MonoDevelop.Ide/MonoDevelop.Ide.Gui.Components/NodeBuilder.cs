@@ -27,6 +27,7 @@
 //
 
 using System;
+
 using MonoDevelop.Core;
 
 namespace MonoDevelop.Ide.Gui.Components
@@ -77,6 +78,10 @@ namespace MonoDevelop.Ide.Gui.Components
 		}
 		
 		public virtual void BuildNode (ITreeBuilder treeBuilder, object dataObject, ref string label, ref Gdk.Pixbuf icon, ref Gdk.Pixbuf closedIcon)
+		{
+		}
+		
+		public virtual void PrepareChildNodes (object dataObject)
 		{
 		}
 		

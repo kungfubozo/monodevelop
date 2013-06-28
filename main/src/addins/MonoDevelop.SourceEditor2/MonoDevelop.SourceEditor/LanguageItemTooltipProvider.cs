@@ -27,13 +27,12 @@
 
 using System;
 using Mono.TextEditor;
-using MonoDevelop.Projects.Dom;
-using MonoDevelop.Projects.Dom.Output;
-using MonoDevelop.Projects.Dom.Parser;
+using MonoDevelop.Ide.TypeSystem;
+using ICSharpCode.NRefactory.Semantics;
 
 namespace MonoDevelop.SourceEditor
 {
-	public class LanguageItemTooltipProvider: ITooltipProvider
+	public class LanguageItemTooltipProvider: TooltipProvider
 	{
 		public LanguageItemTooltipProvider()
 		{
@@ -41,33 +40,33 @@ namespace MonoDevelop.SourceEditor
 
 		#region ITooltipProvider implementation 
 		
-		public TooltipItem GetItem (Mono.TextEditor.TextEditor editor, int offset)
+		public override TooltipItem GetItem (Mono.TextEditor.TextEditor editor, int offset)
 		{
-			ExtensibleTextEditor ed = (ExtensibleTextEditor) editor;
-			
-			ResolveResult resolveResult = ed.GetLanguageItem (offset);
-			if (resolveResult == null || resolveResult.ResolvedExpression == null)
+			ExtensibleTextEditor ed = (ExtensibleTextEditor)editor;
+			ICSharpCode.NRefactory.TypeSystem.DomRegion region;
+			var resolveResult = ed.GetLanguageItem (offset, out region);
+			if (resolveResult == null)
 				return null;
-			int startOffset = editor.Document.LocationToOffset (resolveResult.ResolvedExpression.Region.Start.Line,
-			                                                    resolveResult.ResolvedExpression.Region.Start.Column);
-			int endOffset = editor.Document.LocationToOffset (resolveResult.ResolvedExpression.Region.End.Line, 
-			                                                    resolveResult.ResolvedExpression.Region.End.Column);
+			int startOffset = offset;
+			int endOffset = offset;
 			return new TooltipItem (resolveResult, startOffset, endOffset - startOffset);
 		}
 		
 		ResolveResult lastResult = null;
 		LanguageItemWindow lastWindow = null;
 		
-		public Gtk.Window CreateTooltipWindow (Mono.TextEditor.TextEditor editor, int offset, Gdk.ModifierType modifierState, TooltipItem item)
+		protected override Gtk.Window CreateTooltipWindow (Mono.TextEditor.TextEditor editor, int offset, Gdk.ModifierType modifierState, TooltipItem item)
 		{
-			ExtensibleTextEditor ed = (ExtensibleTextEditor) editor;
-			ParsedDocument doc = ProjectDomService.GetParsedDocument (null, ed.Document.FileName);
+			var ed = (ExtensibleTextEditor)editor;
+			var doc = ed.ParsedDocument;
+			if (doc == null)
+				return null;
 			
-			ResolveResult resolveResult = (ResolveResult)item.Item;
-			if (lastResult != null && lastResult.ResolvedExpression != null && lastWindow.IsRealized && 
-			    resolveResult != null && resolveResult.ResolvedExpression != null &&  lastResult.ResolvedExpression.Expression == resolveResult.ResolvedExpression.Expression)
+			var resolveResult = (ResolveResult)item.Item;
+			if (lastResult != null && lastWindow.IsRealized && 
+			    resolveResult != null && lastResult.Type.Equals (resolveResult.Type))
 				return lastWindow;
-			LanguageItemWindow result = new LanguageItemWindow (ed, modifierState, resolveResult, null, doc != null ? doc.CompilationUnit : null);
+			var result = new LanguageItemWindow (ed, modifierState, resolveResult, null, doc.ParsedFile);
 			lastWindow = result;
 			lastResult = resolveResult;
 			if (result.IsEmpty)
@@ -75,18 +74,13 @@ namespace MonoDevelop.SourceEditor
 			return result;
 		}
 		
-		public void GetRequiredPosition (Mono.TextEditor.TextEditor editor, Gtk.Window tipWindow, out int requiredWidth, out double xalign)
+		protected override void GetRequiredPosition (Mono.TextEditor.TextEditor editor, Gtk.Window tipWindow, out int requiredWidth, out double xalign)
 		{
 			LanguageItemWindow win = (LanguageItemWindow) tipWindow;
 			requiredWidth = win.SetMaxWidth (win.Screen.Width);
 			xalign = 0.5;
 		}
-		
-		public bool IsInteractive (Mono.TextEditor.TextEditor editor, Gtk.Window tipWindow)
-		{
-			return false;
-		}
-		
+
 		#endregion 
 		
 	}

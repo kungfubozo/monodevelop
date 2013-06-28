@@ -26,7 +26,6 @@
 	
 	<SeparatorItem id = "ActionsSectionStart" />
 	<Condition id="ItemType" value="ProjectReference|ProjectFile|SystemFile">
-		<CommandItem id = "MonoDevelop.Ide.Commands.ViewCommands.Open" />
 		<ItemSet id = "OpenWith" _label = "Open _With" autohide="true">
 			<CommandItem id = "MonoDevelop.Ide.Commands.ViewCommands.OpenWithList" />
 		</ItemSet>
@@ -87,7 +86,7 @@
 	<SeparatorItem id = "ToolsSectionStart" />
 	<ItemSet id = "Tools" _label = "_Tools" autohide="True">
 		<Condition id="ItemType" value="Solution|Project">
-			<CommandItem id = "MonoDevelop.Ide.Commands.ProjectCommands.ExportProject" />
+			<CommandItem id = "MonoDevelop.Ide.Commands.ProjectCommands.ExportSolution" />
 			<SeparatorItem id = "ExportSeparator" />
 		</Condition>
 		<Condition id="ItemType" value="Solution|Project|SolutionFolder">

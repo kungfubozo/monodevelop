@@ -87,7 +87,7 @@ namespace MonoDevelop.Ide.Projects {
 			this.openSolution = openCombine;
 			TransientFor = IdeApp.Workbench.RootWindow;
 			Title = newSolution ? GettextCatalog.GetString ("New Solution") : GettextCatalog.GetString ("New Project");
-
+			
 			InitializeTemplates ();
 			
 			if (!newSolution) {
@@ -96,6 +96,9 @@ namespace MonoDevelop.Ide.Projects {
 				chk_combine_directory.Hide ();
 				lbl_subdirectory.Hide ();
 			}
+
+			TreeIter iter;
+			ExpandCategory ("C#", out iter);
 		}
 		
 		public void SelectTemplate (string id)
@@ -149,14 +152,16 @@ namespace MonoDevelop.Ide.Projects {
 			} while (catStore.IterNext (ref trial));
 			return false;
 		}
-		
-		void SelectCategory (string category)
+
+		bool ExpandCategory (string category, out TreeIter result)
 		{
 			string[] cats = category.Split ('/');
 			
 			TreeIter iter;
-			if (!catStore.GetIterFirst (out iter))
-				return;
+			if (!catStore.GetIterFirst (out iter)) {
+				result = TreeIter.Zero;
+				return false;
+			}
 			
 			TreeIter nextIter = iter;
 			for (int i = 0; i < cats.Length; i++) {
@@ -171,7 +176,15 @@ namespace MonoDevelop.Ide.Projects {
 			}
 			
 			lst_template_types.ExpandToPath (catStore.GetPath (iter));
-			lst_template_types.Selection.SelectIter (iter);
+			result = iter;
+			return true;
+		}
+		
+		void SelectCategory (string category)
+		{
+			TreeIter iter;
+			if (ExpandCategory (category, out iter))
+				lst_template_types.Selection.SelectIter (iter);
 		}
 		
 		void InitializeView()
@@ -303,8 +316,8 @@ namespace MonoDevelop.Ide.Projects {
 		{
 			if (!btn_new.Sensitive)
 				return;
+			
 			if (notebook.Page == 0) {
-				
 				if (!CreateProject ())
 					return;
 				
@@ -387,7 +400,7 @@ namespace MonoDevelop.Ide.Projects {
 			
 			string solution = txt_subdirectory.Text;
 			string name     = txt_name.Text;
-			string location = entry_location.Path;
+			string location = ProjectLocation;
 
 			if(solution.Equals("")) solution = name; //This was empty when adding after first combine
 			
@@ -416,22 +429,25 @@ namespace MonoDevelop.Ide.Projects {
 			ProjectTemplate item = (ProjectTemplate) templateView.CurrentlySelected;
 			
 			try {
-				System.IO.Directory.CreateDirectory (ProjectLocation);
+				System.IO.Directory.CreateDirectory (location);
 			} catch (IOException) {
-				MessageService.ShowError (GettextCatalog.GetString ("Could not create directory {0}. File already exists.", ProjectLocation));
+				MessageService.ShowError (GettextCatalog.GetString ("Could not create directory {0}. File already exists.", location));
 				return false;
 			} catch (UnauthorizedAccessException) {
-				MessageService.ShowError (GettextCatalog.GetString ("You do not have permission to create to {0}", ProjectLocation));
+				MessageService.ShowError (GettextCatalog.GetString ("You do not have permission to create to {0}", location));
 				return false;
 			}
 			
-			ProjectCreateInformation cinfo = CreateProjectCreateInformation ();
 			
 			try {
+				ProjectCreateInformation cinfo = CreateProjectCreateInformation ();
 				if (newSolution)
 					newItem = item.CreateWorkspaceItem (cinfo);
 				else
 					newItem = item.CreateProject (parentFolder, cinfo);
+			} catch (UserException ex) {
+				MessageService.ShowError (ex.Message, ex.Details);
+				return false;
 			} catch (Exception ex) {
 				MessageService.ShowException (ex, GettextCatalog.GetString ("The project could not be created"));
 				return false;
@@ -443,8 +459,8 @@ namespace MonoDevelop.Ide.Projects {
 		ProjectCreateInformation CreateProjectCreateInformation ()
 		{
 			ProjectCreateInformation cinfo = new ProjectCreateInformation ();
-			cinfo.SolutionPath = SolutionLocation;
-			cinfo.ProjectBasePath = ProjectLocation;
+			cinfo.SolutionPath = FileService.ResolveFullPath (SolutionLocation);
+			cinfo.ProjectBasePath = FileService.ResolveFullPath (ProjectLocation);
 			cinfo.ProjectName = txt_name.Text;
 			cinfo.SolutionName = CreateSolutionDirectory ? txt_subdirectory.Text : txt_name.Text;
 			cinfo.ParentFolder = parentFolder;
@@ -489,6 +505,8 @@ namespace MonoDevelop.Ide.Projects {
 				}
 				
 				PathChanged (null, null);
+				
+				btn_new.GrabDefault ();
 			} catch (Exception ex) {
 				txt_name.Sensitive = false;
 				btn_new.Sensitive = false;
@@ -548,7 +566,7 @@ namespace MonoDevelop.Ide.Projects {
 			if (basePath == null)
 				basePath = IdeApp.ProjectOperations.ProjectsDefaultPath;
 				
-			entry_location.Path = basePath;
+			entry_location.Path = FileService.ResolveFullPath (basePath);
 			
 			PathChanged (null, null);
 			

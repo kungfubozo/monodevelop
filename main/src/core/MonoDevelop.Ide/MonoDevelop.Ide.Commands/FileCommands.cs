@@ -173,6 +173,20 @@ namespace MonoDevelop.Ide.Commands
 		}
 	}
 
+	// MonoDevelop.Ide.Commands.FileCommands.CloseFile
+	public class CloseFileHandler: CommandHandler
+	{
+		protected override void Run ()
+		{
+			IdeApp.Workbench.ActiveDocument.Close ();
+		}
+
+		protected override void Update (CommandInfo info)
+		{
+			info.Enabled = IdeApp.Workbench.ActiveDocument != null;
+		}
+	}
+
 	// MonoDevelop.Ide.Commands.FileCommands.CloseWorkspace
 	// MonoDevelop.Ide.Commands.FileCommands.CloseWorkspaceItem
 	public class CloseWorkspaceHandler : CommandHandler
@@ -215,7 +229,9 @@ namespace MonoDevelop.Ide.Commands
 		{
 			return false; // Unity
 			IPrintable print;
-			return IdeApp.Workbench.ActiveDocument != null
+			//HACK: disable printing on Windows while it doesn't work
+			return !Platform.IsWindows
+				&& IdeApp.Workbench.ActiveDocument != null
 				&& (print = IdeApp.Workbench.ActiveDocument.GetContent<IPrintable> ()) != null
 				&& print.CanPrint;
 		}
@@ -289,7 +305,12 @@ namespace MonoDevelop.Ide.Commands
 			try {
 				string title = GettextCatalog.GetString ("Clear recent files");
 				string question = GettextCatalog.GetString ("Are you sure you want to clear recent files list?");
-				if (MessageService.Confirm (title, question, AlertButton.Clear)) {
+				if (MessageService.GenericAlert (
+					MonoDevelop.Ide.Gui.Stock.Question,
+					title,
+					question,
+					AlertButton.No,
+					AlertButton.Yes) == AlertButton.Yes) {
 					DesktopService.RecentFiles.ClearFiles ();
 				}
 			} catch (Exception ex) {
@@ -348,8 +369,8 @@ namespace MonoDevelop.Ide.Commands
 		protected override void Run (object dataItem)
 		{
 			string filename = (string)dataItem;
-			Gdk.ModifierType mtype;
-			bool inWorkspace = Gtk.Global.GetCurrentEventState (out mtype) && (mtype & Gdk.ModifierType.ControlMask) != 0;
+			Gdk.ModifierType mtype = Mono.TextEditor.GtkWorkarounds.GetCurrentKeyModifiers ();
+			bool inWorkspace = (mtype & Gdk.ModifierType.ControlMask) != 0;
 			IdeApp.Workspace.OpenWorkspaceItem (filename, !inWorkspace);
 		}
 	}
@@ -357,12 +378,17 @@ namespace MonoDevelop.Ide.Commands
 	// MonoDevelop.Ide.Commands.FileCommands.ClearRecentProjects
 	internal class ClearRecentProjectsHandler : CommandHandler
 	{
-		protected override void Run()
+		protected override void Run ()
 		{
 			try {
 				string title = GettextCatalog.GetString ("Clear recent projects");
 				string question = GettextCatalog.GetString ("Are you sure you want to clear recent projects list?");
-				if (MessageService.Confirm (title, question, AlertButton.Clear)) {
+				if (MessageService.GenericAlert (
+					MonoDevelop.Ide.Gui.Stock.Question,
+					title,
+					question,
+					AlertButton.No,
+					AlertButton.Yes) == AlertButton.Yes) {
 					DesktopService.RecentFiles.ClearProjects ();
 				}
 			} catch (Exception ex) {

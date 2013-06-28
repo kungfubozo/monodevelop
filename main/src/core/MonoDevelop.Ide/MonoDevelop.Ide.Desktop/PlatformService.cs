@@ -38,6 +38,7 @@ using MonoDevelop.Core;
 using Mono.Unix;
 using MonoDevelop.Ide.Extensions;
 using MonoDevelop.Core.Execution;
+using MonoDevelop.Components.MainToolbar;
 
 
 namespace MonoDevelop.Ide.Desktop
@@ -77,8 +78,10 @@ namespace MonoDevelop.Ide.Desktop
 		public string GetMimeTypeForUri (string uri)
 		{
 			if (!String.IsNullOrEmpty (uri)) {
-				FileInfo file = new FileInfo (uri);
-				MimeTypeNode mt = FindMimeTypeForFile (file.Name);
+// Creating file infos is expensive, should be avoided 
+//				FileInfo file = new FileInfo (uri);
+//				MimeTypeNode mt = FindMimeTypeForFile (file.Name);
+				MimeTypeNode mt = FindMimeTypeForFile (uri);
 				if (mt != null)
 					return mt.Id;
 			}
@@ -220,10 +223,32 @@ namespace MonoDevelop.Ide.Desktop
 			else
 				return OnGetIconForType (type);
 		}
-		
+
+		static List<MimeTypeNode> mimeTypeNodes = new List<MimeTypeNode> ();
+		static PlatformService ()
+		{
+			if (AddinManager.IsInitialized) {
+				AddinManager.AddExtensionNodeHandler ("/MonoDevelop/Core/MimeTypes", delegate (object sender, ExtensionNodeEventArgs args) {
+					var newList = new List<MimeTypeNode> (mimeTypeNodes);
+					var mimeTypeNode = (MimeTypeNode)args.ExtensionNode;
+					switch (args.Change) {
+					case ExtensionChange.Add:
+							// initialize child nodes.
+						var initialize = mimeTypeNode.ChildNodes;
+						newList.Add (mimeTypeNode);
+						break;
+					case ExtensionChange.Remove:
+						newList.Remove (mimeTypeNode);
+						break;
+					}
+					mimeTypeNodes = newList;
+				});
+			}
+		}
+
 		MimeTypeNode FindMimeTypeForFile (string fileName)
 		{
-			foreach (MimeTypeNode mt in AddinManager.GetExtensionNodes ("/MonoDevelop/Core/MimeTypes")) {
+			foreach (MimeTypeNode mt in mimeTypeNodes) {
 				if (mt.SupportsFile (fileName))
 					return mt;
 			}
@@ -232,7 +257,7 @@ namespace MonoDevelop.Ide.Desktop
 		
 		MimeTypeNode FindMimeType (string type)
 		{
-			foreach (MimeTypeNode mt in AddinManager.GetExtensionNodes ("/MonoDevelop/Core/MimeTypes")) {
+			foreach (MimeTypeNode mt in mimeTypeNodes) {
 				if (mt.Id == type)
 					return mt;
 			}
@@ -283,7 +308,8 @@ namespace MonoDevelop.Ide.Desktop
 			return null;
 		}
 		
-		public virtual bool SetGlobalMenu (MonoDevelop.Components.Commands.CommandManager commandManager, string commandMenuAddinPath)
+		public virtual bool SetGlobalMenu (MonoDevelop.Components.Commands.CommandManager commandManager,
+			string commandMenuAddinPath, string appMenuAddinPath)
 		{
 			return false;
 		}
@@ -345,6 +371,7 @@ namespace MonoDevelop.Ide.Desktop
 		{
 			return new string[0];
 		}
+
 		
 		/// <summary>
 		/// Starts the installer.
@@ -378,6 +405,15 @@ namespace MonoDevelop.Ide.Desktop
 		public virtual void GrabDesktopFocus (Gtk.Window window)
 		{
 			window.Present ();
+		}
+
+		internal virtual void SetMainWindowDecorations (Gtk.Window window)
+		{
+		}
+
+		internal virtual MainToolbar CreateMainToolbar (Gtk.Window window)
+		{
+			return new MainToolbar ();
 		}
 	}
 }

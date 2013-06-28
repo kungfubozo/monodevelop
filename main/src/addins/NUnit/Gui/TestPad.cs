@@ -41,6 +41,7 @@ using MonoDevelop.Ide.Execution;
 using MonoDevelop.Components.Docking;
 using MonoDevelop.Ide;
 using MonoDevelop.Projects;
+using Mono.TextEditor;
 
 namespace MonoDevelop.NUnit
 {
@@ -146,7 +147,7 @@ namespace MonoDevelop.NUnit
 			VBox boxPaned1 = new VBox ();
 			
 			chart = new TestChart ();
-			chart.ButtonReleaseEvent += new Gtk.ButtonReleaseEventHandler (OnChartPopupMenu);
+			chart.ButtonPressEvent += OnChartButtonPress;
 			chart.SelectionChanged += new EventHandler (OnChartDateChanged);
 			chart.HeightRequest = 50;
 			
@@ -596,7 +597,7 @@ namespace MonoDevelop.NUnit
 					foreach (UnitTest t in group.Tests) {
 						UnitTestResult res = t.Results.GetLastResult (chart.CurrentDate);
 						if (res != null)
-							detailsStore.AppendValues (t, t.Name, res.TotalSuccess.ToString(), res.TotalFailures.ToString(), res.TotalIgnored.ToString());
+							detailsStore.AppendValues (t, t.Name, res.Passed.ToString (), res.ErrorsAndFailures.ToString (), res.Ignored.ToString());
 						else
 							detailsStore.AppendValues (t, t.Name, "", "", "");
 					}
@@ -712,10 +713,11 @@ namespace MonoDevelop.NUnit
 				chart.GoLast ();
 		}
 		
-		void OnChartPopupMenu (object o, Gtk.ButtonReleaseEventArgs args)
+		void OnChartButtonPress (object o, Gtk.ButtonPressEventArgs args)
 		{
-			if (args.Event.Button == 3) {
-				IdeApp.CommandService.ShowContextMenu ("/MonoDevelop/NUnit/ContextMenu/TestChart");
+			if (args.Event.TriggersContextMenu ()) {
+				IdeApp.CommandService.ShowContextMenu (Control, args.Event, "/MonoDevelop/NUnit/ContextMenu/TestChart");
+				args.RetVal = true;
 			}
 		}
 		

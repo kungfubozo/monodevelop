@@ -45,7 +45,9 @@ namespace MonoDevelop.SourceEditor
 			this.SkipTaskbarHint = true;
 			this.Decorated = false;
 			this.BorderWidth = 2;
-			this.TypeHint = WindowTypeHint.Tooltip;
+			//HACK: this should be WindowTypeHint.Tooltip, but GTK on mac is buggy and doesn't allow keyboard
+			//input to WindowType.Toplevel windows with WindowTypeHint.Tooltip hint
+			this.TypeHint = WindowTypeHint.PopupMenu;
 			this.AllowShrink = false;
 			this.AllowGrow = false;
 		}
@@ -62,15 +64,20 @@ namespace MonoDevelop.SourceEditor
 		}
 	}
 	
-	public class DebugValueWindow : BaseWindow
+	public class DebugValueWindow : PopoverWindow
 	{
 		ObjectValueTreeView tree;
 		ScrolledWindow sw;
-		PinWindow pinWindow;
-		TreeIter currentPinIter;
+//		PinWindow pinWindow;
+//		TreeIter currentPinIter;
 		
-		public DebugValueWindow (Mono.TextEditor.TextEditor editor, int offset, StackFrame frame, ObjectValue value, PinnedWatch watch)
+		public DebugValueWindow (Mono.TextEditor.TextEditor editor, int offset, StackFrame frame, ObjectValue value, PinnedWatch watch): base (Gtk.WindowType.Toplevel)
 		{
+			this.TypeHint = WindowTypeHint.PopupMenu;
+			this.AllowShrink = false;
+			this.AllowGrow = false;
+			this.Decorated = false;
+
 			TransientFor = (Gtk.Window) editor.Toplevel;
 			
 			// Avoid getting the focus when the window is shown. We'll get it when the mouse enters the window
@@ -82,7 +89,7 @@ namespace MonoDevelop.SourceEditor
 			
 			tree = new ObjectValueTreeView ();
 			sw.Add (tree);
-			Add (sw);
+			ContentBox.Add (sw);
 			
 			tree.Frame = frame;
 			tree.CompactView = true;
@@ -93,7 +100,7 @@ namespace MonoDevelop.SourceEditor
 			tree.RootPinAlwaysVisible = true;
 			tree.PinnedWatch = watch;
 			DocumentLocation location = editor.Document.OffsetToLocation (offset);
-			tree.PinnedWatchLine = location.Line + 1;
+			tree.PinnedWatchLine = location.Line;
 			tree.PinnedWatchFile = ((ExtensibleTextEditor)editor).View.ContentName;
 			
 			tree.AddValue (value);
@@ -118,12 +125,15 @@ namespace MonoDevelop.SourceEditor
 			tree.EndEditing += delegate {
 				Modal = false;
 			};
+
+			ShowArrow = true;
+			Theme.CornerRadius = 3;
 		}
 
-		void HandlePinWindowButtonPressEvent (object o, ButtonPressEventArgs args)
-		{
-			tree.CreatePinnedWatch (currentPinIter);
-		}
+//		void HandlePinWindowButtonPressEvent (object o, ButtonPressEventArgs args)
+//		{
+//			tree.CreatePinnedWatch (currentPinIter);
+//		}
 		
 //		[GLib.ConnectBefore]
 //		void HandleTreeMotionNotifyEvent (object o, MotionNotifyEventArgs args)
@@ -175,8 +185,7 @@ namespace MonoDevelop.SourceEditor
 				AcceptFocus = true;
 			return base.OnEnterNotifyEvent (evnt);
 		}
-		
-		
+
 		void OnTreeSizeChanged (object s, SizeAllocatedArgs a)
 		{
 			int x,y,w,h;
@@ -201,6 +210,31 @@ namespace MonoDevelop.SourceEditor
 				sw.HscrollbarPolicy = PolicyType.Never;
 				sw.WidthRequest = -1;
 			}
+			// Force a redraw of the whole window. This is a workaround for bug 7538
+			QueueDraw ();
+		}
+		
+		protected override void OnSizeAllocated (Gdk.Rectangle allocation)
+		{
+			const int edgeGap = 2;
+			int oldY, x, y;
+			
+			this.GetPosition (out x, out y);
+			oldY = y;
+			
+			Gdk.Rectangle geometry = DesktopService.GetUsableMonitorGeometry (Screen, Screen.GetMonitorAtPoint (x, y));
+			if (allocation.Height <= geometry.Height && y + allocation.Height >= geometry.Y + geometry.Height - edgeGap)
+				y = geometry.Top + (geometry.Height - allocation.Height - edgeGap);
+			if (y < geometry.Top + edgeGap)
+				y = geometry.Top + edgeGap;
+			
+			if (y != oldY) {
+				Move (x, y);
+				// If the window is moved, hide the arrow since it will be pointing to the wrong place
+				ShowArrow = false;
+			}
+			
+			base.OnSizeAllocated (allocation);
 		}
 	}
 	

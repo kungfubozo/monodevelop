@@ -52,6 +52,32 @@ namespace MonoDevelop.MacInterop
 		}
 		
 		[DllImport (SecurityLib)]
+		static extern OSStatus SecKeychainItemFreeContent (IntPtr attrList, IntPtr data);
+
+		[DllImport (SecurityLib)]
+		static extern OSStatus SecKeychainAddGenericPassword (IntPtr keychain, uint serviceNameLength, string serviceName,
+		                                                      uint accountNameLength, string accountName, uint passwordLength,
+		                                                      byte[] passwordData, ref IntPtr itemRef);
+		[DllImport (SecurityLib)]
+		static extern OSStatus SecKeychainFindGenericPassword (IntPtr keychain, uint serviceNameLength, string serviceName,
+		                                                      uint accountNameLength, string accountName, out uint passwordLength,
+		                                                      out IntPtr passwordData, ref IntPtr itemRef);
+
+		[DllImport (SecurityLib)]
+		static extern OSStatus SecKeychainAddInternetPassword (IntPtr keychain, uint serverNameLength, string serverName, uint securityDomainLength,
+		                                                      string securityDomain, uint accountNameLength, string accountName, uint pathLength,
+		                                                      string path, ushort port, int protocol, int authenticationType,
+		                                                      uint passwordLength, byte[] passwordData, ref IntPtr itemRef);
+		[DllImport (SecurityLib)]
+		static extern OSStatus SecKeychainFindInternetPassword (IntPtr keychain, uint serverNameLength, string serverName, uint securityDomainLength,
+		                                                      string securityDomain, uint accountNameLength, string accountName, uint pathLength,
+		                                                      string path, ushort port, int protocol, int authenticationType,
+		                                                      out uint passwordLength, out IntPtr passwordData, ref IntPtr itemRef);
+
+		[DllImport (SecurityLib)]
+		static extern OSStatus SecKeychainItemModifyAttributesAndData (IntPtr itemRef, IntPtr attrList, uint length, byte [] data);
+		
+		[DllImport (SecurityLib)]
 		static extern OSStatus SecKeychainSearchCreateFromAttributes (IntPtr keychainOrArray, SecItemClass itemClass, IntPtr attrList, out IntPtr searchRef);
 		
 		[DllImport (SecurityLib)]
@@ -175,13 +201,13 @@ namespace MonoDevelop.MacInterop
 			if (res != OSStatus.Ok)
 				throw new Exception ("Could not enumerate certificates from the keychain. Error:\n" + GetError (res));
 			
-			var list = new List<string> ();
+			var names = new HashSet<string> ();
 			
 			OSStatus searchStatus;
 			while ((searchStatus = SecKeychainSearchCopyNext (searchRef, out itemRef)) == OSStatus.Ok) {
 				IntPtr commonName;
 				if (SecCertificateCopyCommonName (itemRef, out commonName) == OSStatus.Ok) {
-					list.Add (FetchString (commonName));
+					names.Add (FetchString (commonName));
 					CFRelease (commonName);
 				}
 				CFRelease (itemRef);
@@ -190,7 +216,7 @@ namespace MonoDevelop.MacInterop
 				LoggingService.LogWarning ("Unexpected error retrieving certificates from keychain:\n" + GetError (searchStatus));
 			
 			CFRelease (searchRef);
-			return list;
+			return names.ToList ();
 		}
 		
 		public static IList<string> GetAllSigningIdentities ()
@@ -202,7 +228,7 @@ namespace MonoDevelop.MacInterop
 			if (res != OSStatus.Ok)
 				throw new Exception ("Could not enumerate certificates from the keychain. Error:\n" + GetError (res));
 			
-			var list = new List<string> ();
+			var identities = new HashSet<string> ();
 			
 			OSStatus searchStatus;
 			while ((searchStatus = SecIdentitySearchCopyNext (searchRef, out itemRef)) == OSStatus.Ok) {
@@ -210,7 +236,7 @@ namespace MonoDevelop.MacInterop
 					if (SecCertificateCopyCommonName (certRef, out commonName) == OSStatus.Ok) {
 						string name = FetchString (commonName);
 						if (name != null)
-							list.Add (name);
+							identities.Add (name);
 						CFRelease (commonName);
 					}
 					CFRelease (certRef);
@@ -221,7 +247,7 @@ namespace MonoDevelop.MacInterop
 				LoggingService.LogWarning ("Unexpected error retrieving identities from keychain:\n" + GetError (searchStatus));
 			
 			CFRelease (searchRef);
-			return list;
+			return identities.ToList ();
 		}
 		
 		public static IEnumerable<X509Certificate2> FindNamedSigningCertificates (Func<string,bool> nameCheck)
@@ -241,7 +267,7 @@ namespace MonoDevelop.MacInterop
 			if (res != OSStatus.Ok)
 				throw new Exception ("Could not enumerate certificates from the keychain. Error:\n" + GetError (res));
 			
-			var list = new List<X509Certificate2> ();
+			var certs = new HashSet<X509Certificate2> ();
 			
 			OSStatus searchStatus;
 			while ((searchStatus = SecIdentitySearchCopyNext (searchRef, out itemRef)) == OSStatus.Ok) {
@@ -249,7 +275,7 @@ namespace MonoDevelop.MacInterop
 					CssmData data;
 					if (SecCertificateGetData (certRef, out data) == OSStatus.Ok) {
 						try {
-							list.Add (new X509Certificate2 (data.GetCopy ()));
+							certs.Add (new X509Certificate2 (data.GetCopy ()));
 						} catch (Exception ex) {
 							LoggingService.LogWarning ("Error loading signing certificate from keychain", ex);
 						}
@@ -261,7 +287,7 @@ namespace MonoDevelop.MacInterop
 				LoggingService.LogWarning ("Unexpected error code retrieving signing certificates from keychain:\n" + GetError (searchStatus));
 			
 			CFRelease (searchRef);
-			return list;
+			return certs.ToList ();
 		}
 		
 		/* 10.6 only
@@ -315,6 +341,48 @@ namespace MonoDevelop.MacInterop
 		public static string GetCertificateCommonName (X509Certificate2 cert)
 		{
 			return cert.GetNameInfo (X509NameType.SimpleName, false);
+		}
+
+		public static void AddInternetPassword (Uri uri, string password)
+		{
+			IntPtr itemRef = IntPtr.Zero;
+			IntPtr passwordPtr = IntPtr.Zero;
+			uint passwordLength = 0;
+			var passwordBytes = System.Text.Encoding.UTF8.GetBytes (password);
+			
+			// See if there is already a password there for this uri
+			var result = SecKeychainFindInternetPassword (IntPtr.Zero, (uint) uri.Host.Length, uri.Host, 0, null,
+			                                              (uint) uri.UserInfo.Length, uri.UserInfo, (uint) uri.PathAndQuery.Length, uri.PathAndQuery,
+			                                              (ushort) uri.Port, 0, 0, out passwordLength, out passwordPtr, ref itemRef);
+			if (result == OSStatus.Ok) {
+				// If there is, replace it with the new one
+				result = SecKeychainItemModifyAttributesAndData (itemRef, IntPtr.Zero, (uint) passwordBytes.Length, passwordBytes);
+			} else {
+				// Otherwise add a new entry with the password
+				result = SecKeychainAddInternetPassword (IntPtr.Zero, (uint) uri.Host.Length, uri.Host, 0, null,
+			                                             (uint) uri.UserInfo.Length, uri.UserInfo, (uint) uri.PathAndQuery.Length, uri.PathAndQuery,
+			                                             (ushort) uri.Port, 0, 0, (uint) passwordBytes.Length, passwordBytes, ref itemRef);
+			}
+			
+			if (result != OSStatus.Ok)
+				throw new Exception ("Could not add internet password to keychain: " + GetError (result));
+		}
+
+		public static string FindInternetPassword (Uri uri)
+		{
+			IntPtr itemRef = IntPtr.Zero;
+			IntPtr password = IntPtr.Zero;
+			uint passwordLength = 0;
+			var result = SecKeychainFindInternetPassword (IntPtr.Zero, (uint) uri.Host.Length, uri.Host, 0, null,
+			                                              (uint) uri.UserInfo.Length, uri.UserInfo, (uint) uri.PathAndQuery.Length, uri.PathAndQuery,
+			                                              (ushort) uri.Port, 0, 0, out passwordLength, out password, ref itemRef);
+			if (result == OSStatus.ItemNotFound)
+				return null;
+
+			if (result != OSStatus.Ok)
+				throw new Exception ("Could not find internet password: " + GetError (result));
+
+			return Marshal.PtrToStringAuto (password, (int) passwordLength);
 		}
 		
 		enum SecItemClass : uint

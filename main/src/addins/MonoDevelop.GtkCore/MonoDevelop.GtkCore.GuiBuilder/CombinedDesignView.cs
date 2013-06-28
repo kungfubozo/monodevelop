@@ -48,11 +48,12 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 		public CombinedDesignView (IViewContent content)
 		{
 			this.content = content;
-			if (content is IEditableTextBuffer) {
+	/* This code causes that chagnes in a version control view always select the source code view.
+				if (content is IEditableTextBuffer) {
 				((IEditableTextBuffer)content).CaretPositionSet += delegate {
 					ShowPage (0);
 				};
-			}
+			}*/
 			content.ContentChanged += new EventHandler (OnTextContentChanged);
 			content.DirtyChanged += new EventHandler (OnTextDirtyChanged);
 			
@@ -229,7 +230,7 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 		{
 		}
 		
-		public override T GetContent<T> ()
+		public override object GetContent (Type type)
 		{
 //			if (type == typeof(IEditableTextBuffer)) {
 //				// Intercept the IPositionable interface, since we need to
@@ -240,12 +241,12 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 //					return null;
 //			}
 //			
-			return  base.GetContent<T> () ?? content.GetContent<T> ();
+			return  base.GetContent (type) ?? content.GetContent (type);
 		}
 
 		public void JumpTo (int line, int column)
 		{
-			IEditableTextBuffer ip = content.GetContent<IEditableTextBuffer> ();
+			IEditableTextBuffer ip = (IEditableTextBuffer) content.GetContent (typeof(IEditableTextBuffer));
 			if (ip != null) {
 				ShowPage (0);
 				ip.SetCaretTo (line, column);
@@ -264,11 +265,11 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 			this.content = content;
 		}
 		
-		public override T GetContent<T> ()
+		public override object GetContent (Type type)
 		{
-			if (Control is T)
-				return (T) (object) Control;
-			return base.GetContent<T> ();
+			if (type.IsInstanceOfType (Control))
+				return Control;
+			return base.GetContent (type);
 		}
 		
 		#region IAttachableViewContent implementation

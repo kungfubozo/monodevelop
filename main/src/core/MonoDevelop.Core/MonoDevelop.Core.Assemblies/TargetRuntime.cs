@@ -53,6 +53,7 @@ namespace MonoDevelop.Core.Assemblies
 		bool initialized;
 		bool initializing;
 		bool backgroundInitialize;
+		bool extensionInitialized;
 		
 		Dictionary<TargetFrameworkMoniker,TargetFrameworkBackend> frameworkBackends
 			= new Dictionary<TargetFrameworkMoniker, TargetFrameworkBackend> ();
@@ -259,35 +260,6 @@ namespace MonoDevelop.Core.Assemblies
 					throw new InvalidOperationException (string.Format ("No compatible framework found for assembly '{0}' (required framework: {1})", pinfo.FileName, fxId));
 			}
 			
-			// Make a copy of the ProcessStartInfo because we are going to modify it
-			
-			ProcessStartInfo cp = new ProcessStartInfo ();
-			cp.Arguments = pinfo.Arguments;
-			cp.CreateNoWindow = pinfo.CreateNoWindow;
-			cp.Domain = pinfo.Domain;
-			cp.ErrorDialog = pinfo.ErrorDialog;
-			cp.ErrorDialogParentHandle = pinfo.ErrorDialogParentHandle;
-			cp.FileName = pinfo.FileName;
-			cp.LoadUserProfile = pinfo.LoadUserProfile;
-			cp.Password = pinfo.Password;
-			cp.UseShellExecute = pinfo.UseShellExecute;
-			cp.RedirectStandardError = pinfo.RedirectStandardError;
-			cp.RedirectStandardInput = pinfo.RedirectStandardInput;
-			cp.RedirectStandardOutput = pinfo.RedirectStandardOutput;
-			cp.StandardErrorEncoding = pinfo.StandardErrorEncoding;
-			cp.StandardOutputEncoding = pinfo.StandardOutputEncoding;
-			cp.UserName = pinfo.UserName;
-			cp.Verb = pinfo.Verb;
-			cp.WindowStyle = pinfo.WindowStyle;
-			cp.WorkingDirectory = pinfo.WorkingDirectory;
-			
-			foreach (string key in pinfo.EnvironmentVariables.Keys)
-				cp.EnvironmentVariables [key] = pinfo.EnvironmentVariables [key];
-			
-			// Set the runtime env vars
-			
-			GetToolsExecutionEnvironment (fx).MergeTo (cp);
-			
 			ConvertAssemblyProcessStartInfo (pinfo);
 			return Process.Start (pinfo);
 		}
@@ -353,6 +325,11 @@ namespace MonoDevelop.Core.Assemblies
 		/// Returns the MSBuild bin path for this runtime.
 		/// </summary>
 		public abstract string GetMSBuildBinPath (TargetFramework fx);
+		
+		/// <summary>
+		/// Returns the MSBuild extensions path.
+		/// </summary>
+		public abstract string GetMSBuildExtensionsPath ();
 
 		/// <summary>
 		/// Returns all GAC locations for this runtime.
@@ -397,6 +374,12 @@ namespace MonoDevelop.Core.Assemblies
 						// If we are here, that's because 1) the runtime has been initialized, or 2) the runtime is being initialized by *this* thread
 						throw new InvalidOperationException ("Runtime intialization not started");
 				}
+				if (!extensionInitialized && !initializing) {
+					// Get assemblies registered using the extension point.
+					// This is not done in BackgroundInitialize because the add-in manager is not thread safe
+					extensionInitialized = true;
+					AddinManager.AddExtensionNodeHandler ("/MonoDevelop/Core/SupportPackages", OnPackagesChanged);
+				}
 			}
 		}
 		
@@ -407,6 +390,7 @@ namespace MonoDevelop.Core.Assemblies
 				try {
 					RunInitialization ();
 				} catch (Exception ex) {
+					LogReporting.LogReportingService.ReportUnhandledException (ex, false);
 					LoggingService.LogFatalError ("Unhandled exception in SystemAssemblyService background initialisation thread.", ex);
 				} finally {
 					lock (initEventLock) {
@@ -450,16 +434,6 @@ namespace MonoDevelop.Core.Assemblies
 			
 			timer.Trace ("Initializing frameworks");
 			OnInitialize ();
-			
-			if (ShuttingDown)
-				return;
-			
-			timer.Trace ("Registering support packages");
-			
-			// Get assemblies registered using the extension point
-			mainContext.Post (delegate {
-				AddinManager.AddExtensionNodeHandler ("/MonoDevelop/Core/SupportPackages", OnPackagesChanged);
-			}, null);
 		}
 		
 		void OnPackagesChanged (object s, ExtensionNodeEventArgs args)

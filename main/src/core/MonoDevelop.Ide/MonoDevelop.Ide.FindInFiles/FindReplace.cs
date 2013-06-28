@@ -86,18 +86,21 @@ namespace MonoDevelop.Ide.FindInFiles
 			try {
 				int totalWork = scope.GetTotalWork (filter);
 				int step = Math.Max (1, totalWork / 50);
+				string content;
+				
 				foreach (FileProvider provider in scope.GetFiles (monitor, filter)) {
 					if (monitor.IsCancelRequested)
 						yield break;
 					SearchedFilesCount++;
 					try {
+						content = provider.ReadString ();
 						if (replacePattern != null)
-							provider.BeginReplace ();
+							provider.BeginReplace (content);
 					} catch (System.IO.FileNotFoundException) {
 						MessageService.ShowError (string.Format (GettextCatalog.GetString ("File {0} not found.")), provider.FileName);
 						continue;
 					}
-					foreach (SearchResult result in FindAll (monitor, provider, pattern, replacePattern, filter)) {
+					foreach (SearchResult result in FindAll (monitor, provider, content, pattern, replacePattern, filter)) {
 						if (monitor.IsCancelRequested)
 							yield break;
 						FoundMatchesCount++;
@@ -114,21 +117,14 @@ namespace MonoDevelop.Ide.FindInFiles
 			}
 		}
 		
-		IEnumerable<SearchResult> FindAll (IProgressMonitor monitor, FileProvider provider, string pattern, string replacePattern, FilterOptions filter)
+		IEnumerable<SearchResult> FindAll (IProgressMonitor monitor, FileProvider provider, string content, string pattern, string replacePattern, FilterOptions filter)
 		{
 			if (string.IsNullOrEmpty (pattern))
 				return Enumerable.Empty<SearchResult> ();
-			string content;
-			try {
-				content = provider.ReadString ();
-				if (content == null)
-					return Enumerable.Empty<SearchResult> ();
-			} catch (Exception e) {
-				LoggingService.LogError ("Error while reading file", e);
-				return Enumerable.Empty<SearchResult> ();
-			}
+			
 			if (filter.RegexSearch)
 				return RegexSearch (monitor, provider, content, replacePattern, filter);
+			
 			return Search (provider, content, pattern, replacePattern, filter);
 		}
 		
@@ -156,7 +152,7 @@ namespace MonoDevelop.Ide.FindInFiles
 						continue;
 					matches.Add(match);
 				}
-				provider.BeginReplace ();
+				provider.BeginReplace (content);
 				int delta = 0;
 				for (int i = 0; !monitor.IsCancelRequested && i < matches.Count; i++) {
 					Match match = matches[i];
@@ -179,8 +175,8 @@ namespace MonoDevelop.Ide.FindInFiles
 			int idx = provider.SelectionStartPosition < 0 ? 0 : Math.Max (0, provider.SelectionStartPosition);
 			int delta = 0;
 			var comparison = filter.CaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
-			
-			while ((idx = content.IndexOf (pattern, idx, content.Length - idx, comparison)) >= 0) {
+			int end = provider.SelectionEndPosition < 0 ? content.Length : Math.Min (content.Length, provider.SelectionEndPosition);
+			while ((idx = content.IndexOf (pattern, idx, end - idx, comparison)) >= 0) {
 				if (!filter.WholeWordsOnly || FilterOptions.IsWholeWordAt (content, idx, pattern.Length)) {
 					if (replacePattern != null) {
 						provider.Replace (idx + delta, pattern.Length, replacePattern);

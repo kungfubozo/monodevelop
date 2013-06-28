@@ -40,10 +40,11 @@ namespace MonoDevelop.Ide.Gui.Content
 	[PolicyType ("Text file formatting")]
 	public sealed class TextStylePolicy : IEquatable<TextStylePolicy>
 	{
-		public TextStylePolicy (int fileWidth, int tabWidth, bool tabsToSpaces, bool noTabsAfterNonTabs, bool removeTrailingWhitespace, EolMarker eolMarker)
+		public TextStylePolicy (int fileWidth, int tabWidth, int indentWidth, bool tabsToSpaces, bool noTabsAfterNonTabs, bool removeTrailingWhitespace, EolMarker eolMarker)
 		{
 			FileWidth = fileWidth;
 			TabWidth = tabWidth;
+			IndentWidth = indentWidth;
 			TabsToSpaces = tabsToSpaces;
 			NoTabsAfterNonTabs = noTabsAfterNonTabs;
 			RemoveTrailingWhitespace = removeTrailingWhitespace;
@@ -54,6 +55,8 @@ namespace MonoDevelop.Ide.Gui.Content
 		{
 			FileWidth = 120;
 			TabWidth = 4;
+			IndentWidth = 4;
+			RemoveTrailingWhitespace = true;
 		}
 		
 		[ItemProperty]
@@ -66,10 +69,13 @@ namespace MonoDevelop.Ide.Gui.Content
 		public bool TabsToSpaces { get; private set; }
 		
 		[ItemProperty]
-		public bool NoTabsAfterNonTabs { get; private set; }
+		public int IndentWidth { get; private set; }
 		
 		[ItemProperty]
 		public bool RemoveTrailingWhitespace { get; private set; }
+		
+		[ItemProperty]
+		public bool NoTabsAfterNonTabs { get; private set; }
 		
 		[ItemProperty]
 		public EolMarker EolMarker { get; private set; }
@@ -98,7 +104,7 @@ namespace MonoDevelop.Ide.Gui.Content
 		{
 			return other != null && other.FileWidth == FileWidth && other.TabWidth == TabWidth
 				&& other.TabsToSpaces == TabsToSpaces && other.NoTabsAfterNonTabs == NoTabsAfterNonTabs
-				&& other.RemoveTrailingWhitespace == RemoveTrailingWhitespace && other.EolMarker == EolMarker;
+				&& other.RemoveTrailingWhitespace == RemoveTrailingWhitespace && other.EolMarker == EolMarker && other.IndentWidth == IndentWidth;
 		}
 	}
 }

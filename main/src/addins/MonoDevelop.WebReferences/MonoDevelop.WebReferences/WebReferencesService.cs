@@ -35,8 +35,8 @@ namespace MonoDevelop.WebReferences
 {
 	public static class WebReferencesService
 	{
-		public static WebServiceEngine WsEngine = new WebServiceEngineWS ();
-		public static WebServiceEngine WcfEngine = new WebServiceEngineWCF ();
+		public static WebServiceEngineWS WsEngine = new WebServiceEngineWS ();
+		public static WebServiceEngineWCF WcfEngine = new WebServiceEngineWCF ();
 		
 		public static IEnumerable<WebReferenceItem> GetWebReferenceItems (DotNetProject project)
 		{
@@ -48,8 +48,18 @@ namespace MonoDevelop.WebReferences
 		
 		public static void NotifyWebReferencesChanged (DotNetProject project)
 		{
-			if (WebReferencesChanged != null)
-				WebReferencesChanged (null, new WebReferencesChangedArgs (project));
+			// This is called from a background thread when webreferences are being
+			// updated asynchronously, so lets keep things simple for the users of
+			// this event and just ensure we proxy it to the main thread.
+			if (MonoDevelop.Ide.DispatchService.IsGuiThread) {
+				if (WebReferencesChanged != null)
+					WebReferencesChanged (null, new WebReferencesChangedArgs (project));
+			} else {
+				MonoDevelop.Ide.DispatchService.GuiDispatch (() => {
+					if (WebReferencesChanged != null)
+						WebReferencesChanged (null, new WebReferencesChangedArgs (project));
+				});
+			}
 		}
 		
 		public static event EventHandler<WebReferencesChangedArgs> WebReferencesChanged;

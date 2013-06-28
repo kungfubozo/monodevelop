@@ -32,8 +32,6 @@ using System.Xml.Serialization;
 using MonoDevelop.Core;
 using MonoDevelop.Core.Serialization;
 using MonoDevelop.Projects;
-using MonoDevelop.Projects.Dom;
-using MonoDevelop.Projects.Dom.Parser;
 using MonoDevelop.Ide.Gui;
 
 namespace MonoDevelop.Ide.Tasks
@@ -184,6 +182,24 @@ namespace MonoDevelop.Ide.Tasks
 			EventHandler<TaskEventArgs> handler = JumpedToTask;
 			if (handler != null)
 				handler (null, new TaskEventArgs (task));
+		}
+
+		internal static void InformCommentTasks (CommentTasksChangedEventArgs args)
+		{
+			var handler = CommentTasksChanged;
+			if (handler != null)
+				handler (null, args);
+		}
+		
+		public static event EventHandler<CommentTasksChangedEventArgs> CommentTasksChanged;
+
+		public static event EventHandler<TaskEventArgs> TaskToggled;
+
+		public static void FireTaskToggleEvent (object sender, TaskEventArgs e)
+		{
+			var handler = TaskToggled;
+			if (handler != null)
+				handler (sender, e);
 		}
 	}
 }

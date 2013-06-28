@@ -7,15 +7,15 @@
        description = "The MonoDevelop IDE application."
        category    = "MonoDevelop Core"
        isroot      = "true"
-       version     = "2.8.2"
-       compatVersion = "2.7">
+       version     = "4.0.1"
+       compatVersion = "4.0">
 	
 	<Runtime>
 		<Import assembly="MonoDevelop.Ide.dll"/>
 	</Runtime>
 	
 	<Dependencies>
-		<Addin id="Core" version="2.8.2"/>
+		<Addin id="Core" version="4.0.1"/>
 	</Dependencies>
 
 	<!-- Extension ponts -->
@@ -136,6 +136,11 @@
 		<Description>Addins can register own fonts to be configured.</Description>
 		<ExtensionNode name="Font" type="MonoDevelop.Ide.Fonts.FontDescriptionCodon"/>
 	</ExtensionPoint>
+		
+	<ExtensionPoint path = "/MonoDevelop/Ide/FeedbackService" name = "Feedback reporting service">
+		<Description>Provides the webservice url to which MonoDevelop will send user feedback.</Description>
+		<ExtensionNode name="Service" type="MonoDevelop.Ide.Extensions.ServiceUrlExtensionNode" />
+	</ExtensionPoint>
 	
 	<ExtensionPoint path = "/MonoDevelop/Ide/CodeFormatters" name = "Code formatters">
 		<ExtensionNode name="Formatter" type="MonoDevelop.Ide.CodeFormatting.CodeFormatterExtensionNode" />
@@ -150,16 +155,37 @@
 		<ExtensionNode name="Type" />
 	</ExtensionPoint>
 	
-	<ExtensionPoint path = "/MonoDevelop/Ide/AboutInformation" name = "Adddional about information">
-		<ExtensionNode name = "Class" objectType = "MonoDevelop.Ide.Gui.Dialogs.IAboutInformation" />
+	<ExtensionPoint path = "/MonoDevelop/TypeSystem/Parser" name = "TypeSystemParser">
+		<ExtensionNode name="Parser" type="MonoDevelop.Ide.TypeSystem.TypeSystemParserNode"/>
 	</ExtensionPoint>
 	
+	<ExtensionPoint path = "/MonoDevelop/TypeSystem/OutputTracking" name = "TypeSystemOutputTracker">
+		<ExtensionNode name="Track" type="MonoDevelop.Ide.TypeSystem.TypeSystemOutputTrackingNode"/>
+	</ExtensionPoint>
+	
+	<ExtensionPoint path = "/MonoDevelop/TypeSystem/FoldingParser">
+		<ExtensionNode name="Parser" type="MonoDevelop.Ide.Extensions.MimeTypeExtensionNode"/>
+	</ExtensionPoint>	
+
+	<ExtensionPoint path = "/MonoDevelop/TypeSystem/Ambiences" name = "Language ambiences">
+		<Description>Language ambiences. Specified classes must implement IAmbience.</Description>
+		<ExtensionNode name="Ambience" type="MonoDevelop.Ide.Extensions.MimeTypeExtensionNode" />
+	</ExtensionPoint>
+	
+	<ExtensionPoint path = "/MonoDevelop/TypeSystem/CodeGenerators">
+		<ExtensionNode name="Generator" type="MonoDevelop.Ide.Extensions.MimeTypeExtensionNode"/>
+	</ExtensionPoint>
+
 	<!-- Extensions -->
 	
 	<Extension path = "/MonoDevelop/Core/Applications">
 		<Application id = "gsetup"
 		       description = "Graphical add-in setup utility"
 		       class = "MonoDevelop.Ide.Gui.Dialogs.SetupApp"/>
+	</Extension>
+	
+	<Extension path = "/MonoDevelop/Core/SystemInformation">
+		<Class class = "MonoDevelop.Ide.IdeVersionInfo" />
 	</Extension>
 
 	<Extension path = "/MonoDevelop/Ide/DisplayBindings">
@@ -170,7 +196,7 @@
 	<Extension path = "/MonoDevelop/Ide/StartupHandlers">
 		<Class class = "MonoDevelop.Ide.Updater.UpdateCheckHandler"/>
 		<Class class = "MonoDevelop.Ide.Gui.Dialogs.TipOfTheDayStartup"/>
-		<Class class = "MonoDevelop.Ide.WelcomePage.WelcomePageStartUp"/>
+		<Class class = "MonoDevelop.Ide.LogReportingStartup"/>
 	</Extension>
 	
 	<Extension path = "/MonoDevelop/Ide/KeyBindingSchemes">
@@ -186,9 +212,6 @@
 	</Extension>
 	
 	<Extension path="/MonoDevelop/Ide/WorkbenchLayouts">
-		<Layout id="Default" _name="Default">
-			<LayoutPad id="ProjectPad" status="AutoHide" />
-		</Layout>
 		<Layout id="Solution" _name="Solution" />
 	</Extension>
 	
@@ -233,7 +256,6 @@
 		<CommandItem id = "MonoDevelop.Ide.Commands.FileCommands.Save" />
 		<CommandItem id = "MonoDevelop.Ide.Commands.FileCommands.SaveAll" />
 		<SeparatorItem id = "SaveSeparator" />
-		<CommandItem id = "MonoDevelop.Ide.Commands.FileCommands.OpenContainingFolder" />
 		<CommandItem id = "MonoDevelop.Ide.Commands.FileTabCommands.CopyPathName" />
 		<CommandItem id = "MonoDevelop.Ide.Commands.FileTabCommands.ToggleMaximize" />
 	</Extension>
@@ -245,6 +267,8 @@
 	
 	<Extension path = "/MonoDevelop/Ide/Fonts">
 		<Font name ="Editor" _displayName="Text Editor" default ="_DEFAULT_MONOSPACE"/>
+		<Font name ="Pad" _displayName="Pads" default ="_DEFAULT_SANS"/>
+		<Font name ="OutputPad" _displayName="Output Pads" default ="_DEFAULT_MONOSPACE"/>
 	</Extension>
 	
 	<Extension path = "/MonoDevelop/Core/UserDataMigration">
@@ -265,5 +289,9 @@
 		<Migration sourceVersion="2.6+" kind="Config" path="EditingLayout.xml" />
 		<Migration sourceVersion="2.6+" kind="LocalConfig" path="RecentlyUsed.xml" />
 		<Migration sourceVersion="2.6+" kind="LocalConfig" path="Feedback.xml" />
+	</Extension>
+
+	<Extension path = "/MonoDevelop/Core/WebCertificateProvider">
+		<Class class = "MonoDevelop.Ide.DefaultWebCertificateProvider" />
 	</Extension>
 </Addin>

@@ -13,6 +13,8 @@ using MonoDevelop.Projects;
 using MonoDevelop.Ide.Gui.Components;
 using MonoDevelop.Ide;
 using MonoDevelop.Ide.Gui;
+using Mono.TextEditor;
+using MonoDevelop.Components;
 
 namespace MonoDevelop.VersionControl.Views
 {
@@ -23,12 +25,11 @@ namespace MonoDevelop.VersionControl.Views
 		bool disposed;
 		
 		Widget widget;
-		Toolbar commandbar;
 		VBox main;
 		Label status;
-		Gtk.ToolButton showRemoteStatus;
-		Gtk.ToolButton buttonCommit;
-		Gtk.ToolButton buttonRevert;
+		Gtk.Button showRemoteStatus;
+		Gtk.Button buttonCommit;
+		Gtk.Button buttonRevert;
 		
 		FileTreeView filelist;
 		TreeViewColumn colCommit, colRemote;
@@ -44,14 +45,37 @@ namespace MonoDevelop.VersionControl.Views
 		bool remoteStatus = false;
 
 		class DiffData {
-			public bool diffRequested = false;
-			public bool diffRunning = false;
-			public Exception diffException;
-			public DiffInfo[] difs;
-		};
+			public Exception Exception {
+				get; private set;
+			}
 
-		DiffData localDiff = new DiffData ();
-		DiffData remoteDiff = new DiffData ();
+			public Lazy<DiffInfo> Diff {
+				get; set;
+			}
+			
+			public VersionInfo VersionInfo {
+				get; private set;
+			}
+			
+			public DiffData (Repository vc, FilePath root, VersionInfo info, bool remote)
+			{
+				VersionInfo = info;
+				Diff = new Lazy<DiffInfo> (() => {
+					try {
+						DiffInfo result = null;
+						if (!remote)
+							result = vc.GenerateDiff (root, info);
+						return result ?? vc.PathDiff (root, new [] { info.LocalPath }, remote).FirstOrDefault ();
+					} catch (Exception ex) {
+						Exception = ex;
+						return null;
+					}
+				});
+			}
+		}
+
+		List<DiffData> localDiff = new List<DiffData> ();
+		List<DiffData> remoteDiff = new List<DiffData> ();
 		
 		bool updatingComment;
 		ChangeSet changeSet;
@@ -73,12 +97,7 @@ namespace MonoDevelop.VersionControl.Views
 		const int ColStatusRemoteDiff = 13;
 		const int ColRenderAsText = 14;
 		
-		delegate void DiffDataHandler (DiffData diffdata);
-		
-		/// <summary>
-		/// Fired when content difference data is loaded
-		/// </summary>
-		event DiffDataHandler DiffDataLoaded;
+		delegate void DiffDataHandler (List<DiffData> diffdata);
 		
 		public static bool Show (VersionControlItemList items, bool test)
 		{
@@ -110,74 +129,29 @@ namespace MonoDevelop.VersionControl.Views
 			main = new VBox(false, 6);
 			widget = main;
 			
-			commandbar = new Toolbar ();
-			commandbar.ToolbarStyle = Gtk.ToolbarStyle.BothHoriz;
-			commandbar.IconSize = Gtk.IconSize.Menu;
-			main.PackStart (commandbar, false, false, 0);
-			
-			buttonCommit = new Gtk.ToolButton (new Gtk.Image ("vc-commit", Gtk.IconSize.Menu), GettextCatalog.GetString ("Commit..."));
-			buttonCommit.IsImportant = true;
-			buttonCommit.Clicked += new EventHandler (OnCommitClicked);
-			commandbar.Insert (buttonCommit, -1);
-			
-			Gtk.ToolButton btnRefresh = new Gtk.ToolButton (new Gtk.Image (Gtk.Stock.Refresh, IconSize.Menu), GettextCatalog.GetString ("Refresh"));
-			btnRefresh.IsImportant = true;
-			btnRefresh.Clicked += new EventHandler (OnRefresh);
-			commandbar.Insert (btnRefresh, -1);
-			
-			buttonRevert = new Gtk.ToolButton (new Gtk.Image ("vc-revert-command", Gtk.IconSize.Menu), GettextCatalog.GetString ("Revert"));
-			buttonRevert.IsImportant = true;
-			buttonRevert.Clicked += new EventHandler (OnRevert);
-			commandbar.Insert (buttonRevert, -1);
-			
-			showRemoteStatus = new Gtk.ToolButton (new Gtk.Image ("vc-remote-status", Gtk.IconSize.Menu), GettextCatalog.GetString ("Show Remote Status"));
-			showRemoteStatus.IsImportant = true;
-			showRemoteStatus.Clicked += new EventHandler(OnShowRemoteStatusClicked);
-			commandbar.Insert (showRemoteStatus, -1);
-			
-			Gtk.ToolButton btnCreatePatch = new Gtk.ToolButton (new Gtk.Image ("vc-diff", Gtk.IconSize.Menu), GettextCatalog.GetString ("Create Patch"));
-			btnCreatePatch.IsImportant = true;
-			btnCreatePatch.Clicked += new EventHandler (OnCreatePatch);
-			commandbar.Insert (btnCreatePatch, -1);
-			
-			commandbar.Insert (new Gtk.SeparatorToolItem (), -1);
-			
-			Gtk.ToolButton btnOpen = new Gtk.ToolButton (new Gtk.Image (Gtk.Stock.Open, IconSize.Menu), GettextCatalog.GetString ("Open"));
-			btnOpen.IsImportant = true;
-			btnOpen.Clicked += new EventHandler (OnOpen);
-			commandbar.Insert (btnOpen, -1);
-			
-			commandbar.Insert (new Gtk.SeparatorToolItem (), -1);
-			
-			Gtk.ToolButton btnExpand = new Gtk.ToolButton (null, GettextCatalog.GetString ("Expand All"));
-			btnExpand.IsImportant = true;
-			btnExpand.Clicked += new EventHandler (OnExpandAll);
-			commandbar.Insert (btnExpand, -1);
-			
-			Gtk.ToolButton btnCollapse = new Gtk.ToolButton (null, GettextCatalog.GetString ("Collapse All"));
-			btnCollapse.IsImportant = true;
-			btnCollapse.Clicked += new EventHandler (OnCollapseAll);
-			commandbar.Insert (btnCollapse, -1);
-			
-			commandbar.Insert (new Gtk.SeparatorToolItem (), -1);
-			
-			Gtk.ToolButton btnSelectAll = new Gtk.ToolButton (null, GettextCatalog.GetString ("Select All"));
-			btnSelectAll.IsImportant = true;
-			btnSelectAll.Clicked += new EventHandler (OnSelectAll);
-			commandbar.Insert (btnSelectAll, -1);
-			
-			Gtk.ToolButton btnSelectNone = new Gtk.ToolButton (null, GettextCatalog.GetString ("Select None"));
-			btnSelectNone.IsImportant = true;
-			btnSelectNone.Clicked += new EventHandler (OnSelectNone);
-			commandbar.Insert (btnSelectNone, -1);
-			
+			buttonCommit = new Gtk.Button () {
+				Image = new Gtk.Image ("vc-commit", Gtk.IconSize.Menu),
+				Label = GettextCatalog.GetString ("Commit...")
+			};
+			buttonCommit.Image.Show ();
+			buttonRevert = new Gtk.Button () {
+				Image = new Gtk.Image ("vc-revert-command", Gtk.IconSize.Menu),
+				Label = GettextCatalog.GetString ("Revert")
+			};
+			buttonRevert.Image.Show ();
+			showRemoteStatus = new Gtk.Button () {
+				Image = new Gtk.Image ("vc-remote-status", Gtk.IconSize.Menu),
+				Label = GettextCatalog.GetString ("Show Remote Status")
+			};
+			showRemoteStatus.Image.Show ();
+
 			status = new Label("");
 			main.PackStart(status, false, false, 0);
 			
 			scroller = new ScrolledWindow();
-			scroller.ShadowType = Gtk.ShadowType.In;
+			scroller.ShadowType = Gtk.ShadowType.None;
 			filelist = new FileTreeView();
-			filelist.Selection.Mode = SelectionMode.Multiple;
+			filelist.Selection.Mode = Gtk.SelectionMode.Multiple;
 			
 			scroller.Add(filelist);
 			scroller.HscrollbarPolicy = PolicyType.Automatic;
@@ -243,24 +217,32 @@ namespace MonoDevelop.VersionControl.Views
 			filelist.TestExpandRow += new Gtk.TestExpandRowHandler (OnTestExpandRow);
 			
 			commitBox = new VBox ();
-			
+
+			HeaderBox commitMessageLabelBox = new HeaderBox ();
+			commitMessageLabelBox.SetPadding (6, 6, 6, 6);
+			commitMessageLabelBox.SetMargins (1, 1, 0, 0);
+
 			HBox labBox = new HBox ();
 			labelCommit = new Gtk.Label (GettextCatalog.GetString ("Commit message:"));
 			labelCommit.Xalign = 0;
 			labBox.PackStart (new Gtk.Image ("vc-comment", Gtk.IconSize.Menu), false, false, 0);
 			labBox.PackStart (labelCommit, true, true, 3);
-			
-			commitBox.PackStart (labBox, false, false, 0);
+
+			commitMessageLabelBox.Add (labBox);
+			commitMessageLabelBox.ShowAll ();
+			//commitBox.PackStart (commitMessageLabelBox, false, false, 0);
 			
 			Gtk.ScrolledWindow frame = new Gtk.ScrolledWindow ();
-			frame.ShadowType = ShadowType.In;
+			frame.HeightRequest = 75;
+			frame.ShadowType = ShadowType.None;
 			commitText = new TextView ();
 			commitText.WrapMode = WrapMode.WordChar;
 			commitText.Buffer.Changed += OnCommitTextChanged;
 			frame.Add (commitText);
-			commitBox.PackStart (frame, true, true, 6);
+			commitBox.PackStart (frame, true, true, 0);
 			
-			VPaned paned = new VPaned ();
+			var paned = new VPanedThin ();
+			paned.HandleWidget = commitMessageLabelBox;
 			paned.Pack1 (scroller, true, true);
 			paned.Pack2 (commitBox, false, false);
 			main.PackStart (paned, true, true, 0);
@@ -283,9 +265,75 @@ namespace MonoDevelop.VersionControl.Views
 			
 			filestore.SetSortColumnId (3, Gtk.SortType.Ascending);
 			
-			filelist.ShowContextMenu += OnPopupMenu;
+			filelist.DoPopupMenu = DoPopupMenu;
 			
 			StartUpdate();
+		}
+
+		protected override void OnWorkbenchWindowChanged (EventArgs e)
+		{
+			base.OnWorkbenchWindowChanged (e);
+			if (WorkbenchWindow == null)
+				return;
+
+			var toolbar = WorkbenchWindow.GetToolbar (this);
+
+			buttonCommit.Clicked += new EventHandler (OnCommitClicked);
+			toolbar.Add (buttonCommit);
+
+			var btnRefresh = new Gtk.Button () {
+				Label = GettextCatalog.GetString ("Refresh"),
+				Image = new Gtk.Image (Gtk.Stock.Refresh, IconSize.Menu)
+			};
+			btnRefresh.Image.Show ();
+
+			btnRefresh.Clicked += new EventHandler (OnRefresh);
+			toolbar.Add (btnRefresh);
+
+			buttonRevert.Clicked += new EventHandler (OnRevert);
+			toolbar.Add (buttonRevert);
+			
+			showRemoteStatus.Clicked += new EventHandler(OnShowRemoteStatusClicked);
+			toolbar.Add (showRemoteStatus);
+			
+			var btnCreatePatch = new Gtk.Button () {
+				Image = new Gtk.Image ("vc-diff", Gtk.IconSize.Menu), 
+				Label = GettextCatalog.GetString ("Create Patch")
+			};
+			btnCreatePatch.Image.Show ();
+			btnCreatePatch.Clicked += new EventHandler (OnCreatePatch);
+			toolbar.Add (btnCreatePatch);
+			
+			toolbar.Add (new Gtk.SeparatorToolItem ());
+			
+			var btnOpen = new Gtk.Button () {
+				Image = new Gtk.Image (Gtk.Stock.Open, IconSize.Menu), 
+				Label = GettextCatalog.GetString ("Open")
+			};
+			btnOpen.Image.Show ();
+			btnOpen.Clicked += new EventHandler (OnOpen);
+			toolbar.Add (btnOpen);
+			
+			toolbar.Add (new Gtk.SeparatorToolItem ());
+			
+			var btnExpand = new Gtk.Button (GettextCatalog.GetString ("Expand All"));
+			btnExpand.Clicked += new EventHandler (OnExpandAll);
+			toolbar.Add (btnExpand);
+			
+			var btnCollapse = new Gtk.Button (GettextCatalog.GetString ("Collapse All"));
+			btnCollapse.Clicked += new EventHandler (OnCollapseAll);
+			toolbar.Add (btnCollapse);
+			
+			toolbar.Add (new Gtk.SeparatorToolItem ());
+			
+			var btnSelectAll = new Gtk.Button (GettextCatalog.GetString ("Select All"));
+			btnSelectAll.Clicked += new EventHandler (OnSelectAll);
+			toolbar.Add (btnSelectAll);
+			
+			var btnSelectNone = new Gtk.Button (GettextCatalog.GetString ("Select None"));
+			btnSelectNone.Clicked += new EventHandler (OnSelectNone);
+			toolbar.Add (btnSelectNone);
+			toolbar.ShowAll ();
 		}
 		
 		public override string StockIconId {
@@ -379,7 +427,7 @@ namespace MonoDevelop.VersionControl.Views
 		
 		void LoadStatus (List<VersionInfo> newList)
 		{
-			statuses = newList;
+			statuses = newList.Where (f => FileVisible (f)).ToList ();
 			
 			// Remove from the changeset files/folders which have been deleted
 			var toRemove = new List<ChangeSetItem> ();
@@ -441,21 +489,32 @@ namespace MonoDevelop.VersionControl.Views
 		
 		private void Update ()
 		{
-			localDiff.diffRequested = false;
-			remoteDiff.diffRequested = false;
-			localDiff.difs = null;
-			remoteDiff.difs = null;
+			localDiff.Clear ();
+			remoteDiff.Clear ();
 			
 			filestore.Clear();
 			diffRenderer.Reset ();
 			
 			if (statuses.Count > 0) {
-				foreach (VersionInfo n in statuses) {
-					if (FileVisible (n)) {
+				try {
+					filelist.FreezeChildNotify ();
+					
+					foreach (VersionInfo n in statuses) {
 						if (firstLoad)
 							changeSet.AddFile (n);
 						AppendFileInfo (n);
+
+						// Calling GenerateDiff and supplying the versioninfo
+						// is the new fast way of doing things. If we do not get
+						// the same number of diffs as VersionInfos, we should
+						// fall back to the old slow method as the VC addin probably
+						// has not implemented the new fast one.
+						// The new way can also only be used locally.
+						localDiff.Add (new DiffData (vc, filepath, n, false));
+						remoteDiff.Add (new DiffData (vc, filepath, n, true));
 					}
+				} finally {
+					filelist.ThawChildNotify ();
 				}
 			}
 			UpdateControlStatus ();
@@ -663,11 +722,11 @@ namespace MonoDevelop.VersionControl.Views
 				filestore.IterChildren (out iter, args.Iter);
 				string fileName = (string) filestore.GetValue (args.Iter, ColFullPath);
 				bool remoteDiff = (bool) filestore.GetValue (args.Iter, ColStatusRemoteDiff);
-				SetFileDiff (iter, fileName, remoteDiff);
+				FillDiffInfo (iter, fileName, GetDiffData (remoteDiff));
 			}
 		}
 		
-		void OnPopupMenu (object o, EventArgs args)
+		void DoPopupMenu (Gdk.EventButton evnt)
 		{
 			object commandChain = this;
 			CommandEntrySet opset = new CommandEntrySet ();
@@ -689,7 +748,7 @@ namespace MonoDevelop.VersionControl.Views
 				} else
 					opset.AddSeparator ();
 			}
-			IdeApp.CommandService.ShowContextMenu (opset, commandChain);
+			IdeApp.CommandService.ShowContextMenu (filelist, evnt, opset, commandChain);
 		}
 		
 		public VersionControlItemList GetSelectedItems ()
@@ -864,7 +923,7 @@ namespace MonoDevelop.VersionControl.Views
 			VersionInfo newInfo;
 			try {
 				// Reuse remote status from old version info
-				newInfo = vc.GetVersionInfo (args.FilePath, false);
+				newInfo = vc.GetVersionInfo (args.FilePath);
 				if (found && newInfo != null) {
 					VersionInfo oldInfo = statuses [oldStatusIndex];
 					if (oldInfo != null) {
@@ -908,99 +967,53 @@ namespace MonoDevelop.VersionControl.Views
 			return vinfo != null && (vinfo.HasLocalChanges || vinfo.HasRemoteChanges);
 		}
 
-		DiffData GetDiffData (bool remote)
+		List<DiffData> GetDiffData (bool remote)
 		{
 			if (remote)
 				return remoteDiff;
 			else
 				return localDiff;
 		}
-		
-		/// <summary>
-		/// Loads diff information from a version control provider.
-		/// </summary>
-		/// <param name="remote">
-		/// A <see cref="System.Boolean"/>: Whether the information 
-		/// should be loaded from the remote server.
-		/// </param>
-		void LoadDiffs (bool remote)
-		{
-			DiffData ddata = GetDiffData (remote);
-			if (ddata.diffRunning)
-				return;
 
-			// Diff not yet requested. Do it now.
-			ddata.diffRunning = true;
+		void FillDiffInfo (TreeIter iter, string file, List<DiffData> ddata)
+		{
+			bool asText = true;
+			string[] text = null;
 			
-			// Run the diff in a separate thread and update the tree when done
-			ThreadPool.QueueUserWorkItem (
-				delegate {
-					ddata.diffException = null;
-					try {
-						ddata.difs = vc.PathDiff (filepath, null, remote);
-					} catch (Exception ex) {
-						ddata.diffException = ex;
-					} finally {
-						ddata.diffRequested = true;
-						ddata.diffRunning = false;
-						if (null != DiffDataLoaded) {
-							Gtk.Application.Invoke (delegate {
-								DiffDataLoaded (ddata);
-								DiffDataLoaded = null;
-							});
-						}
-					}
-				}
-			);
-		}
-		
-		void SetFileDiff (TreeIter iter, string file, bool remote)
-		{
-			// If diff information is already loaded, just look for the
-			// diff chunk of the file and fill the tree
-
-			DiffData ddata = GetDiffData (remote);
-			if (ddata.diffRequested) {
-				FillDiffInfo (iter, file, ddata);
-				return;
+			DiffData info = ddata.FirstOrDefault (d => d.VersionInfo.LocalPath == file);
+			if (info == null) {
+				// This should be impossible. We shouldn't generate a diff for a file
+				// which is not in our list
+				text =  new[] { GettextCatalog.GetString ("No differences found") };
+				LoggingService.LogError ("Attempted to generate the diff for a file not in the changeset", (Exception) null);
+			} else if (!info.Diff.IsValueCreated) {
+				text = new [] { GettextCatalog.GetString ("Loading data...") };
+				ThreadPool.QueueUserWorkItem (delegate {
+					// Here we just touch the  property so that the Lazy<T> creates
+					// the value. Do not capture the TreeIter as it may invalidate 
+					// before the diff data has asyncronously loaded.
+					GC.KeepAlive (info.Diff.Value);
+					Gtk.Application.Invoke (delegate { if (!disposed) FillDifs (GetDiffData (this.remoteStatus)); });
+				});
+			} else if (info.Exception != null) {
+				text = new [] { GettextCatalog.GetString ("Could not get diff information. ") + info.Exception.Message };
+			} else if (info.Diff.Value == null || string.IsNullOrEmpty (info.Diff.Value.Content)) {
+				text = new [] { GettextCatalog.GetString ("No differences found") };
+			} else {
+				text = info.Diff.Value.Content.Split ('\n');
+				asText = false;
 			}
-
-			filestore.SetValue (iter, ColPath, new string[] { GettextCatalog.GetString ("Loading data...") });
-			filestore.SetValue (iter, ColRenderAsText, true);
 			
-			if (ddata.diffRunning)
-				return;
-
-			DiffDataLoaded += FillDifs;
-			LoadDiffs (remote);
+			filestore.SetValue (iter, ColRenderAsText, asText);
+			filestore.SetValue (iter, ColPath, text);
 		}
 		
-		void FillDiffInfo (TreeIter iter, string file, DiffData ddata)
-		{
-			if (ddata.difs != null) {
-				foreach (DiffInfo di in ddata.difs) {
-					if (di.FileName == file) {
-						filestore.SetValue (iter, ColPath, di.Content.Split ('\n'));
-						filestore.SetValue (iter, ColRenderAsText, false);
-						return;
-					}
-				}
-			}
-			filestore.SetValue (iter, ColPath, new string[] { GettextCatalog.GetString ("No differences found") });
-			filestore.SetValue (iter, ColRenderAsText, true);
-		}
-		
-		void FillDifs (DiffData ddata)
+		void FillDifs (List<DiffData> ddata)
 		{
 			if (disposed)
 				return;
 
 			diffRenderer.Reset ();
-
-			if (ddata.diffException != null) {
-				MessageService.ShowException (ddata.diffException, GettextCatalog.GetString ("Could not get diff information. ") + ddata.diffException.Message);
-			}
-			
 			TreeIter it;
 			if (!filestore.GetIterFirst (out it))
 				return;
@@ -1035,39 +1048,47 @@ namespace MonoDevelop.VersionControl.Views
 
 	class FileTreeView: TreeView
 	{
-		protected override bool OnButtonPressEvent(Gdk.EventButton evnt)
+		const Gdk.ModifierType selectionModifiers = Gdk.ModifierType.ShiftMask | Gdk.ModifierType.ControlMask;
+		
+		protected override bool OnButtonPressEvent (Gdk.EventButton evnt)
 		{
 			bool keepPos = false;
 			double vpos = 0;
 			
-			TreePath path, cpath;
-			GetPathAtPos ((int)evnt.X, (int)evnt.Y, out path);
+			bool ctxMenu = evnt.TriggersContextMenu ();
+			bool handled = false;
 			
-			TreeViewColumn col;
-			GetCursor (out cpath, out col);
-			
-			if (path != null && path.Depth == 2) {
-				vpos = Vadjustment.Value;
-				keepPos = true;
-				if (Selection.PathIsSelected (path) && Selection.GetSelectedRows ().Length == 1 && evnt.Button == 1) {
-					if (evnt.Type == Gdk.EventType.TwoButtonPress && DiffLineActivated != null)
-						DiffLineActivated (this, EventArgs.Empty);
-					return true;
+			if (!ctxMenu) {
+				TreePath path;
+				GetPathAtPos ((int)evnt.X, (int)evnt.Y, out path);
+				if (path != null && path.Depth == 2) {
+					vpos = Vadjustment.Value;
+					keepPos = true;
+					if (Selection.PathIsSelected (path) && Selection.GetSelectedRows ().Length == 1 && evnt.Button == 1) {
+						if (evnt.Type == Gdk.EventType.TwoButtonPress && DiffLineActivated != null)
+							DiffLineActivated (this, EventArgs.Empty);
+						handled = true;
+					}
 				}
 			}
 			
-			bool res = true;
-			bool withModifider = (evnt.State & Gdk.ModifierType.ShiftMask) != 0 || (evnt.State & Gdk.ModifierType.ControlMask) != 0;
-			if (!IsClickedNodeSelected ((int)evnt.X, (int)evnt.Y) || (Selection.GetSelectedRows ().Length <= 1) || withModifider || evnt.Button != 3)
-				res = base.OnButtonPressEvent (evnt);
+			handled = handled || (
+				IsClickedNodeSelected ((int)evnt.X, (int)evnt.Y)
+				&& this.Selection.GetSelectedRows ().Length > 1
+				&& (evnt.State & selectionModifiers) == 0);
 			
-			if (evnt.Button == 3) {
-				if (ShowContextMenu != null)
-					ShowContextMenu (this, EventArgs.Empty);
+			if (!handled)
+				handled = base.OnButtonPressEvent (evnt);
+			
+			if (ctxMenu) {
+				if (DoPopupMenu != null)
+					DoPopupMenu (evnt);
+				handled = true;
 			}
+			
 			if (keepPos)
 				Vadjustment.Value = vpos;
-			return res;
+			return handled;
 		}
 		
 		bool IsClickedNodeSelected (int x, int y)
@@ -1081,8 +1102,8 @@ namespace MonoDevelop.VersionControl.Views
 
 		protected override bool OnPopupMenu()
 		{
-			if (ShowContextMenu != null)
-				ShowContextMenu (this, EventArgs.Empty);
+			if (DoPopupMenu != null)
+				DoPopupMenu (null);
 			return true;
 		}
 		
@@ -1121,7 +1142,7 @@ namespace MonoDevelop.VersionControl.Views
 			return base.OnScrollEvent (evnt);
 		}
 
-		public event EventHandler ShowContextMenu;
+		public Action<Gdk.EventButton> DoPopupMenu;
 		public event EventHandler DiffLineActivated;
 	}
 }

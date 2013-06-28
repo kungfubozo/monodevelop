@@ -39,10 +39,18 @@ using MonoDevelop.Core;
 using MonoDevelop.Ide;
 using MonoDevelop.Ide.Commands;
 using MonoDevelop.Ide.Gui.Components;
-using MonoDevelop.Projects.Dom;
-using MonoDevelop.Projects.Dom.Output;
 using System.Linq;
 using Mono.TextEditor;
+using MonoDevelop.Ide.TypeSystem;
+using ICSharpCode.NRefactory.Documentation;
+using ICSharpCode.NRefactory.TypeSystem;
+using MonoDevelop.Projects;
+using ICSharpCode.NRefactory.TypeSystem.Implementation;
+using Mono.TextEditor.Theatrics;
+using MonoDevelop.SourceEditor;
+using XmlDocIdLib;
+using MonoDevelop.Ide.Gui;
+using MonoDevelop.Components;
 
 namespace MonoDevelop.AssemblyBrowser
 {
@@ -50,14 +58,21 @@ namespace MonoDevelop.AssemblyBrowser
 	[System.ComponentModel.ToolboxItem(true)]
 	partial class AssemblyBrowserWidget : Gtk.Bin
 	{
-		public ExtensibleTreeView TreeView {
+		Gtk.Button buttonBack;
+		Gtk.Button buttonForeward;
+		Gtk.ComboBox comboboxVisibilty;
+		MonoDevelop.Components.SearchEntry searchentry1;
+		Gtk.ComboBox languageCombobox;
+
+		public AssemblyBrowserTreeView TreeView {
 			get;
 			private set;
 		}
 		
 		public bool PublicApiOnly {
-			get;
-			private set;
+			get {
+				return TreeView.PublicApiOnly;
+			}
 		}
 		
 		Ambience ambience = AmbienceService.GetAmbience ("text/x-csharp");
@@ -66,111 +81,58 @@ namespace MonoDevelop.AssemblyBrowser
 		}
 		
 		DocumentationPanel documentationPanel = new DocumentationPanel ();
-		Mono.TextEditor.TextEditor inspectEditor = new Mono.TextEditor.TextEditor ();
+		readonly TextEditor inspectEditor;
+
+		public class AssemblyBrowserTreeView : ExtensibleTreeView
+		{
+			bool publicApiOnly = true;
+
+			public bool PublicApiOnly {
+				get {
+					return publicApiOnly;
+				}
+				set {
+					if (publicApiOnly == value)
+						return;
+					publicApiOnly = value;
+					var root = GetRootNode ();
+					if (root != null)
+						RefreshNode (root);
+				}
+			}
+
+			public AssemblyBrowserTreeView (NodeBuilder[] builders, TreePadOption[] options) : base (builders, options)
+			{
+			}
+		}
+
 		public AssemblyBrowserWidget ()
 		{
-			this.Build();
-			TreeView = new ExtensibleTreeView (new NodeBuilder[] { 
-				new ErrorNodeBuilder (),
-				new AssemblyNodeBuilder (this),
-				new ModuleReferenceNodeBuilder (),
-				new ModuleDefinitionNodeBuilder (this),
-				new ReferenceFolderNodeBuilder (this),
-				new ResourceFolderNodeBuilder (),
-				new ResourceNodeBuilder (),
-				new NamespaceBuilder (this),
-				new DomTypeNodeBuilder (this),
-				new DomMethodNodeBuilder (this),
-				new DomFieldNodeBuilder (this),
-				new DomEventNodeBuilder (this),
-				new DomPropertyNodeBuilder (this),
-				new BaseTypeFolderNodeBuilder (this),
-				new DomReturnTypeNodeBuilder (this),
-				new ReferenceNodeBuilder (this),
-				}, new TreePadOption [] {
-				new TreePadOption ("PublicApiOnly", GettextCatalog.GetString ("Show public members only"), true)
-			});
-			TreeView.Tree.Selection.Mode = Gtk.SelectionMode.Single;
-			TreeView.Tree.CursorChanged += HandleCursorChanged;
-			inspectEditor.ButtonPressEvent += HandleInspectEditorButtonPressEvent;
-			TreeView.ShadowType = ShadowType.In;
-			treeViewPlaceholder.Add (TreeView);
-			treeViewPlaceholder.ShowAll ();
-			
-//			this.descriptionLabel.ModifyFont (Pango.FontDescription.FromString ("Sans 9"));
-			this.documentationLabel.ModifyFont (Pango.FontDescription.FromString ("Sans 12"));
-			this.documentationLabel.ModifyBg (Gtk.StateType.Normal, new Gdk.Color (255, 255, 225));
-			this.documentationLabel.Wrap = true;
-			
-			Mono.TextEditor.TextEditorOptions options = new Mono.TextEditor.TextEditorOptions ();
-			options.FontName = PropertyService.Get<string> ("FontName");
-			options.ShowFoldMargin = false;
-			options.ShowIconMargin = false;
-			options.ShowInvalidLines = false;
-			options.ShowLineNumberMargin = false;
-			options.ShowSpaces = false;
-			options.ShowTabs = false;
-			options.HighlightCaretLine = true;
-			options.ColorScheme = PropertyService.Get ("ColorScheme", "Default");
-			this.inspectEditor.Options = options;
-			
-			PropertyService.PropertyChanged += HandlePropertyChanged;
-			this.inspectEditor.Document.ReadOnly = true;
-//			this.inspectEditor.Document.SyntaxMode = new Mono.TextEditor.Highlighting.MarkupSyntaxMode ();
-			this.inspectEditor.TextViewMargin.GetLink = delegate(Mono.TextEditor.MarginMouseEventArgs arg) {
-				var loc = inspectEditor.PointToLocation (arg.X, arg.Y);
-				int offset = inspectEditor.LocationToOffset (loc);
-				var referencedSegment = ReferencedSegments != null ? ReferencedSegments.FirstOrDefault (seg => seg.Contains (offset)) : null;
-				if (referencedSegment == null)
-					return null;
-				if (referencedSegment.Reference is TypeDefinition)
-					return new DomCecilType ((TypeDefinition)referencedSegment.Reference).HelpUrl;
-				
-				if (referencedSegment.Reference is MethodDefinition)
-					return new DomCecilMethod ((MethodDefinition)referencedSegment.Reference).HelpUrl;
-				
-				if (referencedSegment.Reference is PropertyDefinition)
-					return new DomCecilProperty ((PropertyDefinition)referencedSegment.Reference).HelpUrl;
-				
-				if (referencedSegment.Reference is FieldDefinition)
-					return new DomCecilField ((FieldDefinition)referencedSegment.Reference).HelpUrl;
-				
-				if (referencedSegment.Reference is EventDefinition)
-					return new DomCecilEvent ((EventDefinition)referencedSegment.Reference).HelpUrl;
-				
-				if (referencedSegment.Reference is FieldDefinition)
-					return new DomCecilField ((FieldDefinition)referencedSegment.Reference).HelpUrl;
-				
-				if (referencedSegment.Reference is TypeReference) {
-					var returnType = DomCecilMethod.GetReturnType ((TypeReference)referencedSegment.Reference);
-					if (returnType.GenericArguments.Count == 0)
-						return "T:" + returnType.FullName;
-					return "T:" + returnType.FullName + "`" + returnType.GenericArguments.Count;
-				}
-				return referencedSegment.Reference.ToString ();
+			this.Build ();
+
+			buttonBack = new Gtk.Button (new Gtk.Image (ImageService.GetPixbuf ("md-breadcrumb-prev")));
+			buttonBack.Clicked += OnNavigateBackwardActionActivated;
+
+			buttonForeward = new Gtk.Button (new Gtk.Image (ImageService.GetPixbuf ("md-breadcrumb-next")));
+			buttonForeward.Clicked += OnNavigateForwardActionActivated;
+
+			comboboxVisibilty = ComboBox.NewText ();
+			comboboxVisibilty.InsertText (0, GettextCatalog.GetString ("Only public members"));
+			comboboxVisibilty.InsertText (1, GettextCatalog.GetString ("All members"));
+			comboboxVisibilty.Active = 0;
+			comboboxVisibilty.Changed += delegate {
+				TreeView.PublicApiOnly = comboboxVisibilty.Active == 0;
+				FillInspectLabel ();
 			};
-			this.inspectEditor.LinkRequest += InspectEditorhandleLinkRequest;
-			
-//			this.inspectLabel.ModifyBg (Gtk.StateType.Normal, new Gdk.Color (255, 255, 250));
-			
-//			this.vpaned1.ExposeEvent += VPaneExpose;
-			this.hpaned1.ExposeEvent += HPaneExpose;
-/*			this.notebook1.SwitchPage += delegate {
-				// Hack for the switch page select all bug.
-//				this.inspectLabel.Selectable = false;
-			};*/
-			this.notebook1.GetNthPage (0).Hide ();
-			this.languageCombobox.AppendText (GettextCatalog.GetString ("Summary"));
-			this.languageCombobox.AppendText (GettextCatalog.GetString ("IL"));
-			this.languageCombobox.AppendText (GettextCatalog.GetString ("C#"));
-			this.languageCombobox.Active = PropertyService.Get ("AssemblyBrowser.InspectLanguage", 2);
-			this.languageCombobox.Changed += LanguageComboboxhandleChanged;
-			this.searchentry1.Ready = true;
-			this.searchentry1.WidthRequest = 200;
-			this.searchentry1.Visible = true;
-			this.searchentry1.EmptyMessage = GettextCatalog.GetString ("Search for types or members");
-			this.searchentry1.InnerEntry.Changed += SearchEntryhandleChanged;
-			
+
+			searchentry1 = new MonoDevelop.Components.SearchEntry ();
+			searchentry1.Ready = true;
+			searchentry1.HasFrame = true;
+			searchentry1.WidthRequest = 200;
+			searchentry1.Visible = true;
+			searchentry1.EmptyMessage = GettextCatalog.GetString ("Search for types or members");
+			searchentry1.InnerEntry.Changed += SearchEntryhandleChanged;
+
 			CheckMenuItem checkMenuItem = this.searchentry1.AddFilterOption (0, GettextCatalog.GetString ("Types"));
 			checkMenuItem.Active = true;
 			checkMenuItem.Toggled += delegate {
@@ -189,44 +151,163 @@ namespace MonoDevelop.AssemblyBrowser
 					StartSearch ();
 				}
 			};
-			comboboxVisibilty.InsertText (0, GettextCatalog.GetString ("Only public members"));
-			comboboxVisibilty.InsertText (1, GettextCatalog.GetString ("All members"));
-			comboboxVisibilty.Active = 0;
-			comboboxVisibilty.Changed += delegate {
-				PublicApiOnly = comboboxVisibilty.Active == 0;
-				this.TreeView.GetRootNode ().Options["PublicApiOnly"] = PublicApiOnly;
-				FillInspectLabel ();
+
+			languageCombobox = Gtk.ComboBox.NewText ();
+			languageCombobox.AppendText (GettextCatalog.GetString ("Summary"));
+			languageCombobox.AppendText (GettextCatalog.GetString ("IL"));
+			languageCombobox.AppendText (GettextCatalog.GetString ("C#"));
+			languageCombobox.Active = PropertyService.Get ("AssemblyBrowser.InspectLanguage", 2);
+			languageCombobox.Changed += LanguageComboboxhandleChanged;
+
+			loader = new CecilLoader (true);
+			loader.IncludeInternalMembers = true;
+			TreeView = new AssemblyBrowserTreeView (new NodeBuilder[] { 
+				new ErrorNodeBuilder (),
+				new ProjectNodeBuilder (this),
+				new AssemblyNodeBuilder (this),
+				new ModuleReferenceNodeBuilder (),
+				new AssemblyReferenceNodeBuilder (this),
+				new AssemblyReferenceFolderNodeBuilder (this),
+				new AssemblyResourceFolderNodeBuilder (),
+				new ResourceNodeBuilder (),
+				new NamespaceBuilder (this),
+				new DomTypeNodeBuilder (this),
+				new DomMethodNodeBuilder (this),
+				new DomFieldNodeBuilder (this),
+				new DomEventNodeBuilder (this),
+				new DomPropertyNodeBuilder (this),
+				new BaseTypeFolderNodeBuilder (this),
+				new BaseTypeNodeBuilder (this)
+				}, new TreePadOption [0]);
+			TreeView.Tree.Selection.Mode = Gtk.SelectionMode.Single;
+			TreeView.Tree.CursorChanged += HandleCursorChanged;
+			TreeView.ShadowType = ShadowType.None;
+			TreeView.BorderWidth = 1;
+			TreeView.ShowBorderLine = false;
+			TreeView.Zoom = 1.0;
+			treeViewPlaceholder.Add (TreeView);
+			treeViewPlaceholder.ShowAll ();
+			
+//			this.descriptionLabel.ModifyFont (Pango.FontDescription.FromString ("Sans 9"));
+//			this.documentationLabel.ModifyFont (Pango.FontDescription.FromString ("Sans 12"));
+//			this.documentationLabel.ModifyBg (Gtk.StateType.Normal, new Gdk.Color (255, 255, 225));
+//			this.documentationLabel.Wrap = true;
+			
+			var options = new MonoDevelop.Ide.Gui.CommonTextEditorOptions () {
+				ShowFoldMargin = false,
+				ShowIconMargin = false,
+				ShowLineNumberMargin = false,
+				HighlightCaretLine = true,
 			};
+			inspectEditor = new TextEditor (new TextDocument (), options);
+			inspectEditor.ButtonPressEvent += HandleInspectEditorButtonPressEvent;
+			
+			this.inspectEditor.Document.ReadOnly = true;
+//			this.inspectEditor.Document.SyntaxMode = new Mono.TextEditor.Highlighting.MarkupSyntaxMode ();
+			this.inspectEditor.TextViewMargin.GetLink = delegate(Mono.TextEditor.MarginMouseEventArgs arg) {
+				var loc = inspectEditor.PointToLocation (arg.X, arg.Y);
+				int offset = inspectEditor.LocationToOffset (loc);
+				var referencedSegment = ReferencedSegments != null ? ReferencedSegments.FirstOrDefault (seg => seg.Segment.Contains (offset)) : null;
+				if (referencedSegment == null)
+					return null;
+				if (referencedSegment.Reference is TypeDefinition)
+					return new XmlDocIdGenerator ().GetXmlDocPath ((TypeDefinition)referencedSegment.Reference);
+				
+				if (referencedSegment.Reference is MethodDefinition)
+					return new XmlDocIdGenerator ().GetXmlDocPath ((MethodDefinition)referencedSegment.Reference);
+				
+				if (referencedSegment.Reference is PropertyDefinition)
+					return new XmlDocIdGenerator ().GetXmlDocPath ((PropertyDefinition)referencedSegment.Reference);
+				
+				if (referencedSegment.Reference is FieldDefinition)
+					return new XmlDocIdGenerator ().GetXmlDocPath ((FieldDefinition)referencedSegment.Reference);
+				
+				if (referencedSegment.Reference is EventDefinition)
+					return new XmlDocIdGenerator ().GetXmlDocPath ((EventDefinition)referencedSegment.Reference);
+				
+				if (referencedSegment.Reference is FieldDefinition)
+					return new XmlDocIdGenerator ().GetXmlDocPath ((FieldDefinition)referencedSegment.Reference);
+
+				if (referencedSegment.Reference is TypeReference) {
+					return new XmlDocIdGenerator ().GetXmlDocPath ((TypeReference)referencedSegment.Reference);
+				}
+				return referencedSegment.Reference.ToString ();
+			};
+			this.inspectEditor.LinkRequest += InspectEditorhandleLinkRequest;
+			var scrolledWindow = new CompactScrolledWindow ();
+			scrolledWindow.Add (inspectEditor);
+			scrolledWindow.ShowAll ();
+			notebookInspection.Add (scrolledWindow);
+			var notebookChild = ((Notebook.NotebookChild)(notebookInspection [scrolledWindow]));
+			notebookChild.Position = 1;
+
+//			this.inspectLabel.ModifyBg (Gtk.StateType.Normal, new Gdk.Color (255, 255, 250));
+			
+//			this.vpaned1.ExposeEvent += VPaneExpose;
+			this.hpaned1.ExposeEvent += HPaneExpose;
+			hpaned1 = hpaned1.ReplaceWithWidget (new HPanedThin (), true);
+			hpaned1.Position = 271;
+
+/*			this.notebook1.SwitchPage += delegate {
+				// Hack for the switch page select all bug.
+//				this.inspectLabel.Selectable = false;
+			};*/
+
 			/*
 			this.searchInCombobox.Active = 0;
 			this.searchInCombobox.Changed += SearchInComboboxhandleChanged;
 			*/
 			this.notebook1.SetTabLabel (this.documentationScrolledWindow, new Label (GettextCatalog.GetString ("Documentation")));
-			this.notebook1.SetTabLabel (this.vboxInspect, new Label (GettextCatalog.GetString ("Inspect")));
+			this.notebook1.SetTabLabel (this.notebookInspection, new Label (GettextCatalog.GetString ("Inspect")));
 			this.notebook1.SetTabLabel (this.searchWidget, new Label (GettextCatalog.GetString ("Search")));
 			//this.searchWidget.Visible = false;
 				
-			typeListStore = new Gtk.ListStore (typeof (Gdk.Pixbuf), // type image
-			                                   typeof (string),     // name
-			                                   typeof (string),     // namespace
-			                                   typeof (string),     // assembly
-				                               typeof (IMember)
+			typeListStore = new Gtk.ListStore (typeof(Gdk.Pixbuf), // type image
+			                                   typeof(string), // name
+			                                   typeof(string), // namespace
+			                                   typeof(string), // assembly
+				                               typeof(IMember)
 			                                  );
 			
-			memberListStore = new Gtk.ListStore (typeof (Gdk.Pixbuf), // member image
-			                                   typeof (string),     // name
-			                                   typeof (string),     // Declaring type full name
-			                                   typeof (string),     // assembly
-				                               typeof (IMember)
+			memberListStore = new Gtk.ListStore (typeof(Gdk.Pixbuf), // member image
+			                                   typeof(string), // name
+			                                   typeof(string), // Declaring type full name
+			                                   typeof(string), // assembly
+				                               typeof(IMember)
 			                                  );
 			CreateColumns ();
 			SetInspectWidget ();
 //			this.searchEntry.Changed += SearchEntryhandleChanged;
 			this.searchTreeview.RowActivated += SearchTreeviewhandleRowActivated;
-			this.searchentry1.ShowAll ();
-			this.buttonBack.Clicked += this.OnNavigateBackwardActionActivated;
-			this.buttonForeward.Clicked += this.OnNavigateForwardActionActivated;
-			
+			this.notebook1.ShowTabs = false;
+			this.notebookInspection.ShowTabs = false;
+			this.ShowAll ();
+		}
+
+		internal void SetToolbar (DocumentToolbar toolbar)
+		{
+			toolbar.Add (buttonBack);
+
+			toolbar.Add (buttonForeward);
+
+			toolbar.Add (new VSeparator ());
+
+			Gtk.Label la = new Label (GettextCatalog.GetString ("Visibility"));
+			toolbar.Add (la);
+
+			toolbar.Add (comboboxVisibilty);
+
+			la = new Label ("");
+			toolbar.Add (la, true);
+
+			toolbar.Add (searchentry1);
+
+			la = new Label (GettextCatalog.GetString ("Language"));
+			toolbar.Add (la);
+
+			toolbar.Add (languageCombobox);
+
+			toolbar.ShowAll ();
 		}
 		
 		[CommandHandler (EditCommands.Copy)]
@@ -253,25 +334,13 @@ namespace MonoDevelop.AssemblyBrowser
 
 		void SearchTreeviewhandleRowActivated (object o, RowActivatedArgs args)
 		{
-			Gtk.TreeIter selectedIter;
+			TreeIter selectedIter;
 			if (searchTreeview.Selection.GetSelected (out selectedIter)) {
-				MonoDevelop.Projects.Dom.IMember member = (MonoDevelop.Projects.Dom.IMember)(searchMode != SearchMode.Type ? memberListStore.GetValue (selectedIter, 4) : typeListStore.GetValue (selectedIter, 4));
-				ITreeNavigator nav = SearchMember (member);
+				var member = (IUnresolvedEntity)(searchMode != SearchMode.Type ? memberListStore.GetValue (selectedIter, 4) : typeListStore.GetValue (selectedIter, 4));
+				
+				var nav = SearchMember (member);
 				if (nav != null) {
-					nav.ExpandToNode ();
-					nav.Selected = true;
-				}
-				if (searchMode == SearchMode.Disassembler) {
-					this.notebook1.Page = 0;
-//						int idx = DomMethodNodeBuilder.Disassemble ((DomCecilMethod)member, false).ToUpper ().IndexOf (searchEntry.Text.ToUpper ());
-//						this.inspectLabel.Selectable = true;
-//						this.inspectLabel.SelectRegion (idx, idx + searchEntry.Text.Length);
-				}
-				if (searchMode == SearchMode.Decompiler) {
-					this.notebook1.Page = 1;
-//						int idx = DomMethodNodeBuilder.Decompile ((DomCecilMethod)member, false).ToUpper ().IndexOf (searchEntry.Text.ToUpper ());
-//						this.inspectLabel.Selectable = true;
-//						this.inspectLabel.SelectRegion (idx, idx + searchEntry.Text.Length);
+					notebook1.Page = 0;
 				}
 			}
 		}
@@ -283,7 +352,7 @@ namespace MonoDevelop.AssemblyBrowser
 		
 		void LanguageComboboxhandleChanged (object sender, EventArgs e)
 		{
-			this.notebook1.Page = 1;
+			this.notebook1.Page = 0;
 			PropertyService.Set ("AssemblyBrowser.InspectLanguage", this.languageCombobox.Active);
 			SetInspectWidget ();
 			FillInspectLabel ();
@@ -291,19 +360,21 @@ namespace MonoDevelop.AssemblyBrowser
 
 		void InspectEditorhandleLinkRequest (object sender, Mono.TextEditor.LinkEventArgs args)
 		{
+			var loader = (AssemblyLoader)this.TreeView.GetSelectedNode ().GetParentDataItem (typeof(AssemblyLoader), true);
+
 			if (args.Button == 2 || (args.Button == 1 && (args.ModifierState & Gdk.ModifierType.ShiftMask) == Gdk.ModifierType.ShiftMask)) {
 				AssemblyBrowserViewContent assemblyBrowserView = new AssemblyBrowserViewContent ();
-				foreach (DomCecilCompilationUnit cu in definitions) {
-					assemblyBrowserView.Load (cu.FileName);
+				foreach (var cu in definitions) {
+					assemblyBrowserView.Load (cu.UnresolvedAssembly.AssemblyName);
 				}
 				IdeApp.Workbench.OpenDocument (assemblyBrowserView, true);
 				((AssemblyBrowserWidget)assemblyBrowserView.Control).Open (args.Link);
 			} else {
-				this.Open (args.Link);
+				this.Open (args.Link, loader);
 			}
 		}
 		
-		public MonoDevelop.Projects.Dom.IMember ActiveMember  {
+		public IEntity ActiveMember  {
 			get;
 			set;
 		}
@@ -313,16 +384,10 @@ namespace MonoDevelop.AssemblyBrowser
 			base.OnRealized ();
 			TreeView.GrabFocus ();
 		}
-
-		void HandlePropertyChanged(object sender, MonoDevelop.Core.PropertyChangedEventArgs e)
-		{
-			if (e.Key == "ColorScheme")
-				((Mono.TextEditor.TextEditorOptions)this.inspectEditor.Options).ColorScheme = PropertyService.Get ("ColorScheme", "Default");
-		}
 		
-		ITreeNavigator SearchMember (IMember member)
+		ITreeNavigator SearchMember (IUnresolvedEntity member)
 		{
-			return SearchMember (member.HelpUrl);
+			return SearchMember (GetIdString (member));
 		}
 			
 		ITreeNavigator SearchMember (string helpUrl)
@@ -330,57 +395,211 @@ namespace MonoDevelop.AssemblyBrowser
 			return SearchMember (TreeView.GetRootNode (), helpUrl);
 		}
 		
-		static bool IsMatch (ITreeNavigator nav, string helpUrl)
+		static void AppendTypeReference (StringBuilder result, ITypeReference type)
 		{
-			IMember member = nav.DataItem as IMember;
-			return member != null && member.HelpUrl == helpUrl;
+			if (type is ByReferenceTypeReference) {
+				var brtr = (ByReferenceTypeReference)type;
+				AppendTypeReference (result, brtr.ElementType);
+				return;
+			}
+
+			if (type is ArrayTypeReference) {
+				var array = (ArrayTypeReference)type;
+				AppendTypeReference (result, array.ElementType);
+				result.Append ("[");
+				result.Append (new string (',', array.Dimensions - 1));
+				result.Append ("]");
+				return;
+			}
+
+			if (type is PointerTypeReference) {
+				var ptr = (PointerTypeReference)type;
+				AppendTypeReference (result, ptr.ElementType);
+				result.Append ("*");
+				return;
+			}
+
+			if (type is GetClassTypeReference) {
+				var r = (GetClassTypeReference)type;
+				var n = r.FullTypeName.TopLevelTypeName;
+				result.Append (n.Namespace + "." + n.Name);
+				return;
+			}
+
+			if (type is IUnresolvedTypeDefinition) {
+				result.Append (((IUnresolvedTypeDefinition)type).FullName);
+			}
+		}
+		
+		static void AppendHelpParameterList (StringBuilder result, IList<IUnresolvedParameter> parameters)
+		{
+			if (parameters == null || parameters.Count == 0)
+				return;
+			result.Append ('(');
+			if (parameters != null) {
+				for (int i = 0; i < parameters.Count; i++) {
+					if (i > 0)
+						result.Append (',');
+					var p = parameters [i];
+					if (p == null)
+						continue;
+					AppendTypeReference (result, p.Type);
+					if (p.IsRef)
+						result.Append ("&");
+					if (p.IsOut) {
+						result.Append ("@");
+					}
+				}
+			}
+			result.Append (')');
+		}
+		
+		static string GetIdString (IUnresolvedEntity member)
+		{
+			StringBuilder sb;
+			
+			switch (member.EntityType) {
+			case EntityType.TypeDefinition:
+				var type = member as IUnresolvedTypeDefinition;
+				if (type.TypeParameters.Count == 0)
+					return "T:" + type.FullName;
+				return "T:" + type.FullName + "`" + type.TypeParameters.Count;
+			case EntityType.Method:
+				var method = (IUnresolvedMethod)member;
+				sb = new StringBuilder ();
+				sb.Append ("M:");
+				sb.Append (method.FullName);
+				if (method.TypeParameters.Count > 0) {
+					sb.Append ("`");
+					sb.Append (method.TypeParameters.Count);
+				}
+				AppendHelpParameterList (sb, method.Parameters);
+				return sb.ToString ();
+			case EntityType.Constructor:
+				var constructor = (IUnresolvedMethod)member;
+				sb = new StringBuilder ();
+				sb.Append ("M:");
+				sb.Append (constructor.DeclaringTypeDefinition.FullName);
+				sb.Append (".#ctor");
+				AppendHelpParameterList (sb, constructor.Parameters);
+				return sb.ToString ();
+			case EntityType.Destructor: // todo
+				return "todo";
+			case EntityType.Property:
+				return "P:" + member.FullName;
+			case EntityType.Indexer:
+				var indexer = (IUnresolvedProperty)member;
+				sb = new StringBuilder ();
+				sb.Append ("P:");
+				sb.Append (indexer.DeclaringTypeDefinition.FullName);
+				sb.Append (".Item");
+				AppendHelpParameterList (sb, indexer.Parameters);
+				return sb.ToString ();
+			case EntityType.Field:
+				return "F:" + member.FullName;
+			case EntityType.Event:
+				return "E:" + member.FullName;
+			case EntityType.Operator: // todo
+				return "todo";
+			}
+			return "unknown entity: " + member;
+		}
+
+		static string GetIdString (MethodDefinition methodDefinition)
+		{
+			var sb = new StringBuilder ();
+			sb.Append ("M:");
+			sb.Append (methodDefinition.FullName);
+			if (methodDefinition.HasGenericParameters) {
+				sb.Append ("`");
+				sb.Append (methodDefinition.GenericParameters.Count);
+			}
+//			AppendHelpParameterList (sb, method.Parameters);
+			return sb.ToString ();
+		}
+
+		static string GetIdString (TypeDefinition typeDefinition)
+		{
+			if (!typeDefinition.HasGenericParameters)
+				return "T:" + typeDefinition.FullName;
+			return "T:" + typeDefinition.FullName + "`" + typeDefinition.GenericParameters.Count;
+		}		
+
+		bool IsMatch (ITreeNavigator nav, string helpUrl, bool searchType)
+		{
+			var member = nav.DataItem as IUnresolvedEntity;
+			if (member == null)
+				return false;
+			
+			if (searchType) {
+				if (member is IUnresolvedTypeDefinition)
+					return GetIdString (member) == helpUrl;
+			} else {
+				if (member is IUnresolvedMember) {
+					return GetIdString (member) == helpUrl;
+				}
+			}
+			return false;
 		}
 			
-		static bool SkipChildren (ITreeNavigator nav, string helpUrl)
+		static bool SkipChildren (ITreeNavigator nav, string helpUrl, bool searchType)
 		{
+			if (nav.DataItem is IUnresolvedMember)
+				return true;
+			if (nav.DataItem is BaseTypeFolder)
+				return true;
+			if (nav.DataItem is Project)
+				return true;
+			if (nav.DataItem is AssemblyReferenceFolder)
+				return true;
+			if (nav.DataItem is AssemblyResourceFolder)
+				return true;
 			string strippedUrl = helpUrl;
+			if (strippedUrl.Length > 2 && strippedUrl [1] == ':')
+				strippedUrl = strippedUrl.Substring (2);
 			int idx = strippedUrl.IndexOf ('~');
 			if (idx > 0) 
 				strippedUrl = strippedUrl.Substring (0, idx);
 			
-			if (nav.DataItem is IType && !strippedUrl.Contains ((nav.DataItem as IType).FullName)) 
+			var type = nav.DataItem as IUnresolvedTypeDefinition;
+			if (type != null && !strippedUrl.StartsWith (type.FullName, StringComparison.Ordinal))
 				return true;
-			if (nav.DataItem is Namespace && !strippedUrl.Contains (((Namespace)nav.DataItem).Name))
+			if (nav.DataItem is Namespace && !strippedUrl.StartsWith (((Namespace)nav.DataItem).Name, StringComparison.Ordinal))
 				return true;
 			return false;
 		}
 		
 		ITreeNavigator SearchMember (ITreeNavigator nav, string helpUrl)
 		{
-			try {
-				do {
-					if (IsMatch (nav, helpUrl))
-						return nav;
-					if (!SkipChildren (nav, helpUrl) && nav.HasChildren ()) {
-						DispatchService.RunPendingEvents ();
-						nav.MoveToFirstChild ();
-						ITreeNavigator result = SearchMember (nav, helpUrl);
-						if (result != null)
-							return result;
-						
-						if (!nav.MoveToParent ())
-							return null;
-						try {
-							if (nav.DataItem is DomCecilType && nav.Options["PublicApiOnly"]) {
-								nav.Options["PublicApiOnly"] = false;
-								nav.MoveToFirstChild ();
-								result = SearchMember (nav, helpUrl);
-								if (result != null)
-									return result;
-								nav.MoveToParent ();
-							}
-						} catch (Exception) {
-							return null;
-						}
+			bool searchType = helpUrl.StartsWith ("T:");
+			do {
+				if (IsMatch (nav, helpUrl, searchType)) {
+					inspectEditor.ClearSelection ();
+					nav.ExpandToNode ();
+					nav.Selected = nav.Expanded = true;
+					return nav;
+				}
+				if (!SkipChildren (nav, helpUrl, searchType) && nav.HasChildren ()) {
+					nav.MoveToFirstChild ();
+					ITreeNavigator result = SearchMember (nav, helpUrl);
+					if (result != null)
+						return result;
+					
+					if (!nav.MoveToParent ()) {
+						return null;
 					}
-				} while (nav.MoveNext());
-			} catch (Exception) {
-			}
+					try {
+						if (nav.DataItem is TypeDefinition && PublicApiOnly) {
+							nav.MoveToFirstChild ();
+							result = SearchMember (nav, helpUrl);
+							if (result != null)
+								return result;
+							nav.MoveToParent ();
+						}
+					} catch (Exception) {
+					}
+				}
+			} while (nav.MoveNext());
 			return null;
 		}
 		
@@ -391,6 +610,7 @@ namespace MonoDevelop.AssemblyBrowser
 			Disassembler = 2,
 			Decompiler = 3
 		}
+		
 		SearchMode searchMode = SearchMode.Type;
 		Gtk.ListStore memberListStore;
 		Gtk.ListStore typeListStore;
@@ -450,11 +670,11 @@ namespace MonoDevelop.AssemblyBrowser
 				searchBackgoundWorker.CancelAsync ();
 			
 			if (string.IsNullOrEmpty (query)) {
-				notebook1.Page = 1;
+				notebook1.Page = 0;
 				return;
 			}
 			
-			this.notebook1.Page = 2;
+			this.notebook1.Page = 1;
 			
 			switch (searchMode) {
 			case SearchMode.Member:
@@ -488,21 +708,21 @@ namespace MonoDevelop.AssemblyBrowser
 		{
 			BackgroundWorker worker = sender as BackgroundWorker;
 			try {
-				
 				string pattern = e.Argument.ToString ().ToUpper ();
 				int types = 0, curType = 0;
-				foreach (DomCecilCompilationUnit unit in this.definitions) {
-					types += unit.Types.Count;
+				foreach (var unit in this.definitions) {
+					types += unit.UnresolvedAssembly.TopLevelTypeDefinitions.Count ();
 				}
-				List<IMember> members = new List<IMember> ();
+				var memberDict = new Dictionary<AssemblyLoader, List<IUnresolvedMember>> ();
 				switch (searchMode) {
 				case SearchMode.Member:
-					foreach (DomCecilCompilationUnit unit in this.definitions) {
-						foreach (IType type in unit.Types) {
+					foreach (var unit in this.definitions) {
+						var members = new List<IUnresolvedMember> ();
+						foreach (var type in unit.UnresolvedAssembly.TopLevelTypeDefinitions) {
 							if (worker.CancellationPending)
 								return;
 							curType++;
-							foreach (IMember member in type.Members) {
+							foreach (var member in type.Members) {
 								if (worker.CancellationPending)
 									return;
 								if (member.Name.ToUpper ().Contains (pattern)) {
@@ -510,104 +730,112 @@ namespace MonoDevelop.AssemblyBrowser
 								}
 							}
 						}
+						memberDict [unit] = members;
 					}
 					Gtk.Application.Invoke (delegate {
 						IdeApp.Workbench.StatusBar.SetProgressFraction ((double)curType / types);
-						foreach (MonoDevelop.Projects.Dom.IMember member in members) {
-							if (worker.CancellationPending)
-								return;
-							memberListStore.AppendValues (ImageService.GetPixbuf (member.StockIcon, Gtk.IconSize.Menu),
-							                              member.Name,
-							                              member.DeclaringType.FullName,
-							                              ((DomCecilCompilationUnit)member.DeclaringType.CompilationUnit).AssemblyDefinition.Name.FullName,
-							                              member);
+						foreach (var kv in memberDict) {
+							foreach (var member in kv.Value) {
+								if (worker.CancellationPending)
+									return;
+								memberListStore.AppendValues (ImageService.GetPixbuf (member.GetStockIcon (), Gtk.IconSize.Menu),
+								                              member.Name,
+								                              member.DeclaringTypeDefinition.FullName,
+								                              kv.Key.Assembly.FullName,
+								                              member);
+							}
 						}
-					});
+					}
+					);
 					break;
 				case SearchMode.Disassembler:
 					Gtk.Application.Invoke (delegate {
 						IdeApp.Workbench.StatusBar.BeginProgress (GettextCatalog.GetString ("Searching string in disassembled code..."));
-					});
-					foreach (DomCecilCompilationUnit unit in this.definitions) {
-						foreach (IType type in unit.Types) {
+					}
+					);
+					foreach (var unit in this.definitions) {
+						foreach (var type in unit.UnresolvedAssembly.TopLevelTypeDefinitions) {
 							if (worker.CancellationPending)
 								return;
 							curType++;
-							foreach (IMethod method in type.Methods) {
+							foreach (var method in type.Methods) {
 								if (worker.CancellationPending)
 									return;
-								DomCecilMethod domMethod = method as DomCecilMethod;
-								if (domMethod == null)
-									continue;
-//								if (DomMethodNodeBuilder.Disassemble (rd => rd.DisassembleMethod (domMethod.MethodDefinition)).ToUpper ().Contains (pattern)) {
+//								if (DomMethodNodeBuilder.Disassemble (rd => rd.DisassembleMethod (method)).ToUpper ().Contains (pattern)) {
 //									members.Add (method);
 //								}
 							}
-
 						}
 					}
 					Gtk.Application.Invoke (delegate {
 						IdeApp.Workbench.StatusBar.SetProgressFraction ((double)curType / types);
-						foreach (MonoDevelop.Projects.Dom.IMember member in members) {
-							if (worker.CancellationPending)
-								return;
-							memberListStore.AppendValues (ImageService.GetPixbuf (member.StockIcon, Gtk.IconSize.Menu),
-							                              member.Name,
-							                              member.DeclaringType.FullName,
-							                              ((DomCecilCompilationUnit)member.DeclaringType.CompilationUnit).AssemblyDefinition.Name.FullName,
-							                              member);
+						foreach (var kv in memberDict) {
+							foreach (var member in kv.Value) {
+								if (worker.CancellationPending)
+									return;
+								memberListStore.AppendValues ("", //iImageService.GetPixbuf (member.StockIcon, Gtk.IconSize.Menu),
+								                              member.Name,
+								                              member.DeclaringTypeDefinition.FullName,
+								                              kv.Key.Assembly.FullName,
+								                              member);
+							}
 						}
-					});
+					}
+					);
 					break;
 				case SearchMode.Decompiler:
-					foreach (DomCecilCompilationUnit unit in this.definitions) {
-						foreach (IType type in unit.Types) {
+					foreach (var unit in this.definitions) {
+						foreach (var type in unit.UnresolvedAssembly.TopLevelTypeDefinitions) {
 							if (worker.CancellationPending)
 								return;
 							curType++;
-							foreach (IMethod method in type.Methods) {
+							foreach (var method in type.Methods) {
 								if (worker.CancellationPending)
 									return;
-								DomCecilMethod domMethod = method as DomCecilMethod;
-								if (domMethod == null)
-									continue;
 /*								if (DomMethodNodeBuilder.Decompile (domMethod, false).ToUpper ().Contains (pattern)) {
-									members.Add (method);
-								}*/
+									members.Add (method);*/
 							}
 						}
 					}
 					Gtk.Application.Invoke (delegate {
 						IdeApp.Workbench.StatusBar.SetProgressFraction ((double)curType / types);
-						foreach (MonoDevelop.Projects.Dom.IMember member in members) {
-							if (worker.CancellationPending)
-								return;
-							memberListStore.AppendValues (ImageService.GetPixbuf (member.StockIcon, Gtk.IconSize.Menu),
-							                              member.Name,
-							                              member.DeclaringType.FullName,
-							                              ((DomCecilCompilationUnit)member.DeclaringType.CompilationUnit).AssemblyDefinition.Name.FullName,
-							                              member);
+						foreach (var kv in memberDict) {
+							foreach (var member in kv.Value) {
+								if (worker.CancellationPending)
+									return;
+								memberListStore.AppendValues ("", //ImageService.GetPixbuf (member.StockIcon, Gtk.IconSize.Menu),
+								                              member.Name,
+								                              member.DeclaringTypeDefinition.FullName,
+								                              kv.Key.Assembly.FullName,
+								                              member);
+							}
 						}
-					});
+					}
+					);
 					break;
 				case SearchMode.Type:
-					foreach (DomCecilCompilationUnit unit in this.definitions) {
-						foreach (IType type in unit.Types) {
+					var typeDict = new Dictionary<AssemblyLoader, List<IUnresolvedTypeDefinition>> ();
+					foreach (var unit in this.definitions) {
+						var typeList = new List<IUnresolvedTypeDefinition> ();
+						foreach (var type in unit.UnresolvedAssembly.TopLevelTypeDefinitions) {
 							if (worker.CancellationPending)
 								return;
 							if (type.FullName.ToUpper ().IndexOf (pattern) >= 0)
-								members.Add (type);
+								typeList.Add (type);
 						}
+						typeDict [unit] = typeList;
 					}
 					Gtk.Application.Invoke (delegate {
-						foreach (IType type in members) {
-							if (worker.CancellationPending)
-								return;
-							typeListStore.AppendValues (ImageService.GetPixbuf (type.StockIcon, Gtk.IconSize.Menu),
-							                            type.Name,
-							                            type.Namespace,
-							                            ((DomCecilCompilationUnit)type.CompilationUnit).AssemblyDefinition.Name.FullName,
-							                            type);
+						foreach (var kv in typeDict) {
+							foreach (var type in kv.Value) {
+								if (worker.CancellationPending)
+									return;
+								typeListStore.AppendValues (ImageService.GetPixbuf (type.GetStockIcon (), Gtk.IconSize.Menu),
+								                            type.Name,
+								                            type.Namespace,
+								                            kv.Key.Assembly.FullName,
+								                            type);
+							}
 						}
 					});
 					
@@ -824,19 +1052,11 @@ namespace MonoDevelop.AssemblyBrowser
 		
 		void SetInspectWidget ()
 		{
-			if (this.scrolledwindow3.Child != null)
-				this.scrolledwindow3.Remove (this.scrolledwindow3.Child);
 			if (this.languageCombobox.Active <= 0) {
-				documentationPanel.Markup = "No Documentation Available";
-				if (documentationPanel.Parent != null) {
-					this.scrolledwindow3.Child = documentationPanel.Parent;
-				} else {
-					this.scrolledwindow3.AddWithViewport (documentationPanel);
-				}
+				notebookInspection.Page = 0;
 			} else {
-				this.scrolledwindow3.Child = inspectEditor;
+				notebookInspection.Page = 1;
 			}
-			this.scrolledwindow3.ShowAll ();
 		}
 		
 		List<ReferenceSegment> ReferencedSegments = new List<ReferenceSegment>();
@@ -855,8 +1075,12 @@ namespace MonoDevelop.AssemblyBrowser
 			if (ReferencedSegments == null)
 				return;
 			foreach (var seg in refs) {
-				LineSegment line = inspectEditor.GetLineByOffset (seg.Offset);
+				DocumentLine line = inspectEditor.GetLineByOffset (seg.Offset);
 				if (line == null)
+					continue;
+				// FIXME: ILSpy sometimes gives reference segments for punctuation. See http://bugzilla.xamarin.com/show_bug.cgi?id=2918
+				string text = inspectEditor.GetTextAt (seg);
+				if (text != null && text.Length == 1 && !(char.IsLetter (text [0]) || text [0] == '…'))
 					continue;
 				var marker = new UnderlineMarker ("blue", 1 + seg.Offset - line.Offset, 1 + seg.EndOffset - line.Offset);
 				marker.Wave = false;
@@ -892,14 +1116,14 @@ namespace MonoDevelop.AssemblyBrowser
 			case 2:
 				inspectEditor.Options.ShowFoldMargin = true;
 				this.inspectEditor.Document.MimeType = "text/x-csharp";
-				SetReferencedSegments (builder.Decompile (inspectEditor.GetTextEditorData (),  nav));
+				SetReferencedSegments (builder.Decompile (inspectEditor.GetTextEditorData (), nav, PublicApiOnly));
 				break;
 			default:
 				inspectEditor.Options.ShowFoldMargin = false;
 				this.inspectEditor.Document.Text = "Invalid combobox value: " + this.languageCombobox.Active;
 				break;
 			}
-			this.scrolledwindow3.QueueDraw ();
+			this.inspectEditor.QueueDraw ();
 		}
 			
 		void CreateOutput ()
@@ -925,7 +1149,7 @@ namespace MonoDevelop.AssemblyBrowser
 					} catch (Exception) {
 					}
 				}
-				this.documentationLabel.Markup = documentation;
+//				this.documentationLabel.Markup = documentation;
 /*				IAssemblyBrowserNodeBuilder builder = nav.TypeNodeBuilder as IAssemblyBrowserNodeBuilder;
 				if (builder != null) {
 					this.descriptionLabel.Markup  = builder.GetDescription (nav);
@@ -955,42 +1179,56 @@ namespace MonoDevelop.AssemblyBrowser
 			this.hpaned1.Position = Math.Min (350, this.Allocation.Width * 2 / 3);
 		}
 		
-		public void Open (string url)
+		public void Open (string url, AssemblyLoader currentAssembly = null)
 		{
 			ITreeNavigator nav = SearchMember (url);
 			if (definitions == null) // we've been disposed
 				return;
 			if (nav == null) {
-				foreach (DomCecilCompilationUnit definition in definitions.ToArray ()) {
-					foreach (AssemblyNameReference assemblyNameReference in definition.AssemblyDefinition.MainModule.AssemblyReferences) {
-						string assemblyFile = Runtime.SystemAssemblyService.DefaultAssemblyContext.GetAssemblyLocation (assemblyNameReference.FullName, null);
-						if (assemblyFile != null && System.IO.File.Exists (assemblyFile))
-							AddReference (assemblyFile);
+				if (currentAssembly != null) {
+					var cecilObject = loader.GetCecilObject (currentAssembly.UnresolvedAssembly);
+					if (cecilObject != null) {
+						foreach (var reference in cecilObject.MainModule.AssemblyReferences) {
+							string fileName = currentAssembly.LookupAssembly (reference.FullName);
+							if (string.IsNullOrEmpty (fileName))
+								continue;
+							AddReferenceByFileName (fileName, true);
+							nav = SearchMember (url);
+							if (nav != null)
+								break;
+						}
+					}
+
+				} else {
+					foreach (var definition in definitions.ToArray ()) {
+						var cecilObject = loader.GetCecilObject (definition.UnresolvedAssembly);
+						if (cecilObject == null)
+							continue;
+						foreach (var assemblyNameReference in cecilObject.MainModule.AssemblyReferences) {
+							AddReferenceByAssemblyName (assemblyNameReference);
+						}
 					}
 				}
 				nav = SearchMember (url);
 			}
-			if (nav != null) {
-				nav.ExpandToNode ();
-				nav.Selected = true;
-			} else {
+			if (nav == null) {
 				LoggingService.LogError ("Can't open: " + url + " (not found).");
 			}
 		}
 		
 		public void SelectAssembly (string fileName)
 		{
-			DomCecilCompilationUnit cu = null;
-			foreach (DomCecilCompilationUnit unit in definitions) {
-				if (unit.FileName == fileName)
-					cu = unit;
+			AssemblyDefinition cu = null;
+			foreach (var unit in definitions) {
+				if (unit.UnresolvedAssembly.AssemblyName == fileName)
+					cu = loader.GetCecilObject (unit.UnresolvedAssembly);
 			}
 			if (cu == null)
 				return;
 			
 			ITreeNavigator nav = TreeView.GetRootNode ();
 			do {
-				if (nav.DataItem == cu.AssemblyDefinition) {
+				if (nav.DataItem == cu) {
 					nav.ExpandToNode ();
 					nav.Selected = true;
 					return;
@@ -1016,6 +1254,7 @@ namespace MonoDevelop.AssemblyBrowser
 		
 		protected override void OnDestroyed ()
 		{
+			ClearReferenceSegment ();
 			if (searchBackgoundWorker != null && searchBackgoundWorker.IsBusy) {
 				searchBackgoundWorker.CancelAsync ();
 				searchBackgoundWorker.Dispose ();
@@ -1023,13 +1262,15 @@ namespace MonoDevelop.AssemblyBrowser
 			}
 			
 			if (this.TreeView != null) {
-			//	Dispose (TreeView.GetRootNode ());
+				//	Dispose (TreeView.GetRootNode ());
 				TreeView.Tree.CursorChanged -= HandleCursorChanged;
 				this.TreeView.Clear ();
 				this.TreeView = null;
 			}
 			
 			if (definitions != null) {
+				foreach (var def in definitions)
+					def.Dispose ();
 				definitions.Clear ();
 				definitions = null;
 			}
@@ -1050,52 +1291,186 @@ namespace MonoDevelop.AssemblyBrowser
 				documentationPanel = null;
 			}
 			if (inspectEditor != null) {
+				inspectEditor.TextViewMargin.GetLink = null;
 				inspectEditor.LinkRequest -= InspectEditorhandleLinkRequest;
 				inspectEditor.Destroy ();
-				inspectEditor = null;
 			}
 			
 			if (this.UIManager != null) {
 				this.UIManager.Dispose ();
 				this.UIManager = null;
 			}
+
+			this.loader = null;
 			this.languageCombobox.Changed -= LanguageComboboxhandleChanged;
 //			this.searchInCombobox.Changed -= SearchInComboboxhandleChanged;
 //			this.searchEntry.Changed -= SearchEntryhandleChanged;
 			this.searchTreeview.RowActivated -= SearchTreeviewhandleRowActivated;
 			hpaned1.ExposeEvent -= HPaneExpose;
-			PropertyService.PropertyChanged -= HandlePropertyChanged;
+			if (NavigateBackwardAction != null) {
+				this.NavigateBackwardAction.Dispose ();
+				this.NavigateBackwardAction = null;
+			}
+
+			if (NavigateForwardAction != null) {
+				this.NavigateForwardAction.Dispose ();
+				this.NavigateForwardAction = null;
+			}
 			base.OnDestroyed ();
 		}
 		
-		List<DomCecilCompilationUnit> definitions = new List<DomCecilCompilationUnit> ();
-		public AssemblyDefinition AddReference (string fileName)
+		static AssemblyDefinition ReadAssembly (string fileName)
 		{
-			foreach (DomCecilCompilationUnit unit in definitions) {
-				if (unit.FileName == fileName) 
-					return unit.AssemblyDefinition;
+			ReaderParameters parameters = new ReaderParameters ();
+//			parameters.AssemblyResolver = new SimpleAssemblyResolver (Path.GetDirectoryName (fileName));
+			using (var stream = new System.IO.MemoryStream (System.IO.File.ReadAllBytes (fileName))) {
+				return AssemblyDefinition.ReadAssembly (stream, parameters);
 			}
-			DomCecilCompilationUnit newUnit = DomCecilCompilationUnit.Load (fileName, true, false);
-			definitions.Add (newUnit);
+		}
 		
-			ITreeBuilder builder;
-			if (definitions.Count == 1) {
-				builder = TreeView.LoadTree (newUnit);
-			} else {
-				builder = TreeView.AddChild (newUnit);
+		CecilLoader loader;
+		internal CecilLoader CecilLoader {
+			get {
+				return loader;
 			}
-			builder.MoveToFirstChild ();
-			builder.Expanded = true;
-			return newUnit.AssemblyDefinition;
+		} 
+		
+		List<AssemblyLoader> definitions = new List<AssemblyLoader> ();
+		List<Project> projects = new List<Project> ();
+		
+		public AssemblyLoader AddReferenceByAssemblyName (AssemblyNameReference reference, bool selectReference = false)
+		{
+			return AddReferenceByAssemblyName (reference.Name, selectReference);
+		}
+		
+		public AssemblyLoader AddReferenceByAssemblyName (string assemblyFullName, bool selectReference = false)
+		{
+			string assemblyFile = Runtime.SystemAssemblyService.DefaultAssemblyContext.GetAssemblyLocation (assemblyFullName, null);
+			if (assemblyFile == null || !System.IO.File.Exists (assemblyFile)) {
+				foreach (var wrapper in definitions) {
+					assemblyFile = wrapper.LookupAssembly (assemblyFullName);
+					if (assemblyFile != null && System.IO.File.Exists (assemblyFile))
+						break;
+				}
+			}
+			if (assemblyFile == null || !System.IO.File.Exists (assemblyFile))
+				return null;
+			
+			return AddReferenceByFileName (assemblyFile, selectReference);
+		}
+		
+		public AssemblyLoader AddReferenceByFileName (string fileName, bool selectReference = false)
+		{
+			var result = definitions.FirstOrDefault (d => d.FileName == fileName);
+			if (result != null)
+				return result;
+			result = new AssemblyLoader (this, fileName);
+			
+			definitions.Add (result);
+			result.LoadingTask.ContinueWith (delegate {
+				Application.Invoke (delegate {
+					if (definitions == null)
+						return;
+					ITreeBuilder builder;
+					if (definitions.Count + projects.Count == 1) {
+						builder = TreeView.LoadTree (result);
+					} else {
+						builder = TreeView.AddChild (result);
+					}
+					builder.Selected = builder.Expanded = selectReference;
+				});
+			}
+			);
+			return result;
+		}
+		
+		public void AddProject (Project project, bool selectReference = false)
+		{
+			if (project == null)
+				throw new ArgumentNullException ("project");
+			if (projects.Contains (project))
+				return;
+			projects.Add (project);
+			ITreeBuilder builder;
+			if (definitions.Count + projects.Count == 1) {
+				builder = TreeView.LoadTree (project);
+			} else {
+				builder = TreeView.AddChild (project);
+			}
+			builder.Selected = builder.Expanded = selectReference;
+		}
+
+		[CommandHandler (SearchCommands.FindNext)]
+		public void FindNext ()
+		{
+			SearchAndReplaceWidget.FindNext (this.inspectEditor);
+		}
+
+		[CommandHandler (SearchCommands.FindPrevious)]
+		public void FindPrevious ()
+		{
+			SearchAndReplaceWidget.FindPrevious (this.inspectEditor);
 		}
 		
 		[CommandHandler (SearchCommands.Find)]
 		public void ShowSearchWidget ()
 		{
-			//this.searchWidget.Visible = true;
-			this.notebook1.Page = 2;
-//			this.searchEntry.GrabFocus ();
+			if (searchAndReplaceWidget == null) {
+				popupWidgetFrame = new MonoDevelop.Components.RoundedFrame ();
+				//searchAndReplaceWidgetFrame.SetFillColor (MonoDevelop.Components.CairoExtensions.GdkColorToCairoColor (widget.TextEditor.ColorStyle.Default.BackgroundColor));
+				popupWidgetFrame.SetFillColor (MonoDevelop.Components.CairoExtensions.GdkColorToCairoColor (Style.Background (StateType.Normal)));
+				popupWidgetFrame.Show ();
+				
+				popupWidgetFrame.Child = searchAndReplaceWidget = new SearchAndReplaceWidget (inspectEditor, popupWidgetFrame);
+				searchAndReplaceWidget.Destroyed += (sender, e) => {
+					DestroyFrames ();
+					if (inspectEditor.IsRealized)
+						inspectEditor.GrabFocus ();
+				};
+				searchAndReplaceWidget.UpdateSearchPattern ();
+				inspectEditor.AddAnimatedWidget (popupWidgetFrame, 300, Mono.TextEditor.Theatrics.Easing.ExponentialInOut, Blocking.Downstage, inspectEditor.Allocation.Width - 400, -searchAndReplaceWidget.Allocation.Height);
+				searchAndReplaceWidget.IsReplaceMode = false;
+			}
+			
+			searchAndReplaceWidget.Focus ();
 		}
+
+		MonoDevelop.Components.RoundedFrame popupWidgetFrame;
+
+		GotoLineNumberWidget gotoLineNumberWidget;
+		SearchAndReplaceWidget searchAndReplaceWidget;
+		void DestroyFrames ()
+		{
+			if (popupWidgetFrame != null) {
+				popupWidgetFrame.Destroy ();
+				popupWidgetFrame = null;
+				gotoLineNumberWidget = null;
+				searchAndReplaceWidget = null;
+			}
+		}
+
+		[CommandHandler (SearchCommands.GotoLineNumber)]
+		public void ShowGotoLineNumberWidget ()
+		{
+			if (gotoLineNumberWidget == null) {
+				DestroyFrames ();
+				popupWidgetFrame = new MonoDevelop.Components.RoundedFrame ();
+				//searchAndReplaceWidgetFrame.SetFillColor (MonoDevelop.Components.CairoExtensions.GdkColorToCairoColor (widget.TextEditor.ColorStyle.Default.BackgroundColor));
+				popupWidgetFrame.SetFillColor (MonoDevelop.Components.CairoExtensions.GdkColorToCairoColor (Style.Background (StateType.Normal)));
+				popupWidgetFrame.Show ();
+				
+				popupWidgetFrame.Child = gotoLineNumberWidget = new GotoLineNumberWidget (inspectEditor, popupWidgetFrame);
+				gotoLineNumberWidget.Destroyed += (sender, e) => {
+					DestroyFrames ();
+					if (inspectEditor.IsRealized)
+						inspectEditor.GrabFocus ();
+				};
+				inspectEditor.AddAnimatedWidget (popupWidgetFrame, 300, Mono.TextEditor.Theatrics.Easing.ExponentialInOut, Blocking.Downstage, inspectEditor.Allocation.Width - 400, -gotoLineNumberWidget.Allocation.Height);
+			}
+			
+			gotoLineNumberWidget.Focus ();
+		}
+
 	
 		#region NavigationHistory
 		Stack<ITreeNavigator> navigationBackwardHistory = new Stack<ITreeNavigator> ();
@@ -1108,18 +1483,20 @@ namespace MonoDevelop.AssemblyBrowser
 				if (currentItem != null)
 					navigationBackwardHistory.Push (currentItem);
 				currentItem = TreeView.GetSelectedNode ();
-				ActiveMember = currentItem.DataItem as IMember;
+				ActiveMember = currentItem.DataItem as IEntity;
 				navigationForwardHistory.Clear ();
 			}
+			notebook1.Page = 0;
 			UpdateNavigationActions ();
 			CreateOutput ();
 		}
 		
 		void UpdateNavigationActions ()
 		{
-			buttonBack.Sensitive = navigationBackwardHistory.Count != 0;
-			buttonForeward.Sensitive = navigationForwardHistory.Count != 0;
-			
+			if (buttonBack != null) {
+				buttonBack.Sensitive = navigationBackwardHistory.Count != 0;
+				buttonForeward.Sensitive = navigationForwardHistory.Count != 0;
+			}
 		}
 		
 		protected virtual void OnNavigateBackwardActionActivated (object sender, System.EventArgs e)
@@ -1150,3 +1527,4 @@ namespace MonoDevelop.AssemblyBrowser
 		#endregion
 	}
 }
+

@@ -35,10 +35,10 @@ namespace Mono.TextEditor.Highlighting
 {
 	public class Rule
 	{
-		protected List<Keywords> keywords = new List<Keywords> ();
-		protected Span[] spans = new Span[0];
-		protected Match[] matches = new Match[0];
-		protected Marker[] prevMarker = new Marker[0];
+		internal protected List<Keywords> keywords = new List<Keywords> ();
+		internal protected Span[] spans = new Span[0];
+		internal protected Match[] matches = new Match[0];
+		internal protected Marker[] prevMarker = new Marker[0];
 		
 		public List<SemanticRule> SemanticRules = new List<SemanticRule> ();
 		
@@ -50,7 +50,7 @@ namespace Mono.TextEditor.Highlighting
 			}
 		}
 		
-		public virtual bool GetIsValid (ColorSheme style)
+		public virtual bool GetIsValid (ColorScheme style)
 		{
 			foreach (Keywords keyword in keywords) {
 				if (!keyword.GetIsValid (style)) {
@@ -81,12 +81,18 @@ namespace Mono.TextEditor.Highlighting
 		
 		public string Name {
 			get;
-			protected set;
+			set;
 		}
 		
 		public IEnumerable<Keywords> Keywords {
 			get {
 				return keywords;
+			}
+			set {
+				keywords = new List<Mono.TextEditor.Highlighting.Keywords> (value);
+				keywordTable = null;
+				keywordTableIgnoreCase = null;
+				keywords.ForEach (kw => UpdateKeywordTable (kw));
 			}
 		}
 		
@@ -110,20 +116,21 @@ namespace Mono.TextEditor.Highlighting
 		
 		public bool IgnoreCase {
 			get;
-			protected set;
+			set;
 		}
 		
 		public string DefaultColor {
 			get;
-			protected set;
+			internal protected set;
 		}
 		
 		string delimiter;
+		bool delimiterSet;
 		public string Delimiter {
 			get { 
-				return string.IsNullOrEmpty (delimiter) ? mode.Delimiter : delimiter; 
+				return !delimiterSet ? mode.Delimiter : delimiter; 
 			}
-			protected set { delimiter = value; }
+			set { delimiter = value; delimiterSet = true; }
 		}
 
 		public Marker[] PrevMarker {
@@ -139,9 +146,9 @@ namespace Mono.TextEditor.Highlighting
 			this.mode = mode;
 		}
 		
-		public virtual Rule GetRule (string name)
+		public virtual Rule GetRule (TextDocument doc, string name)
 		{
-			return mode.GetRule (name);
+			return mode.GetRule (doc, name);
 		}
 		
 		public override string ToString ()
@@ -209,6 +216,29 @@ namespace Mono.TextEditor.Highlighting
 				return result;
 			return null;
 		}
+
+		void UpdateKeywordTable (Keywords keywords)
+		{
+			foreach (string word in keywords.Words) {
+				if (keywords.IgnoreCase) {
+					if (keywordTableIgnoreCase == null)
+						keywordTableIgnoreCase = new Dictionary<string, Keywords> (StringComparer.InvariantCultureIgnoreCase);
+					if (keywordTableIgnoreCase.ContainsKey (word)) {
+						Console.WriteLine ("Error: duplicate keyword " + word);
+						continue;
+					}
+					keywordTableIgnoreCase.Add (word, keywords);
+				} else {
+					if (keywordTable == null)
+						keywordTable = new Dictionary<string, Keywords> ();
+					if (keywordTable.ContainsKey (word)) {
+						Console.WriteLine ("Error: duplicate keyword " + word);
+						continue;
+					}
+					keywordTable.Add (word, keywords);
+				}
+			}
+		}
 		
 		protected bool ReadNode (XmlReader reader, List<Match> matchList, List<Span> spanList, List<Marker> prevMarkerList)
 		{
@@ -234,25 +264,7 @@ namespace Mono.TextEditor.Highlighting
 			case Mono.TextEditor.Highlighting.Keywords.Node:
 				Keywords keywords = Mono.TextEditor.Highlighting.Keywords.Read (reader, IgnoreCase);
 				this.keywords.Add (keywords);
-				foreach (string word in keywords.Words) {
-					if (keywords.IgnoreCase) {
-						if (keywordTableIgnoreCase == null)
-							keywordTableIgnoreCase = new Dictionary<string, Keywords> (StringComparer.InvariantCultureIgnoreCase);
-						if (keywordTableIgnoreCase.ContainsKey (word)) {
-							Console.WriteLine ("Error: duplicate keyword " + word);
-							continue;
-						}
-						keywordTableIgnoreCase.Add (word, keywords);
-					} else {
-						if (keywordTable == null)
-							keywordTable = new Dictionary<string, Keywords> ();
-						if (keywordTable.ContainsKey (word)) {
-							Console.WriteLine ("Error: duplicate keyword " + word);
-							continue;
-						}
-						keywordTable.Add (word, keywords);
-					}
-				}
+				UpdateKeywordTable (keywords);
 				return true;
 			case Marker.PrevMarker:
 				prevMarkerList.Add (Marker.Read (reader));

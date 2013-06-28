@@ -56,6 +56,8 @@ namespace MonoDevelop.Debugger.Soft.AspNet
 			case ClrVersion.Net_2_0:
 				return prefix.Combine ("lib", "mono", "2.0");
 			case ClrVersion.Net_4_0:
+				var net45Path = prefix.Combine ("lib", "mono", "4.5");
+				if (Directory.Exists (net45Path)) return net45Path;
 				return prefix.Combine ("lib", "mono", "4.0");
 			}
 			throw new InvalidOperationException (string.Format ("Unknown runtime version '{0}'", version));
@@ -64,9 +66,16 @@ namespace MonoDevelop.Debugger.Soft.AspNet
 		public DebuggerStartInfo CreateDebuggerStartInfo (ExecutionCommand command)
 		{
 			var cmd = (AspNetExecutionCommand) command;
+			var evars = new Dictionary<string, string>(cmd.EnvironmentVariables);
+			var runtime = (MonoTargetRuntime) cmd.TargetRuntime;
+
+			foreach (var v in runtime.EnvironmentVariables)
+			{
+				if (!evars.ContainsKey (v.Key))
+					evars.Add (v.Key, v.Value);
+			}
 			
-			var runtime = (MonoTargetRuntime)cmd.TargetRuntime;
-			var startInfo = new SoftDebuggerStartInfo (runtime.Prefix, runtime.EnvironmentVariables) {
+			var startInfo = new SoftDebuggerStartInfo (runtime.Prefix, evars) {
 				WorkingDirectory = cmd.BaseDirectory,
 				Arguments = cmd.XspParameters.GetXspParameters ().Trim (),
 			};

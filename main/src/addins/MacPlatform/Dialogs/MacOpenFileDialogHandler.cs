@@ -37,6 +37,7 @@ using MonoDevelop.Ide.Extensions;
 using MonoDevelop.Components.Extensions;
 using MonoDevelop.MacInterop;
 using MonoDevelop.Ide.Gui;
+using System.Text;
 
 namespace MonoDevelop.MacIntegration
 {
@@ -48,7 +49,7 @@ namespace MonoDevelop.MacIntegration
 			
 			try {
 				bool directoryMode = data.Action != Gtk.FileChooserAction.Open
-					&& data.Action != Gtk.FileChooserAction.Save;
+						&& data.Action != Gtk.FileChooserAction.Save;
 				
 				if (data.Action == Gtk.FileChooserAction.Save) {
 					panel = new NSSavePanel ();
@@ -83,7 +84,7 @@ namespace MonoDevelop.MacIntegration
 					
 					if (data.ShowEncodingSelector) {
 						encodingSelector = new SelectEncodingPopUpButton (data.Action != Gtk.FileChooserAction.Save);
-						encodingSelector.SelectedEncodingId = data.Encoding;
+						encodingSelector.SelectedEncodingId = data.Encoding != null ? data.Encoding.CodePage : 0;
 						
 						var encodingLabel = new MDAlignment (new MDLabel (GettextCatalog.GetString ("Encoding:")), true);
 						var encodingBox = new MDBox (LayoutDirection.Horizontal, 2, 0) {
@@ -103,7 +104,7 @@ namespace MonoDevelop.MacIntegration
 						if (encodingSelector != null) {
 							viewerSelector.Activated += delegate {
 								var idx = viewerSelector.IndexOfSelectedItem;
-								encodingSelector.Enabled = ! (idx == 0 && currentViewers[0] == null);
+								encodingSelector.Enabled = ! (idx == 0 && currentViewers [0] == null);
 							};
 						}
 						
@@ -147,8 +148,8 @@ namespace MonoDevelop.MacIntegration
 					var selection = MacSelectFileDialogHandler.GetSelectedFiles (panel);
 					bool slnViewerSelected = false;
 					if (viewerSelector != null) {
-						FillViewers (currentViewers, viewerSelector, selection);
-						if (currentViewers.Count == 0 || currentViewers[0] != null) {
+						FillViewers (currentViewers, viewerSelector, closeSolutionButton, selection);
+						if (currentViewers.Count == 0 || currentViewers [0] != null) {
 							if (closeSolutionButton != null)
 								closeSolutionButton.Hidden = true;
 							slnViewerSelected = false;
@@ -158,6 +159,15 @@ namespace MonoDevelop.MacIntegration
 							slnViewerSelected = true;
 						}
 						box.Layout ();
+						
+						//re-center the accessory view in its parent, Cocoa does this for us initially and after
+						//resizing the window, but we need to do it again after altering its layout
+						var superFrame = box.View.Superview.Frame;
+						var frame = box.View.Frame;
+						//not sure why it's ceiling, but this matches the Cocoa layout
+						frame.X = (float)Math.Ceiling ((superFrame.Width - frame.Width) / 2);
+						frame.Y = (float)Math.Ceiling ((superFrame.Height - frame.Height) / 2);
+						box.View.Frame = frame;
 					} 
 					if (encodingSelector != null)
 						encodingSelector.Enabled = !slnViewerSelected;
@@ -177,7 +187,7 @@ namespace MonoDevelop.MacIntegration
 				data.SelectedFiles = MacSelectFileDialogHandler.GetSelectedFiles (panel);
 				
 				if (encodingSelector != null)
-					data.Encoding = encodingSelector.SelectedEncodingId;
+					data.Encoding = encodingSelector.SelectedEncodingId > 0 ? Encoding.GetEncoding (encodingSelector.SelectedEncodingId) : null;
 				
 				if (viewerSelector != null ) {
 					if (closeSolutionButton != null)
@@ -195,7 +205,7 @@ namespace MonoDevelop.MacIntegration
 			return true;
 		}
 		
-		static void FillViewers (List<FileViewer> currentViewers, NSPopUpButton button, FilePath[] filenames)
+		static void FillViewers (List<FileViewer> currentViewers, NSPopUpButton button, NSButton closeSolutionButton, FilePath[] filenames)
 		{
 			button.Menu.RemoveAllItems ();
 			currentViewers.Clear ();
@@ -209,20 +219,37 @@ namespace MonoDevelop.MacIntegration
 			if (System.IO.Directory.Exists (filename))
 				return;
 			
+			int selected = -1;
+			int i = 0;
+			
 			if (IdeApp.Services.ProjectService.IsWorkspaceItemFile (filename) || IdeApp.Services.ProjectService.IsSolutionItemFile (filename)) {
 				button.Menu.AddItem (new NSMenuItem () { Title = GettextCatalog.GetString ("Solution Workbench") });
 				currentViewers.Add (null);
+				
+				if (closeSolutionButton != null)
+					closeSolutionButton.State = NSCellStateValue.On;
+				
+				selected = 0;
+				i++;
 			}
+			
 			foreach (var vw in DisplayBindingService.GetFileViewers (filename, null)) {
 				if (!vw.IsExternal) {
 					button.Menu.AddItem (new NSMenuItem () { Title = vw.Title });
 					currentViewers.Add (vw);
+					
+					if (vw.CanUseAsDefault && selected == -1)
+						selected = i;
+					
+					i++;
 				}
 			}
+			
+			if (selected == -1)
+				selected = 0;
+			
 			button.Enabled = currentViewers.Count > 1;
-			button.SelectItem (0);
+			button.SelectItem (selected);
 		}
 	}
-	
-
 }

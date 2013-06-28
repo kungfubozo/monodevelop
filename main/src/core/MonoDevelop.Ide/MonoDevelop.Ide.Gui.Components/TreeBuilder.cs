@@ -153,10 +153,12 @@ namespace MonoDevelop.Ide.Gui.Components
 				}
 				return ats;
 			}
+			
 			static int NullSortFunc (Gtk.TreeModel model, Gtk.TreeIter a, Gtk.TreeIter b)
 			{
 				return 0;
 			}
+			
 			public void AddChildren (IEnumerable dataObjects)
 			{
 				NodeBuilder[] chain = null;
@@ -327,6 +329,14 @@ namespace MonoDevelop.Ide.Gui.Components
 			void CreateChildren (NodeBuilder[] chain, object dataObject)
 			{
 				Gtk.TreeIter it = currentIter;
+				foreach (NodeBuilder builder in chain) {
+					try {
+						builder.PrepareChildNodes (dataObject);
+					} catch (Exception ex) {
+						LoggingService.LogError (ex.ToString ());
+					}
+					MoveToIter (it);
+				}
 				foreach (NodeBuilder builder in chain) {
 					try {
 						builder.BuildChildNodes (this, dataObject);

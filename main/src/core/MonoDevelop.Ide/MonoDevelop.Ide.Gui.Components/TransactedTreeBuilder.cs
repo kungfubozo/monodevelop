@@ -91,7 +91,7 @@ namespace MonoDevelop.Ide.Gui.Components
 	
 			public ITreeOptions Options {
 				get {
-					return (node != null) ? node.Options : navigator.Options;
+					return tree.globalOptions;
 				}
 			}
 	
@@ -413,7 +413,7 @@ namespace MonoDevelop.Ide.Gui.Components
 				if (!citPath.Up ())
 					return false;
 
-				if (citPath == pitPath)
+				if (citPath.Equals (pitPath))
 					return true;
 
 				return recursive && pitPath.IsAncestor (citPath);
@@ -500,6 +500,14 @@ namespace MonoDevelop.Ide.Gui.Components
 				NodePosition pos = CurrentPosition;
 				foreach (NodeBuilder builder in node.BuilderChain) {
 					try {
+						builder.PrepareChildNodes (node.DataItem);
+					} catch (Exception ex) {
+						LoggingService.LogError (ex.ToString ());
+					}
+					MoveToPosition (pos);
+				}
+				foreach (NodeBuilder builder in node.BuilderChain) {
+					try {
 						builder.BuildChildNodes (this, node.DataItem);
 					} catch (Exception ex) {
 						LoggingService.LogError (ex.ToString ());
@@ -548,7 +556,6 @@ namespace MonoDevelop.Ide.Gui.Components
 				}
 				TreeNode n = CreateNode (dataObject);
 				if (n != null) {
-					n.Options = node.Options;
 					if (node.Children == null)
 						node.Children = new List<TreeNode> ();
 					node.Children.Add (n);
@@ -582,7 +589,6 @@ namespace MonoDevelop.Ide.Gui.Components
 				n.Filled = navigator.Filled;
 				n.Name = navigator.NodeName;
 				n.NodeIter = navigator.CurrentPosition._iter;
-				n.Options = navigator.Options;
 				n.Selected = navigator.Selected;
 				n.TypeNodeBuilder = navigator.TypeNodeBuilder;
 				tstore.RegisterNode (n);
@@ -674,7 +680,6 @@ namespace MonoDevelop.Ide.Gui.Components
 			public bool Selected;
 			public bool Filled;
 			public bool Expanded;
-			public ITreeOptions Options;
 			public TypeNodeBuilder TypeNodeBuilder;
 			public TreeNode Parent;
 			public object DataItem;
@@ -751,8 +756,10 @@ namespace MonoDevelop.Ide.Gui.Components
 					foreach (TreeNode cn in node.Children)
 						RemoveNode (cn);
 				}
-				if (!node.HasIter) {
-					List<TreeNode> list = objects [node.DataItem];
+				
+				List<TreeNode> list = null;
+				
+				if (!node.HasIter && objects.TryGetValue (node.DataItem, out list)) {
 					list.Remove (node);
 					if (list.Count == 0) {
 						objects.Remove (node.DataItem);

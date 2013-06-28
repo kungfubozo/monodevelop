@@ -62,7 +62,13 @@ namespace MonoDevelop.VersionControl.Dialogs
 			this.vboxExtensions = new global::Gtk.VBox ();
 			this.vboxExtensions.Name = "vboxExtensions";
 			this.vboxExtensions.Spacing = 6;
-			// Container child vboxExtensions.Gtk.Box+BoxChild
+			this.mainBox.Add (this.vboxExtensions);
+			global::Gtk.Box.BoxChild w5 = ((global::Gtk.Box.BoxChild)(this.mainBox [this.vboxExtensions]));
+			w5.PackType = ((global::Gtk.PackType)(1));
+			w5.Position = 2;
+			w5.Expand = false;
+			w5.Fill = false;
+			// Container child mainBox.Gtk.Box+BoxChild
 			this.scrolledwindow2 = new global::Gtk.ScrolledWindow ();
 			this.scrolledwindow2.CanFocus = true;
 			this.scrolledwindow2.Name = "scrolledwindow2";
@@ -72,13 +78,10 @@ namespace MonoDevelop.VersionControl.Dialogs
 			this.textview.CanFocus = true;
 			this.textview.Name = "textview";
 			this.scrolledwindow2.Add (this.textview);
-			this.vboxExtensions.Add (this.scrolledwindow2);
-			global::Gtk.Box.BoxChild w6 = ((global::Gtk.Box.BoxChild)(this.vboxExtensions [this.scrolledwindow2]));
-			w6.Position = 0;
-			this.mainBox.Add (this.vboxExtensions);
-			global::Gtk.Box.BoxChild w7 = ((global::Gtk.Box.BoxChild)(this.mainBox [this.vboxExtensions]));
+			this.mainBox.Add (this.scrolledwindow2);
+			global::Gtk.Box.BoxChild w7 = ((global::Gtk.Box.BoxChild)(this.mainBox [this.scrolledwindow2]));
 			w7.PackType = ((global::Gtk.PackType)(1));
-			w7.Position = 2;
+			w7.Position = 3;
 			// Container child mainBox.Gtk.Box+BoxChild
 			this.label2 = new global::Gtk.Label ();
 			this.label2.Name = "label2";
@@ -88,7 +91,7 @@ namespace MonoDevelop.VersionControl.Dialogs
 			this.mainBox.Add (this.label2);
 			global::Gtk.Box.BoxChild w8 = ((global::Gtk.Box.BoxChild)(this.mainBox [this.label2]));
 			w8.PackType = ((global::Gtk.PackType)(1));
-			w8.Position = 3;
+			w8.Position = 4;
 			w8.Expand = false;
 			w8.Fill = false;
 			w1.Add (this.mainBox);
@@ -126,7 +129,11 @@ namespace MonoDevelop.VersionControl.Dialogs
 			w13.Spacing = 2;
 			// Container child GtkHBox.Gtk.Container+ContainerChild
 			global::Gtk.Image w14 = new global::Gtk.Image ();
-			w14.Pixbuf = global::Stetic.IconLoader.LoadIcon (this, "vc-commit", global::Gtk.IconSize.Menu);
+			w14.Pixbuf = global::Stetic.IconLoader.LoadIcon (
+				this,
+				"vc-commit",
+				global::Gtk.IconSize.Menu
+			);
 			w13.Add (w14);
 			// Container child GtkHBox.Gtk.Container+ContainerChild
 			global::Gtk.Label w16 = new global::Gtk.Label ();

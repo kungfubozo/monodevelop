@@ -33,22 +33,24 @@ using System.IO;
 using System.Text;
 
 using Mono.Addins;
+using Mono.Unix.Native;
 using MonoDevelop.Core.FileSystem;
 using System.Collections.Generic;
 using System.Threading;
 using System.Linq;
+using System.Threading.Tasks;
+using System.Net;
 
 namespace MonoDevelop.Core
 {
 	public static class FileService
 	{
 		const string addinFileSystemExtensionPath = "/MonoDevelop/Core/FileSystemExtensions";
-		readonly static char[] separators = { Path.DirectorySeparatorChar, Path.VolumeSeparatorChar, Path.AltDirectorySeparatorChar };
-		
+
 		static FileServiceErrorHandler errorHandler;
 		
 		static FileSystemExtension fileSystemChain;
-		static FileSystemExtension defaultExtension = new DefaultFileSystemExtension ();
+		static FileSystemExtension defaultExtension = Platform.IsWindows ? new DefaultFileSystemExtension () : new UnixFileSystemExtension () ;
 		
 		static EventQueue eventQueue = new EventQueue ();
 		
@@ -65,6 +67,7 @@ namespace MonoDevelop.Core
 				if (args.PathChanged (addinFileSystemExtensionPath))
 					UpdateExtensions ();
 			};
+			UpdateExtensions ();
 		}
 		
 		static void UpdateExtensions ()
@@ -84,6 +87,17 @@ namespace MonoDevelop.Core
 				fileSystemChain = extensions [0];
 			} else {
 				fileSystemChain = defaultExtension;
+			}
+		}
+		
+		public static FilePath ResolveFullPath (FilePath path)
+		{
+			try {
+				return GetFileSystemForPath (path, false).ResolveFullPath (path);
+			} catch (Exception e) {
+				if (!HandleError (GettextCatalog.GetString ("Can't resolve full path {0}", path), e))
+					throw;
+				return FilePath.Empty;
 			}
 		}
 		
@@ -118,11 +132,9 @@ namespace MonoDevelop.Core
 			Debug.Assert (!String.IsNullOrEmpty (oldName));
 			Debug.Assert (!String.IsNullOrEmpty (newName));
 			if (Path.GetFileName (oldName) != newName) {
-				string newPath = Path.Combine (Path.GetDirectoryName (oldName), newName);
-				InternalMoveFile (oldName, newPath);
+				var newPath = ((FilePath)oldName).ParentDirectory.Combine (newName);
+				InternalRenameFile (oldName, newName);
 				OnFileRenamed (new FileCopyEventArgs (oldName, newPath, false));
-				OnFileCreated (new FileEventArgs (newPath, false));
-				OnFileRemoved (new FileEventArgs (oldName, false));
 			}
 		}
 		
@@ -175,11 +187,22 @@ namespace MonoDevelop.Core
 			}
 		}
 		
+		static void InternalRenameFile (string srcFile, string newName)
+		{
+			Debug.Assert (!string.IsNullOrEmpty (srcFile));
+			Debug.Assert (!string.IsNullOrEmpty (newName));
+			FileSystemExtension srcExt = GetFileSystemForPath (srcFile, false);
+			
+			srcExt.RenameFile (srcFile, newName);
+		}
+		
 		public static void CreateDirectory (string path)
 		{
-			Debug.Assert (!String.IsNullOrEmpty (path));
-			GetFileSystemForPath (path, true).CreateDirectory (path);
-			OnFileCreated (new FileEventArgs (path, true));
+			if (!Directory.Exists (path)) {
+				Debug.Assert (!String.IsNullOrEmpty (path));
+				GetFileSystemForPath (path, true).CreateDirectory (path);
+				OnFileCreated (new FileEventArgs (path, true));
+			}
 		}
 		
 		public static void CopyDirectory (string srcPath, string dstPath)
@@ -256,14 +279,14 @@ namespace MonoDevelop.Core
 		internal static FileSystemExtension GetFileSystemForPath (string path, bool isDirectory)
 		{
 			Debug.Assert (!String.IsNullOrEmpty (path));
-			if (fileSystemChain == null)
-				UpdateExtensions ();
 			FileSystemExtension nx = fileSystemChain;
 			while (nx != null && !nx.CanHandlePath (path, isDirectory))
 				nx = nx.Next;
 			return nx;
 		}
 		
+/*
+		readonly static char[] separators = { Path.DirectorySeparatorChar, Path.VolumeSeparatorChar, Path.AltDirectorySeparatorChar };
 		public static string AbsoluteToRelativePath (string baseDirectoryPath, string absPath)
 		{
 			if (!Path.IsPathRooted (absPath))
@@ -271,17 +294,13 @@ namespace MonoDevelop.Core
 			
 			absPath           = Path.GetFullPath (absPath);
 			baseDirectoryPath = Path.GetFullPath (baseDirectoryPath.TrimEnd (Path.DirectorySeparatorChar));
-
+			
 			string[] bPath = baseDirectoryPath.Split (separators);
 			string[] aPath = absPath.Split (separators);
 			int indx = 0;
-
-			StringComparison comparison = (Platform.IsMac || Platform.IsWindows) ?
-			                              StringComparison.OrdinalIgnoreCase :
-			                              StringComparison.Ordinal;
 			
 			for (; indx < Math.Min (bPath.Length, aPath.Length); indx++) {
-				if (!bPath[indx].Equals(aPath[indx], comparison))
+				if (!bPath[indx].Equals(aPath[indx]))
 					break;
 			}
 			
@@ -301,6 +320,87 @@ namespace MonoDevelop.Core
 			if (result.Length == 0)
 				return ".";
 			return result.ToString ();
+		}*/
+		
+		static bool IsSeparator (char ch)
+		{
+			return ch == Path.DirectorySeparatorChar || ch == Path.AltDirectorySeparatorChar || ch == Path.VolumeSeparatorChar;
+		}
+		
+		public unsafe static string AbsoluteToRelativePath (string baseDirectoryPath, string absPath)
+		{
+			if (!Path.IsPathRooted (absPath) || string.IsNullOrEmpty (baseDirectoryPath))
+				return absPath;
+				
+			absPath = Path.GetFullPath (absPath);
+			baseDirectoryPath = Path.GetFullPath (baseDirectoryPath).TrimEnd (Path.DirectorySeparatorChar);
+			
+			fixed (char* bPtr = baseDirectoryPath, aPtr = absPath) {
+				var bEnd = bPtr + baseDirectoryPath.Length;
+				var aEnd = aPtr + absPath.Length;
+				char* lastStartA = aEnd;
+				char* lastStartB = bEnd;
+				
+				int indx = 0;
+				// search common base path
+				var a = aPtr;
+				var b = bPtr;
+				while (a < aEnd) {
+					if (*a != *b)
+						break;
+					if (IsSeparator (*a)) {
+						indx++;
+						lastStartA = a + 1;
+						lastStartB = b; 
+					}
+					a++;
+					b++;
+					if (b >= bEnd) {
+						if (a >= aEnd || IsSeparator (*a)) {
+							indx++;
+							lastStartA = a + 1;
+							lastStartB = b;
+						}
+						break;
+					}
+				}
+				if (indx == 0) 
+					return absPath;
+				
+				if (lastStartA >= aEnd)
+					return ".";
+
+				// handle case a: some/path b: some/path/deeper...
+				if (a >= aEnd) {
+					if (IsSeparator (*b)) {
+						lastStartA = a + 1;
+						lastStartB = b;
+					}
+				}
+				
+				// look how many levels to go up into the base path
+				int goUpCount = 0;
+				while (lastStartB < bEnd) {
+					if (IsSeparator (*lastStartB))
+						goUpCount++;
+					lastStartB++;
+				}
+				var size = goUpCount * 2 + goUpCount + aEnd - lastStartA;
+				var result = new char [size];
+				fixed (char* rPtr = result) {
+					// go paths up
+					var r = rPtr;
+					for (int i = 0; i < goUpCount; i++) {
+						*(r++) = '.';
+						*(r++) = '.';
+						*(r++) = Path.DirectorySeparatorChar;
+					}
+					// copy the remaining absulute path
+					while (lastStartA < aEnd)
+						*(r++) = *(lastStartA++);
+				}
+				return new string (result);
+			}
 		}
 		
 		public static string RelativeToAbsolutePath (string baseDirectoryPath, string relPath)
@@ -365,6 +465,12 @@ namespace MonoDevelop.Core
 		// Atomic rename of a file. It does not fire events.
 		public static void SystemRename (string sourceFile, string destFile)
 		{
+			if (string.IsNullOrEmpty (sourceFile))
+				throw new ArgumentException ("sourceFile");
+
+			if (string.IsNullOrEmpty (destFile))
+				throw new ArgumentException ("destFile");
+
 			//FIXME: use the atomic System.IO.File.Replace on NTFS
 			if (Platform.IsWindows) {
 				string wtmp = null;
@@ -398,7 +504,23 @@ namespace MonoDevelop.Core
 				}
 			}
 			else {
-				Mono.Unix.Native.Syscall.rename (sourceFile, destFile);
+				if (Syscall.rename (sourceFile, destFile) != 0) {
+					switch (Stdlib.GetLastError ()) {
+					case Errno.EACCES:
+					case Errno.EPERM:
+						throw new UnauthorizedAccessException ();
+					case Errno.EINVAL:
+						throw new InvalidOperationException ();
+					case Errno.ENOTDIR:
+						throw new DirectoryNotFoundException ();
+					case Errno.ENOENT:
+						throw new FileNotFoundException ();
+					case Errno.ENAMETOOLONG:
+						throw new PathTooLongException ();
+					default:
+						throw new IOException ();
+					}
+				}
 			}
 		}
 		
@@ -495,6 +617,114 @@ namespace MonoDevelop.Core
 		{
 			Counters.FileChangeNotifications++;
 			eventQueue.RaiseEvent (() => FileChanged, null, args);
+		}
+
+		public static Task<bool> UpdateDownloadedCacheFile (string url, string cacheFile,
+			Func<Stream,bool> validateDownload = null, CancellationToken ct = new CancellationToken ())
+		{
+			var tcs = new TaskCompletionSource<bool> ();
+
+			//HACK: .NET blocks on DNS in BeginGetResponse, so use a threadpool thread
+			// see http://stackoverflow.com/questions/1232139#1232930
+			System.Threading.ThreadPool.QueueUserWorkItem ((state) => {
+				var request = (HttpWebRequest)WebRequest.Create (url);
+
+				try {
+					//check to see if the online file has been modified since it was last downloaded
+					var localNewsXml = new FileInfo (cacheFile);
+					if (localNewsXml.Exists)
+						request.IfModifiedSince = localNewsXml.LastWriteTime;
+
+					request.BeginGetResponse (HandleResponse, new CacheFileDownload {
+						Request = request,
+						Url = url,
+						CacheFile = cacheFile,
+						ValidateDownload = validateDownload,
+						CancellationToken = ct,
+						Tcs = tcs,
+					});
+				} catch (Exception ex) {
+					tcs.SetException (ex);
+				}
+			});
+
+			return tcs.Task;
+		}
+
+		class CacheFileDownload
+		{
+			public HttpWebRequest Request;
+			public string CacheFile, Url;
+			public Func<Stream,bool> ValidateDownload;
+			public CancellationToken CancellationToken;
+			public TaskCompletionSource<bool> Tcs;
+		}
+
+		static void HandleResponse (IAsyncResult ar)
+		{
+			var c = (CacheFileDownload) ar.AsyncState;
+			bool deleteTempFile = true;
+			var tempFile = c.CacheFile + ".temp";
+
+			try {
+				if (c.CancellationToken.IsCancellationRequested)
+					c.Tcs.TrySetCanceled ();
+
+				try {
+					//TODO: limit this size in case open wifi hotspots provide bad data
+					var response = (HttpWebResponse) c.Request.EndGetResponse (ar);
+					if (response.StatusCode == HttpStatusCode.OK) {
+						using (var fs = File.Create (tempFile))
+							response.GetResponseStream ().CopyTo (fs, 2048);
+					}
+				} catch (WebException wex) {
+					var httpResp = wex.Response as HttpWebResponse;
+					if (httpResp != null) {
+						if (httpResp.StatusCode == HttpStatusCode.NotModified) {
+							c.Tcs.TrySetResult (false);
+							return;
+						}
+						//is this valid? should we just return the WebException directly?
+						else if (httpResp.StatusCode == HttpStatusCode.NotFound) {
+							c.Tcs.TrySetException (new FileNotFoundException ("File not found on server", c.Url, wex));
+							return;
+						}
+					}
+					throw;
+				}
+
+				//check the document is valid, might get bad ones from wifi hotspots etc
+				if (c.ValidateDownload != null) {
+					if (c.CancellationToken.IsCancellationRequested)
+						c.Tcs.TrySetCanceled ();
+
+					using (var f = File.OpenRead (tempFile)) {
+						try {
+							if (!c.ValidateDownload (f)) {
+								c.Tcs.TrySetException (new Exception ("Failed to validate downloaded file"));
+								return;
+							}
+						} catch (Exception ex) {
+							c.Tcs.TrySetException (new Exception ("Failed to validate downloaded file", ex));
+						}
+					}
+				}
+
+				if (c.CancellationToken.IsCancellationRequested)
+					c.Tcs.TrySetCanceled ();
+
+				SystemRename (tempFile, c.CacheFile);
+				deleteTempFile = false;
+				c.Tcs.TrySetResult (true);
+			} catch (Exception ex) {
+				c.Tcs.TrySetException (ex);
+			} finally {
+				if (deleteTempFile) {
+					try {
+						File.Delete (tempFile);
+					} catch {}
+				}
+			}
 		}
 	}
 	

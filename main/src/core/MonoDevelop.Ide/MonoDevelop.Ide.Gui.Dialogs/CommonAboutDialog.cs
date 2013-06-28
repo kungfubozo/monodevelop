@@ -55,16 +55,48 @@ namespace MonoDevelop.Ide.Gui.Dialogs
 			TransientFor = IdeApp.Workbench.RootWindow;
 			AllowGrow = false;
 			HasSeparator = false;
-			
+			BorderWidth = 0;
+
 			var notebook = new Notebook ();
+			notebook.ShowTabs = false;
+			notebook.ShowBorder = false;
 			notebook.BorderWidth = 0;
 			notebook.AppendPage (new AboutMonoDevelopTabPage (), new Label (Title));
-			notebook.AppendPage (new VersionInformationTabPage (), new Label (GettextCatalog.GetString ("Version Info")));
+			notebook.AppendPage (new VersionInformationTabPage (), new Label (GettextCatalog.GetString ("Version Information")));
 			VBox.PackStart (notebook, true, true, 0);
 			
+			var copyButton = new Button () { Label = GettextCatalog.GetString ("Copy Information") };
+			copyButton.Clicked += (sender, e) => CopyBufferToClipboard ();
+			ActionArea.PackEnd (copyButton, false, false, 0);
+			copyButton.NoShowAll = true;
+
+			var backButton = new Button () { Label = GettextCatalog.GetString ("Show Details") };
+			ActionArea.PackEnd (backButton, false, false, 0);
+			backButton.Clicked += (sender, e) => {
+				if (notebook.Page == 0) {
+					backButton.Label = GettextCatalog.GetString ("Hide Details");
+					copyButton.Show ();
+					notebook.Page = 1;
+				}
+				else {
+					backButton.Label = GettextCatalog.GetString ("Show Details");
+					copyButton.Hide ();
+					notebook.Page = 0;
+				}
+			};
+
 			AddButton (Gtk.Stock.Close, (int)ResponseType.Close);
-			
+
 			ShowAll ();
+		}
+
+		static void CopyBufferToClipboard ()
+		{
+			var text = SystemInformation.GetTextDescription ();
+			var clipboard = Clipboard.Get (Gdk.Atom.Intern ("CLIPBOARD", false));
+			clipboard.Text = text.ToString ();
+			clipboard = Clipboard.Get (Gdk.Atom.Intern ("PRIMARY", false));
+			clipboard.Text = text.ToString ();
 		}
 
 		void ChangeColor (Gtk.Widget w)

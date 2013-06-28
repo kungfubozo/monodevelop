@@ -29,6 +29,7 @@ using MonoDevelop.Components.Commands;
 using Mono.Addins;
 using MonoDevelop.VersionControl;
 using MonoDevelop.Ide.Gui;
+using MonoDevelop.Core.LogReporting;
 
 namespace MonoDevelop.VersionControl.Views
 {
@@ -36,52 +37,46 @@ namespace MonoDevelop.VersionControl.Views
 	{
 		protected override void Run ()
 		{
-			Ide.IdeApp.Workbench.DocumentOpened += HandleDocumentOpened;
-			Core.FileService.FileChanged += HandleCoreFileServiceFileChanged;
-		}
-		
-		void AttachViewContents (MonoDevelop.Ide.Gui.Document document)
-		{
-			if (document == null || document.Project == null)
-				return;
-			var repo = VersionControlService.GetRepository (document.Project);
-			if (repo == null)
-				return;
-			if (!document.IsFile || !repo.GetVersionInfo (document.FileName).IsVersioned)
-				return;
-			if (document.Editor == null)
-				return;
-			
-			var item = new VersionControlItem (repo, document.Project, document.FileName, false, null);
-			TryAttachView <IDiffView> (document, item, DiffCommand.DiffViewHandlers);
-			TryAttachView <IBlameView> (document, item, BlameCommand.BlameViewHandlers);
-			TryAttachView <ILogView> (document, item, LogCommand.LogViewHandlers);
-			TryAttachView <IMergeView> (document, item, MergeCommand.MergeViewHandlers);
+			Ide.IdeApp.Workbench.ActiveDocumentChanged += HandleDocumentChanged;
 		}
 
-		void HandleCoreFileServiceFileChanged (object sender, Core.FileEventArgs e)
+		void HandleDocumentChanged (object sender, EventArgs e)
 		{
-			foreach (Core.FileEventInfo info in e) {
-				AttachViewContents (Ide.IdeApp.Workbench.GetDocument (info.FileName.FullPath));
+			var document = Ide.IdeApp.Workbench.ActiveDocument;
+			try {
+				if (document == null || !document.IsFile || document.Project == null || document.Window.FindView<IDiffView> () >= 0)
+					return;
+				
+				var repo = VersionControlService.GetRepository (document.Project);
+				if (repo == null)
+					return;
+
+				var versionInfo = repo.GetVersionInfo (document.FileName);
+				if (!versionInfo.IsVersioned)
+					return;
+
+				var item = new VersionControlItem (repo, document.Project, document.FileName, false, null);
+				var vcInfo = new VersionControlDocumentInfo (document.PrimaryView, item, item.Repository);
+				TryAttachView <IDiffView> (document, vcInfo, DiffCommand.DiffViewHandlers);
+				TryAttachView <IBlameView> (document, vcInfo, BlameCommand.BlameViewHandlers);
+				TryAttachView <ILogView> (document, vcInfo, LogCommand.LogViewHandlers);
+				TryAttachView <IMergeView> (document, vcInfo, MergeCommand.MergeViewHandlers);
+			} catch (Exception ex) {
+				// If a user is hitting this, it will show a dialog box every time they
+				// switch to a document or open a document, so suppress the crash dialog
+				// This bug *should* be fixed already, but it's hard to tell.
+				LogReportingService.ReportUnhandledException (ex, false, true);
 			}
 		}
-
-		void HandleDocumentOpened (object sender, Ide.Gui.DocumentEventArgs e)
-		{
-			AttachViewContents (e.Document);
-		}
 		
-		void TryAttachView <T> (Document document, VersionControlItem item, string type)
+		void TryAttachView <T>(Document document, VersionControlDocumentInfo info, string type)
 			where T : IAttachableViewContent
 		{
-			// Don't reattach existing views
-			if (0 <= document.Window.FindView<T> ())
-				return;
-				
-			var handler = AddinManager.GetExtensionObjects<IVersionControlViewHandler<T>> (type).FirstOrDefault (h => h.CanHandle (item));
-			if (handler != null) {
-				document.Window.AttachViewContent (handler.CreateView (item, document.PrimaryView));
-			}
+			var handler = AddinManager.GetExtensionObjects<IVersionControlViewHandler<T>> (type)
+				.Where (h => h.CanHandle (info.Item, info.Document))
+				.FirstOrDefault ();
+			if (handler != null)
+				document.Window.AttachViewContent (handler.CreateView (info));
 		}
 	}
 }

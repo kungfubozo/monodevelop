@@ -28,21 +28,64 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Text;
 using System.Xml;
-using System.Diagnostics;
 
 namespace Mono.TextEditor.Highlighting
 {
-	public class SyntaxMode : Rule
+	public class SyntaxMode : Rule, ISyntaxMode
 	{
-		public static readonly SyntaxMode Default = new SyntaxMode ();
-		protected List<Rule> rules = new List<Rule> ();
+		protected TextDocument doc;
 
+		public TextDocument Document {
+			get {
+				return doc;
+			}
+			set {
+				if (doc != null) {
+					doc.TextSet -= HandleTextSet;
+					doc.TextReplaced -= HandleTextReplaced;
+				}
+				doc = value;
+				if (doc != null) {
+					doc.TextSet += HandleTextSet;
+					doc.TextReplaced += HandleTextReplaced;
+				}
+				HandleTextSet (doc, EventArgs.Empty);
+				OnDocumentSet (EventArgs.Empty);
+
+			}
+		}
+
+		void HandleTextReplaced (object sender, DocumentChangeEventArgs e)
+		{
+			if (doc == null || doc.SuppressHighlightUpdate)
+				return;
+			SyntaxModeService.StartUpdate (doc, this, e.Offset, e.Offset + e.InsertionLength);
+		}
+
+		void HandleTextSet (object sender, EventArgs e)
+		{
+			if (doc == null || doc.SuppressHighlightUpdate)
+				return;
+			SyntaxModeService.StartUpdate (doc, this, 0, doc.TextLength);
+		}
+		
+		public event EventHandler DocumentSet;
+		
+		protected virtual void OnDocumentSet (EventArgs e)
+		{
+			var handler = DocumentSet;
+			if (handler != null)
+				handler (this, e);
+		}	
+		
+		internal protected List<Rule> rules = new List<Rule> ();
+		
+	
 		public string MimeType {
 			get;
-			private set;
+			internal set;
 		}
 
 		public IEnumerable<Rule> Rules {
@@ -50,15 +93,20 @@ namespace Mono.TextEditor.Highlighting
 				return rules;
 			}
 		}
-
-		public SyntaxMode() : base (null)
+		
+		protected SyntaxMode () : base (null)
 		{
 			DefaultColor = "text";
 			Name = "<root>";
 			this.Delimiter = "&()<>{}[]~!%^*-+=|\\#/:;\"' ,\t.?";
 		}
+		
+		public SyntaxMode (TextDocument doc) : this ()
+		{
+			this.doc = doc;
+		}
 
-		public bool Validate (ColorSheme style)
+		public bool Validate (ColorScheme style)
 		{
 			if (!GetIsValid (style)) {
 				return false;
@@ -71,11 +119,11 @@ namespace Mono.TextEditor.Highlighting
 			return true;
 		}
 
-		public virtual Chunk GetChunks (Document doc, ColorSheme style, LineSegment line, int offset, int length)
+		public virtual IEnumerable<Chunk> GetChunks (ColorScheme style, DocumentLine line, int offset, int length)
 		{
-			SpanParser spanParser = CreateSpanParser (doc, this, line, null);
-			ChunkParser chunkParser = CreateChunkParser (spanParser, doc, style, this, line);
-			Chunk result = chunkParser.GetChunks (chunkParser.lineOffset, line.EditableLength);
+			SpanParser spanParser = CreateSpanParser (line, null);
+			ChunkParser chunkParser = CreateChunkParser (spanParser, style, line);
+			Chunk result = chunkParser.GetChunks (chunkParser.lineOffset, line.Length);
 			if (SemanticRules != null) {
 				foreach (SemanticRule sematicRule in SemanticRules) {
 					sematicRule.Analyze (doc, line, result, offset, offset + length);
@@ -84,39 +132,29 @@ namespace Mono.TextEditor.Highlighting
 			if (result != null) {
 				// crop to begin
 				if (result.Offset != offset) {
-					while (result != null && result.EndOffset < offset)
+					while (result != null && result.EndOffset < offset) {
 						result = result.Next;
+					}
 					if (result != null) {
 						int endOffset = result.EndOffset;
 						result.Offset = offset;
 						result.Length = endOffset - offset;
 					}
 				}
-
-				if (result != null && offset + length != chunkParser.lineOffset + line.EditableLength) {
-					// crop to end
-					Chunk cur = result;
-					while (cur != null && cur.EndOffset < offset + length) {
-						cur = cur.Next;
-					}
-					if (cur != null) {
-						cur.Length = offset + length - cur.Offset;
-						cur.Next = null;
+			}
+			while (result != null) {
+				// crop to end
+				if (result.EndOffset > offset + length) {
+					result.Length = offset + length - result.Offset;
+					if (result.Length < 0) {
+						result.Length = 0;
+						result.Next = null;
+						yield break;
 					}
 				}
+				yield return result;
+				result = result.Next;
 			}
-
-			return result;
-		}
-
-		public virtual string GetTextWithoutMarkup (Document doc, ColorSheme style, int offset, int length)
-		{
-			return doc.GetTextAt (offset, length);
-		}
-
-		public string GetMarkup (Document doc, ITextEditorOptions options, ColorSheme style, int offset, int length, bool removeIndent)
-		{
-			return GetMarkup (doc, options, style, offset, length, removeIndent, true, true);
 		}
 
 		public static string ColorToPangoMarkup (Gdk.Color color)
@@ -124,110 +162,30 @@ namespace Mono.TextEditor.Highlighting
 			return string.Format ("#{0:X2}{1:X2}{2:X2}", color.Red >> 8, color.Green >> 8, color.Blue >> 8);
 		}
 
-		public string GetMarkup (Document doc, ITextEditorOptions options, ColorSheme style, int offset, int length, bool removeIndent, bool useColors, bool replaceTabs)
-		{
-			int indentLength = GetIndentLength (doc, offset, length, false);
-			int curOffset = offset;
-
-			StringBuilder result = new StringBuilder ();
-			while (curOffset < offset + length && curOffset < doc.Length) {
-				LineSegment line = doc.GetLineByOffset (curOffset);
-				int toOffset = System.Math.Min (line.Offset + line.EditableLength, offset + length);
-				Stack<ChunkStyle> styleStack = new Stack<ChunkStyle> ();
-				for (Chunk chunk = GetChunks (doc, style, line, curOffset, toOffset - curOffset); chunk != null; chunk = chunk.Next) {
-
-					ChunkStyle chunkStyle = chunk.GetChunkStyle (style);
-					bool setBold = chunkStyle.Bold && (styleStack.Count == 0 || !styleStack.Peek ().Bold) ||
-						!chunkStyle.Bold && (styleStack.Count == 0 || styleStack.Peek ().Bold);
-					bool setItalic = chunkStyle.Italic && (styleStack.Count == 0 || !styleStack.Peek ().Italic) ||
-						!chunkStyle.Italic && (styleStack.Count == 0 || styleStack.Peek ().Italic);
-					bool setUnderline = chunkStyle.Underline && (styleStack.Count == 0 || !styleStack.Peek ().Underline) ||
-						!chunkStyle.Underline && (styleStack.Count == 0 || styleStack.Peek ().Underline);
-					bool setColor = styleStack.Count == 0 || TextViewMargin.GetPixel (styleStack.Peek ().Color) != TextViewMargin.GetPixel (chunkStyle.Color);
-					if (setColor || setBold || setItalic || setUnderline) {
-						if (styleStack.Count > 0) {
-							result.Append("</span>");
-							styleStack.Pop ();
-						}
-						result.Append("<span");
-						if (useColors) {
-							result.Append(" foreground=\"");
-							result.Append(ColorToPangoMarkup (chunkStyle.Color));
-							result.Append("\"");
-						}
-						if (chunkStyle.Bold)
-							result.Append(" weight=\"bold\"");
-						if (chunkStyle.Italic)
-							result.Append(" style=\"italic\"");
-						if (chunkStyle.Underline)
-							result.Append(" underline=\"single\"");
-						result.Append(">");
-						styleStack.Push (chunkStyle);
-					}
-
-					for (int i = 0; i < chunk.Length && chunk.Offset + i < doc.Length; i++) {
-						char ch = chunk.GetCharAt (doc, chunk.Offset + i);
-						switch (ch) {
-						case '&':
-							result.Append ("&amp;");
-							break;
-						case '<':
-							result.Append ("&lt;");
-							break;
-						case '>':
-							result.Append ("&gt;");
-							break;
-						case '\t':
-							if (replaceTabs) {
-								result.Append (new string (' ', options.TabSize));
-							} else {
-								result.Append ('\t');
-							}
-							break;
-						default:
-							result.Append (ch);
-							break;
-						}
-					}
-				}
-				while (styleStack.Count > 0) {
-					result.Append("</span>");
-					styleStack.Pop ();
-				}
-
-				curOffset = line.EndOffset;
-				if (removeIndent)
-					curOffset += indentLength;
-				if (result.Length > 0 && curOffset < offset + length)
-					result.AppendLine ();
-			}
-			return result.ToString ();
-		}
-
-		public static int GetIndentLength (Document doc, int offset, int length, bool skipFirstLine)
+		public static int GetIndentLength (TextDocument doc, int offset, int length, bool skipFirstLine)
 		{
 			int curOffset = offset;
 			int indentLength = int.MaxValue;
 			while (curOffset < offset + length) {
-				LineSegment line = doc.GetLineByOffset (curOffset);
+				DocumentLine line = doc.GetLineByOffset (curOffset);
 				if (!skipFirstLine) {
 					indentLength = System.Math.Min (indentLength, line.GetIndentation (doc).Length);
 				} else {
 					skipFirstLine = false;
 				}
-				curOffset = line.EndOffset + 1;
+				curOffset = line.EndOffsetIncludingDelimiter + 1;
 			}
 			return indentLength == int.MaxValue ? 0 : indentLength;
 		}
 
-		public virtual SpanParser CreateSpanParser (Document doc, SyntaxMode mode, LineSegment line, CloneableStack<Span> spanStack)
+		public virtual SpanParser CreateSpanParser (DocumentLine line, CloneableStack<Span> spanStack)
 		{
-			return new SpanParser (doc, mode, spanStack ?? line.StartSpan.Clone ());
+			return new SpanParser (this, spanStack ?? line.StartSpan.Clone ());
 		}
 
-		public virtual ChunkParser CreateChunkParser (SpanParser spanParser, Document doc, ColorSheme style, SyntaxMode mode, LineSegment line)
+		public virtual ChunkParser CreateChunkParser (SpanParser spanParser, ColorScheme style, DocumentLine line)
 		{
-			return new ChunkParser (spanParser, doc, style, mode, line);
+			return new ChunkParser (this, spanParser, style, line);
 		}
 
 		public class SpanParser
@@ -235,7 +193,7 @@ namespace Mono.TextEditor.Highlighting
 			protected SyntaxMode mode;
 			protected CloneableStack<Span> spanStack;
 			protected Stack<Rule> ruleStack;
-			protected Document doc;
+			protected TextDocument doc;
 			int maxEnd;
 
 			public Rule CurRule {
@@ -253,7 +211,7 @@ namespace Mono.TextEditor.Highlighting
 					return spanStack;
 				}
 				set {
-					this.spanStack = value;
+					spanStack = value;
 				}
 			}
 
@@ -262,8 +220,8 @@ namespace Mono.TextEditor.Highlighting
 					return ruleStack;
 				}
 				set {
-					this.ruleStack = value;
-					this.CurRule = ruleStack.Peek ();
+					ruleStack = value;
+					CurRule = ruleStack.Peek ();
 				}
 			}
 
@@ -274,19 +232,19 @@ namespace Mono.TextEditor.Highlighting
 					return result;
 				Rule rule = mode;
 				result.Push (mode);
-				foreach (Span span in this.spanStack.Reverse ()) {
-					Rule tmp = rule.GetRule (span.Rule) ?? this.CurRule;
+				foreach (Span span in spanStack.Reverse ()) {
+					Rule tmp = rule.GetRule (doc, span.Rule) ?? CurRule;
 					result.Push (tmp);
 					rule = tmp;
 				}
 				return result;
 			}
 
-			public SpanParser (Document doc, SyntaxMode mode, CloneableStack<Span> spanStack)
+			public SpanParser (SyntaxMode mode, CloneableStack<Span> spanStack)
 			{
-				if (doc == null)
-					throw new ArgumentNullException ("doc");
-				this.doc  = doc;
+				if (mode == null)
+					throw new ArgumentNullException ("mode");
+				this.doc  = mode.Document;
 				this.mode = mode;
 				this.SpanStack = spanStack;
 				this.CurRule = mode;
@@ -313,25 +271,28 @@ namespace Mono.TextEditor.Highlighting
 			{
 				spanStack.Push (span);
 				ruleStack.Push (rule);
-				this.CurRule = rule;
-				this.CurSpan = span;
+				CurRule = rule;
+				CurSpan = span;
 			}
 
-			public void PopSpan ()
+			public Span PopSpan ()
 			{
-				if (spanStack.Count > 0)
-					spanStack.Pop ();
+				Span result = null;
+				if (spanStack.Count > 0) {
+					result = spanStack.Pop ();
+				}
 				if (ruleStack.Count > 1)
 					ruleStack.Pop ();
-				this.CurRule = ruleStack.Peek ();
-				this.CurSpan = spanStack.Count > 0 ? spanStack.Peek () : null;
+				CurRule = ruleStack.Peek ();
+				CurSpan = spanStack.Count > 0 ? spanStack.Peek () : null;
+				return result;
 			}
 
 			public Rule GetRule (Span span)
 			{
 				if (string.IsNullOrEmpty (span.Rule))
 					return new Rule (mode);
-				return CurRule.GetRule (span.Rule);
+				return CurRule.GetRule (doc, span.Rule);
 			}
 
 			public delegate void CharParser (ref int i, char ch);
@@ -344,10 +305,21 @@ namespace Mono.TextEditor.Highlighting
 			
 			public StringBuilder wordBuilder = new StringBuilder ();
 			
-			protected virtual void ScanSpan (ref int i)
+			protected bool IsFirstNonWsChar (int textOffset)
+			{
+				while (textOffset > 0) {
+					char ch = CurText [textOffset - 1];
+					if (ch != '\n' && ch != '\r' && !char.IsWhiteSpace (ch))
+						return false;
+					textOffset--;
+				}
+				return true;
+			}
+		
+						
+			protected virtual bool ScanSpan (ref int i)
 			{
 				int textOffset = i - StartOffset;
-				
 				for (int j = 0; j < CurRule.Spans.Length; j++) {
 					Span span = CurRule.Spans [j];
 
@@ -360,21 +332,22 @@ namespace Mono.TextEditor.Highlighting
 					} 
 
 					RegexMatch match = span.Begin.TryMatch (CurText, textOffset);
-					if (!match.Success)
+					if (!match.Success) {
 						continue;
+					}
 					// scan for span exit which cancels the span.
 					if ((span.ExitFlags & SpanExitFlags.CancelSpan) == SpanExitFlags.CancelSpan && span.Exit != null) {
 						bool foundEnd = false;
 						for (int k = i + match.Length; k < CurText.Length; k++) {
 							if (span.Exit.TryMatch (CurText, k - StartOffset).Success)
-								return;
+								return false;
 							if (span.End.TryMatch (CurText, k - StartOffset).Success) {
 								foundEnd = true;
 								break;
 							}
 						}
 						if (!foundEnd)
-							return;
+							return false;
 					}
 					
 					bool mismatch = false;
@@ -383,9 +356,10 @@ namespace Mono.TextEditor.Highlighting
 					if (mismatch)
 						continue;
 					FoundSpanBegin (span, i, match.Length);
-					i += match.Length - 1;
-					return;
+					i += System.Math.Max (0, match.Length - 1);
+					return true;
 				}
+				return false;
 			}
 
 			protected virtual bool ScanSpanEnd (Span cur, ref int i)
@@ -396,7 +370,7 @@ namespace Mono.TextEditor.Highlighting
 					RegexMatch match = cur.End.TryMatch (CurText, textOffset);
 					if (match.Success) {
 						FoundSpanEnd (cur, i, match.Length);
-						i += match.Length - 1;
+						i += System.Math.Max (0, match.Length - 1);
 						return true;
 					}
 				}
@@ -405,7 +379,7 @@ namespace Mono.TextEditor.Highlighting
 					RegexMatch match = cur.Exit.TryMatch (CurText, textOffset);
 					if (match.Success) {
 						FoundSpanExit (cur, i, match.Length);
-						i += match.Length - 1;
+						i += System.Math.Max (0, match.Length - 1);
 						return true;
 					}
 				}
@@ -423,7 +397,7 @@ namespace Mono.TextEditor.Highlighting
 
 			public void ParseSpans (int offset, int length)
 			{
-				if (offset < 0 || offset + length > doc.Length || length <= 0)
+				if (offset < 0 || offset + length > doc.TextLength || length <= 0)
 					return;
 				StartOffset = offset;
 				CurText = doc.GetTextAt (offset, length);
@@ -435,24 +409,28 @@ namespace Mono.TextEditor.Highlighting
 						if (cur.Escape != null) {
 							bool mismatch = false;
 							for (int j = 0; j < cur.Escape.Length; j++) {
-								if (textIndex + j >= CurText.Length || CurText[textIndex + j] != cur.Escape[j]) {
+								if (textIndex + j >= CurText.Length || CurText [textIndex + j] != cur.Escape [j]) {
 									mismatch = true;
 									break;
 								}
 							}
 							if (!mismatch) {
-								i += cur.Escape.Length;
-								if (cur.Escape.Length > 1)
-									i--;
+								for (int j = 0; j < cur.Escape.Length - 1 && i < maxEnd;j++) {
+									ParseChar (ref i, CurText [textIndex]);
+									i++;
+								}
+//								ScanSpanEnd (cur, ref i);
 								continue;
 							}
 						}
 						if (ScanSpanEnd (cur, ref i))
 							continue;
+
 					}
-					ScanSpan (ref i);
-					if (i < doc.Length)
-						ParseChar (ref i, CurText[textIndex]);
+					if (!ScanSpan (ref i)) {
+						if (i < doc.TextLength)
+							ParseChar (ref i, CurText [textIndex]);
+					}
 				}
 			}
 		}
@@ -461,15 +439,15 @@ namespace Mono.TextEditor.Highlighting
 		{
 			readonly string defaultStyle = "text";
 			protected SpanParser spanParser;
-			protected Document doc;
-			protected LineSegment line;
+			protected TextDocument doc;
+			protected DocumentLine line;
 			internal int lineOffset;
 			protected SyntaxMode mode;
 
-			public ChunkParser (SpanParser spanParser, Document doc, ColorSheme style, SyntaxMode mode, LineSegment line)
+			public ChunkParser (SyntaxMode mode, SpanParser spanParser, ColorScheme style, DocumentLine line)
 			{
 				this.mode = mode;
-				this.doc = doc;
+				this.doc = mode.Document;
 				this.line = line;
 				this.lineOffset = line.Offset;
 				this.spanParser = spanParser;
@@ -481,7 +459,7 @@ namespace Mono.TextEditor.Highlighting
 					throw new ArgumentNullException ("line");
 			}
 
-			Chunk startChunk = null;
+			Chunk startChunk;
 			Chunk endChunk;
 
 			protected virtual void AddRealChunk (Chunk chunk)
@@ -541,7 +519,7 @@ namespace Mono.TextEditor.Highlighting
 					return result;
 				}
 				string rule = spanParser.SpanStack.Peek ().Rule;
-				if (!string.IsNullOrEmpty (rule) && rule.StartsWith ("mode:"))
+				if (!string.IsNullOrEmpty (rule) && rule.StartsWith ("mode:", StringComparison.Ordinal))
 					return spanParser.CurRule.DefaultColor ?? defaultStyle;
 				return spanParser.SpanStack.Peek ().Color;
 			}
@@ -575,11 +553,11 @@ namespace Mono.TextEditor.Highlighting
 
 				curChunk.Offset = offset;
 				curChunk.Length = length;
-				curChunk.Style  = span.TagColor ?? GetChunkStyle (span);
+				curChunk.Style = span.TagColor ?? GetChunkStyle (span);
 				curChunk.SpanStack.Push (span);
 				AddChunk (ref curChunk, 0, curChunk.Style);
 				foreach (SemanticRule semanticRule in spanRule.SemanticRules) {
-					semanticRule.Analyze (this.doc, line, curChunk, offset, line.EndOffset);
+					semanticRule.Analyze (doc, line, curChunk, offset, line.EndOffsetIncludingDelimiter);
 				}
 			}
 
@@ -604,11 +582,9 @@ namespace Mono.TextEditor.Highlighting
 				spanParser.PopSpan ();
 			}
 			protected StringBuilder wordbuilder = new StringBuilder ();
-			bool inWord = false;
+			bool inWord;
 			public void ParseChar (ref int i, char ch)
 			{
-				int textOffset = i - spanParser.StartOffset;
-
 				Rule cur = spanParser.CurRule;
 				bool isWordPart = cur.Delimiter.IndexOf (ch) < 0;
 
@@ -617,21 +593,35 @@ namespace Mono.TextEditor.Highlighting
 
 				inWord = isWordPart;
 
-				if (cur.HasMatches && i - curChunk.Offset == 0) {
+				if (cur.HasMatches && (i - curChunk.Offset == 0 || string.IsNullOrEmpty (cur.Delimiter))) {
 					Match foundMatch = null;
-					int   foundMatchLength = 0;
+					var   foundMatchLength = new int[0];
+					int textOffset = i - spanParser.StartOffset;
 					foreach (Match ruleMatch in cur.Matches) {
-						int matchLength = ruleMatch.TryMatch (spanParser.CurText, textOffset);
-						if (foundMatchLength < matchLength) {
+						var matchLength = ruleMatch.TryMatch (spanParser.CurText, textOffset);
+						if (foundMatchLength.Length < matchLength.Length) {
 							foundMatch = ruleMatch;
 							foundMatchLength = matchLength;
 						}
 					}
 					if (foundMatch != null) {
-						AddChunk (ref curChunk, foundMatchLength, GetChunkStyleColor (foundMatch.Color));
-						i += foundMatchLength - 1;
-						curChunk.Length = i - curChunk.Offset + 1;
-						return;
+						if (foundMatch.IsGroupMatch) {
+							for (int j = 1; j < foundMatchLength.Length; j++) {
+								var len = foundMatchLength [j];
+								if (len > 0) {
+									AddChunk (ref curChunk, len, GetChunkStyleColor (foundMatch.Groups [j - 1]));
+									i += len - 1;
+									curChunk.Length = 0;
+								}
+							}
+							return;
+						}
+						if (foundMatchLength[0] > 0) {
+							AddChunk (ref curChunk, foundMatchLength[0], GetChunkStyleColor (foundMatch.Color));
+							i += foundMatchLength[0] - 1;
+							curChunk.Length = 0;
+							return;
+						}
 					}
 				}
 				wordbuilder.Append (ch);
@@ -652,7 +642,7 @@ namespace Mono.TextEditor.Highlighting
 			{
 				if (lineOffset < offset)
 					SyntaxModeService.ScanSpans (doc, mode, spanParser.CurRule, spanParser.SpanStack, lineOffset, offset);
-				length = System.Math.Min (doc.Length - offset, length);
+				length = System.Math.Min (doc.TextLength - offset, length);
 				curChunk = new Chunk (offset, 0, GetSpanStyle ());
 				spanParser.ParseSpans (offset, length);
 				curChunk.Length = offset + length - curChunk.Offset;
@@ -664,13 +654,13 @@ namespace Mono.TextEditor.Highlighting
 			}
 		}
 
-		public override Rule GetRule (string name)
+		public override Rule GetRule (TextDocument document, string name)
 		{
 			if (name == null || name == "<root>") {
 				return this;
 			}
-			if (name.StartsWith ("mode:"))
-				return SyntaxModeService.GetSyntaxMode (name.Substring ("mode:".Length));
+			if (name.StartsWith ("mode:", StringComparison.Ordinal))
+				return SyntaxModeService.GetSyntaxMode (document, name.Substring ("mode:".Length));
 
 			foreach (Rule rule in rules) {
 				if (rule.Name == name)
@@ -692,7 +682,7 @@ namespace Mono.TextEditor.Highlighting
 
 		public void AddSemanticRule (string addToRuleName, SemanticRule semanticRule)
 		{
-			AddSemanticRule (GetRule (addToRuleName), semanticRule);
+			AddSemanticRule (GetRule (doc, addToRuleName), semanticRule);
 		}
 
 		void RemoveSemanticRule (Rule rule, Type type)
@@ -712,7 +702,7 @@ namespace Mono.TextEditor.Highlighting
 		}
 		public void RemoveSemanticRule (string removeFromRuleName, Type type)
 		{
-			RemoveSemanticRule (GetRule (removeFromRuleName), type);
+			RemoveSemanticRule (GetRule (doc, removeFromRuleName), type);
 		}
 
 		public override string ToString ()
@@ -726,19 +716,21 @@ namespace Mono.TextEditor.Highlighting
 
 		public static SyntaxMode Read (XmlReader reader)
 		{
-			SyntaxMode result = new SyntaxMode ();
-			List<Match> matches = new List<Match> ();
-			List<Span> spanList = new List<Span> ();
-			List<Marker> prevMarkerList = new List<Marker> ();
+			var result = new SyntaxMode (null);
+			var matches = new List<Match> ();
+			var spanList = new List<Span> ();
+			var prevMarkerList = new List<Marker> ();
 			XmlReadHelper.ReadList (reader, Node, delegate () {
+				if (reader == null)
+					return true;
 				switch (reader.LocalName) {
 				case Node:
 					string extends = reader.GetAttribute ("extends");
 					if (!String.IsNullOrEmpty (extends)) {
-						result = (SyntaxMode)SyntaxModeService.GetSyntaxMode (extends).MemberwiseClone ();
+						result = (SyntaxMode)SyntaxModeService.GetSyntaxMode (null, extends).MemberwiseClone ();
 					}
-					result.Name       = reader.GetAttribute ("name");
-					result.MimeType   = reader.GetAttribute (MimeTypesAttribute);
+					result.Name = reader.GetAttribute ("name");
+					result.MimeType = reader.GetAttribute (MimeTypesAttribute);
 					if (!String.IsNullOrEmpty (reader.GetAttribute ("ignorecase")))
 						result.IgnoreCase = Boolean.Parse (reader.GetAttribute ("ignorecase"));
 					return true;
@@ -748,10 +740,94 @@ namespace Mono.TextEditor.Highlighting
 				}
 				return result.ReadNode (reader, matches, spanList, prevMarkerList);
 			});
-			result.spans   = spanList.ToArray ();
+			result.spans = spanList.ToArray ();
 			result.prevMarker = prevMarkerList.ToArray ();
 			result.matches = matches.ToArray ();
 			return result;
+		}
+	}
+
+	public interface ISyntaxModeProvider
+	{
+		SyntaxMode Create (TextDocument doc);
+	}
+	
+	public class ProtoTypeSyntaxModeProvider : ISyntaxModeProvider
+	{
+		SyntaxMode prototype;
+		
+		public ProtoTypeSyntaxModeProvider (SyntaxMode prototype)
+		{
+			this.prototype = prototype;
+		}
+		
+		SyntaxMode DeepCopy (TextDocument doc, SyntaxMode mode)
+		{
+			var newMode = new SyntaxMode (doc);
+			
+			newMode.MimeType = mode.MimeType;
+			newMode.spans = new Span[mode.Spans.Length];
+			for( int i = 0; i < mode.Spans.Length; i++) {
+				newMode.spans [i] = mode.Spans [i].Clone ();
+			}
+			
+			newMode.matches = mode.Matches;
+			newMode.prevMarker = mode.PrevMarker;
+			newMode.keywords = mode.keywords;
+			newMode.keywordTable = mode.keywordTable;
+			newMode.keywordTableIgnoreCase = mode.keywordTableIgnoreCase;
+			foreach (var pair in mode.Properties)
+				newMode.Properties.Add (pair.Key, pair.Value);
+			
+			foreach (var rule in mode.Rules) {
+				if (rule is SyntaxMode) {
+					newMode.rules.Add (DeepCopy (doc, (SyntaxMode)rule));
+				} else {
+					newMode.rules.Add (DeepCopy (doc, newMode, rule));
+				}
+			}
+			return newMode;
+		}
+		
+		Rule DeepCopy (TextDocument doc, SyntaxMode mode, Rule rule)
+		{
+			var newRule = new Rule (mode);
+			newRule.spans = new Span[rule.Spans.Length];
+			for (int i = 0; i < rule.Spans.Length; i++) {
+				newRule.spans [i] = rule.Spans [i].Clone ();
+			}
+			newRule.Delimiter = rule.Delimiter;
+			newRule.IgnoreCase = rule.IgnoreCase;
+			newRule.Name = rule.Name;
+			newRule.DefaultColor = rule.DefaultColor;
+			newRule.matches = rule.Matches;
+			newRule.prevMarker = rule.PrevMarker;
+			newRule.keywords = rule.keywords;
+			newRule.keywordTable = rule.keywordTable;
+			newRule.keywordTableIgnoreCase = rule.keywordTableIgnoreCase;
+			foreach (var pair in rule.Properties)
+				newRule.Properties.Add (pair.Key, pair.Value);
+			return newRule;
+		}
+		
+		public SyntaxMode Create (TextDocument doc)
+		{
+			return DeepCopy (doc, prototype);
+		}
+	}
+	
+	public class SyntaxModeProvider : ISyntaxModeProvider
+	{
+		Func<TextDocument, SyntaxMode> createFunction;
+		
+		public SyntaxModeProvider (Func<TextDocument, SyntaxMode> createFunction)
+		{
+			this.createFunction = createFunction;
+		}
+		
+		public SyntaxMode Create (TextDocument doc)
+		{
+			return createFunction (doc);
 		}
 	}
 }

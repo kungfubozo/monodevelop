@@ -34,9 +34,6 @@ using System.CodeDom.Compiler;
 
 using MonoDevelop.Projects;
 using MonoDevelop.Core;
-using MonoDevelop.Projects.Dom;
-using MonoDevelop.Projects.Dom.Parser;
-using MonoDevelop.Projects.CodeGeneration;
 
 namespace MonoDevelop.VBNetBinding
 {
@@ -60,7 +57,7 @@ namespace MonoDevelop.VBNetBinding
 			}
 		}
 		
-		public bool IsSourceCodeFile (string fileName)
+		public bool IsSourceCodeFile (FilePath fileName)
 		{
 			return Path.GetExtension(fileName) == ".vb";
 		}
@@ -87,22 +84,14 @@ namespace MonoDevelop.VBNetBinding
 			return provider;
 		}
 		
-		public string GetFileName (string baseName)
+		public FilePath GetFileName (FilePath baseName)
 		{
 			return baseName + ".vb";
 		}
 		
-		public IParser Parser {
-			get { return null; }
-		}
-		
-		public IRefactorer Refactorer {
-			get { return null; }
-		}
-		
 		public ClrVersion[] GetSupportedClrVersions ()
 		{
-			return new ClrVersion[] { ClrVersion.Net_2_0 };
+			return new ClrVersion[] { ClrVersion.Net_2_0, ClrVersion.Net_4_0 };
 		}
 	
 		public ProjectParameters CreateProjectParameters (XmlElement projectOptions)

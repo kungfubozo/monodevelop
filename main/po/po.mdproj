@@ -19,6 +19,7 @@
         <Translation isoCode="it" />
         <Translation isoCode="ja" />
         <Translation isoCode="nl" />
+        <Translation isoCode="nb" />
         <Translation isoCode="pl" />
         <Translation isoCode="pt" />
         <Translation isoCode="pt_BR" />
@@ -38,8 +39,6 @@
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' " />
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' " />
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' " />
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' " />
   <!--
   Everything above is for the MD translation project serializer, and isn't really valid MSBuild.
   The real MSBuild project is below. Need to update MD to serialize this instead.
@@ -62,6 +61,7 @@
     <GettextTranslation Include="it.po" />
     <GettextTranslation Include="ja.po" />
     <GettextTranslation Include="nl.po" />
+    <GettextTranslation Include="nb.po" />
     <GettextTranslation Include="pl.po" />
     <GettextTranslation Include="pt.po" />
     <GettextTranslation Include="pt_BR.po" />

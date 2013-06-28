@@ -28,6 +28,7 @@ using System;
 using Mono.Debugging.Client;
 using Mono.Debugging.Backend;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace Mono.Debugging.Evaluation
 {
@@ -131,15 +132,23 @@ namespace Mono.Debugging.Evaluation
 				return ObjectValue.CreateUnknown ("StackTrace");
 			
 			List<ObjectValue> frames = new List<ObjectValue> ();
+
+			var regex = new Regex ("at (.*) in (.*):(.*)");
 			
 			foreach (string sframe in trace.Split ('\n')) {
 				string txt = sframe.Trim (' ', '\r','\n');
 				string file = "";
 				int line = 0;
 				int col = 0;
+				var match = regex.Match (sframe);
+				if (match.Success) {
+					txt = match.Groups [1].ToString ();
+					file = match.Groups [2].ToString ();
+					int.TryParse (match.Groups [3].ToString (), out line);
+				}
 				ObjectValue fileVal = ObjectValue.CreatePrimitive (null, new ObjectPath("File"), "", new EvaluationResult (file), ObjectValueFlags.None);
 				ObjectValue lineVal = ObjectValue.CreatePrimitive (null, new ObjectPath("Line"), "", new EvaluationResult (line.ToString ()), ObjectValueFlags.None);
-				ObjectValue colVal = ObjectValue.CreatePrimitive (null, new ObjectPath("Col"), "", new EvaluationResult (col.ToString ()), ObjectValueFlags.None);
+				ObjectValue colVal = ObjectValue.CreatePrimitive (null, new ObjectPath("Column"), "", new EvaluationResult (col.ToString ()), ObjectValueFlags.None);
 				ObjectValue[] children = new ObjectValue[] { fileVal, lineVal, colVal };
 				ObjectValue frame = ObjectValue.CreateObject (null, new ObjectPath (), "", new EvaluationResult (txt), ObjectValueFlags.None, children);
 				frames.Add (frame);

@@ -91,7 +91,7 @@ namespace MonoDevelop.Projects
 			AddinManager.AddExtensionNodeHandler (ProjectBindingsExtensionPath, OnProjectsExtensionChanged);
 			AddinManager.ExtensionChanged += OnExtensionChanged;
 			
-			defaultFormat = formatManager.GetFileFormat ("MSBuild05");
+			defaultFormat = formatManager.GetFileFormat ("MSBuild10");
 		}
 		
 		public DataContext DataContext {
@@ -499,7 +499,7 @@ namespace MonoDevelop.Projects
 					return project;
 				}
 			}
-			return null;
+			throw new InvalidOperationException ("Project type '" + type + "' not found");
 		}
 		
 		public Solution GetWrapperSolution (IProgressMonitor monitor, string filename)
@@ -731,6 +731,17 @@ namespace MonoDevelop.Projects
 				throw new InvalidOperationException ("Unknown item type: " + item);
 		}
 		
+		public override IEnumerable<ExecutionTarget> GetExecutionTargets (IBuildTarget item, ConfigurationSelector configuration)
+		{
+			if (item is WorkspaceItem) {
+				return ((WorkspaceItem)item).OnGetExecutionTargets (configuration);
+			}
+			else if (item is SolutionItem)
+				return ((SolutionItem)item).OnGetExecutionTargets (configuration);
+			else
+				throw new InvalidOperationException ("Unknown item type: " + item);
+		}
+
 		public override bool GetNeedsBuilding (IBuildTarget item, ConfigurationSelector configuration)
 		{
 			if (item is SolutionItem) {
@@ -777,16 +788,6 @@ namespace MonoDevelop.Projects
 		{
 			return callback (monitor, item, buildData);
 		}
-		
-		public override void PopulateSupportFileList (Project project, FileCopySet list, ConfigurationSelector configuration)
-		{
-			project.PopulateSupportFileList (list, configuration);
-		}
-		
-		public override void PopulateOutputFileList (Project project, List<FilePath> list, ConfigurationSelector configuration)
-		{
-			project.PopulateOutputFileList (list, configuration);
-		}
 	}	
 	
 	internal static class Counters
@@ -803,16 +804,6 @@ namespace MonoDevelop.Projects
 		public static TimerCounter BuildProjectTimer = InstrumentationService.CreateTimerCounter ("Project built", "Project Model");
 		public static TimerCounter BuildWorkspaceItemTimer = InstrumentationService.CreateTimerCounter ("Workspace item built", "Project Model");
 		public static TimerCounter NeedsBuildingTimer = InstrumentationService.CreateTimerCounter ("Needs building checked", "Project Model");
-		
-		public static Counter TypeIndexEntries = InstrumentationService.CreateCounter ("Type index entries", "Parser Service");
-		public static Counter LiveTypeObjects = InstrumentationService.CreateCounter ("Live type objects", "Parser Service");
-		public static Counter LiveDatabases = InstrumentationService.CreateCounter ("Parser databases", "Parser Service");
-		public static Counter LiveAssemblyDatabases = InstrumentationService.CreateCounter ("Assembly databases", "Parser Service");
-		public static Counter LiveProjectDatabases = InstrumentationService.CreateCounter ("Project databases", "Parser Service");
-		public static TimerCounter DatabasesRead = InstrumentationService.CreateTimerCounter ("Parser database read", "Parser Service");
-		public static TimerCounter DatabasesWritten = InstrumentationService.CreateTimerCounter ("Parser database written", "Parser Service");
-		public static TimerCounter FileParse = InstrumentationService.CreateTimerCounter ("File parsed", "Parser Service");
-		public static TimerCounter AssemblyParseTime = InstrumentationService.CreateTimerCounter ("Assembly parsed", "Parser Service");
 		
 		public static TimerCounter HelpServiceInitialization = InstrumentationService.CreateTimerCounter ("Help Service initialization", "IDE");
 		public static TimerCounter ParserServiceInitialization = InstrumentationService.CreateTimerCounter ("Parser Service initialization", "IDE");
