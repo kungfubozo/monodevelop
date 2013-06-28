@@ -88,7 +88,6 @@ namespace Mono.Debugging.Evaluation
 			if (!CanEvaluate (options))
 				return DC.ObjectValue.CreateImplicitNotSupported (this, new ObjectPath (Name), ctx.Adapter.GetTypeName (GetContext (options), Type), Flags);
 			if (withTimeout) {
-				options = options.Clone ();
 				return ctx.Adapter.CreateObjectValueAsync (Name, Flags, delegate {
 					return CreateObjectValue (options);
 				});
@@ -128,7 +127,18 @@ namespace Mono.Debugging.Evaluation
 				name = "?";
 			
 			EvaluationContext newCtx = GetContext (options);
-			object val = Value;
+			EvaluationContext oldCtx = Context;
+			object val = null;
+			
+			try {
+				// Note: The Value property implementation may make use of the EvaluationOptions,
+				// so we need to override our context temporarily to do the evaluation.
+				ctx = newCtx;
+				val = Value;
+			} finally {
+				ctx = oldCtx;
+			}
+			
 			if (val != null)
 				return newCtx.Adapter.CreateObjectValue (newCtx, this, new ObjectPath (name), val, Flags);
 			else
@@ -180,7 +190,7 @@ namespace Mono.Debugging.Evaluation
 			return GetChildren (path, index, count, options);
 		}
 		
-		public virtual string CallToString ( )
+		public virtual string CallToString ()
 		{
 			return ctx.Adapter.CallToString (ctx, Value);
 		}
@@ -190,7 +200,6 @@ namespace Mono.Debugging.Evaluation
 			try {
 				return ctx.Adapter.GetObjectValueChildren (GetChildrenContext (options), this, Value, index, count);
 			} catch (Exception ex) {
-				Console.WriteLine (ex);
 				return new ObjectValue [] { Mono.Debugging.Client.ObjectValue.CreateFatalError ("", ex.Message, ObjectValueFlags.ReadOnly) };
 			}
 		}
@@ -200,7 +209,7 @@ namespace Mono.Debugging.Evaluation
 			try {
 				object val = Value;
 				if (ctx.Adapter.IsClassInstance (Context, val))
-					return ctx.Adapter.GetMembersSorted (GetChildrenContext (options), this, ctx.Adapter.GetValueType (Context, val), val);
+					return ctx.Adapter.GetMembersSorted (GetChildrenContext (options), this, Type, val);
 			} catch {
 				// Ignore
 			}
@@ -209,7 +218,7 @@ namespace Mono.Debugging.Evaluation
 		
 		public IObjectSource ParentSource { get; internal set; }
 
-		EvaluationContext GetChildrenContext (EvaluationOptions options)
+		protected EvaluationContext GetChildrenContext (EvaluationOptions options)
 		{
 			EvaluationContext newCtx = ctx.Clone ();
 			if (options != null)
@@ -237,7 +246,7 @@ namespace Mono.Debugging.Evaluation
 			if (obj == null)
 				return null;
 
-			if (ctx.Adapter.IsArray (Context, obj)) {
+			if (name[0] == '[' && ctx.Adapter.IsArray (Context, obj)) {
 				// Parse the array indices
 				string[] sinds = name.Substring (1, name.Length - 2).Split (',');
 				int[] indices = new int [sinds.Length];
@@ -247,11 +256,9 @@ namespace Mono.Debugging.Evaluation
 				return new ArrayValueReference (ctx, obj, indices);
 			}
 			
-			if (ctx.Adapter.IsClassInstance (Context, obj)) {
-				ValueReference val = ctx.Adapter.GetMember (GetChildrenContext (options), this, obj, name);
-				return val;
-			}
-					
+			if (ctx.Adapter.IsClassInstance (Context, obj))
+				return ctx.Adapter.GetMember (GetChildrenContext (options), this, obj, name);
+
 			return null;
 		}
 	}

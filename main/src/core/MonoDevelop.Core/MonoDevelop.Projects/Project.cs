@@ -37,7 +37,6 @@ using MonoDevelop;
 using MonoDevelop.Core;
 using MonoDevelop.Core.Serialization;
 using MonoDevelop.Projects;
-using MonoDevelop.Projects.Dom.Output;
 
 
 namespace MonoDevelop.Projects
@@ -118,6 +117,24 @@ namespace MonoDevelop.Projects
 			}
 		}
 
+		[ProjectPathItemProperty ("BaseIntermediateOutputPath")]
+		FilePath baseIntermediateOutputPath;
+
+		public virtual FilePath BaseIntermediateOutputPath {
+			get {
+				if (!baseIntermediateOutputPath.IsNullOrEmpty)
+					return baseIntermediateOutputPath;
+				return BaseDirectory.Combine ("obj");
+			}
+			set {
+				if (value.IsNullOrEmpty)
+					value = FilePath.Null;
+				if (baseIntermediateOutputPath == value)
+					return;
+				NotifyModified ("BaseIntermediateOutputPath");
+			}
+		}
+
 		/// <summary>
 		/// Gets the type of the project.
 		/// </summary>
@@ -140,13 +157,6 @@ namespace MonoDevelop.Projects
 		}
 		IconId stockIcon = "md-project";
 		
-		/// <summary>
-		/// Ambience to use to show information about the project
-		/// </summary>
-		public virtual Ambience Ambience {
-			get { return new NetAmbience (); }
-		}
-
 		/// <summary>
 		/// List of languages that this project supports
 		/// </summary>
@@ -393,6 +403,14 @@ namespace MonoDevelop.Projects
 			AddFile (newDir);
 			return newDir;
 		}
+		
+		//HACK: the build code is structured such that support file copying is in here instead of the item handler
+		//so in order to avoid doing them twice when using the msbuild engine, we special-case them
+		bool UsingMSBuildEngine ()
+		{
+			var msbuildHandler = ItemHandler as MonoDevelop.Projects.Formats.MSBuild.MSBuildProjectHandler;
+			return msbuildHandler != null && msbuildHandler.UseXbuild;
+		}
 
 		protected override BuildResult OnBuild (IProgressMonitor monitor, ConfigurationSelector configuration)
 		{
@@ -403,6 +421,15 @@ namespace MonoDevelop.Projects
 				cres.AddError (GettextCatalog.GetString ("Configuration '{0}' not found in project '{1}'", configuration.ToString (), Name));
 				return cres;
 			}
+			
+			StringParserService.Properties["Project"] = Name;
+			
+			if (UsingMSBuildEngine ()) {
+				var r = DoBuild (monitor, configuration);
+				isDirty = false;
+				return r;
+			}
+			
 			string outputDir = conf.OutputDirectory;
 			try {
 				DirectoryInfo directoryInfo = new DirectoryInfo (outputDir);
@@ -415,10 +442,9 @@ namespace MonoDevelop.Projects
 
 			//copy references and files marked to "CopyToOutputDirectory"
 			CopySupportFiles (monitor, configuration);
-
-			StringParserService.Properties["Project"] = Name;
-
-			monitor.BeginTask (GettextCatalog.GetString ("Performing main compilation..."), 0);
+		
+			monitor.Log.WriteLine ("Performing main compilation...");
+			
 			BuildResult res = DoBuild (monitor, configuration);
 
 			isDirty = false;
@@ -429,7 +455,6 @@ namespace MonoDevelop.Projects
 
 				monitor.Log.WriteLine (GettextCatalog.GetString ("Build complete -- ") + errorString + ", " + warningString);
 			}
-			monitor.EndTask ();
 
 			return res;
 		}
@@ -452,8 +477,8 @@ namespace MonoDevelop.Projects
 			ProjectConfiguration config = (ProjectConfiguration) GetConfiguration (configuration);
 
 			foreach (FileCopySet.Item item in GetSupportFileList (configuration)) {
-				string dest = Path.GetFullPath (Path.Combine (config.OutputDirectory, item.Target));
-				string src = Path.GetFullPath (item.Src);
+				FilePath dest = Path.GetFullPath (Path.Combine (config.OutputDirectory, item.Target));
+				FilePath src = Path.GetFullPath (item.Src);
 
 				try {
 					if (dest == src)
@@ -462,10 +487,13 @@ namespace MonoDevelop.Projects
 					if (item.CopyOnlyIfNewer && File.Exists (dest) && (File.GetLastWriteTimeUtc (dest) >= File.GetLastWriteTimeUtc (src)))
 						continue;
 
+					// Use Directory.Create so we don't trigger the VersionControl addin and try to
+					// add the directory to version control.
 					if (!Directory.Exists (Path.GetDirectoryName (dest)))
-						FileService.CreateDirectory (Path.GetDirectoryName (dest));
+						Directory.CreateDirectory (Path.GetDirectoryName (dest));
 
 					if (File.Exists (src)) {
+						dest.Delete ();
 						FileService.CopyFile (src, dest);
 						
 						// Copied files can't be read-only, so they can be removed when rebuilding the project
@@ -500,16 +528,14 @@ namespace MonoDevelop.Projects
 			ProjectConfiguration config = (ProjectConfiguration) GetConfiguration (configuration);
 
 			foreach (FileCopySet.Item item in GetSupportFileList (configuration)) {
-				string dest = Path.Combine (config.OutputDirectory, item.Target);
+				FilePath dest = Path.Combine (config.OutputDirectory, item.Target);
 
 				// Ignore files which were not copied
 				if (Path.GetFullPath (dest) == Path.GetFullPath (item.Src))
 					continue;
 
 				try {
-					if (File.Exists (dest)) {
-						FileService.DeleteFile (dest);
-					}
+					dest.Delete ();
 				} catch (IOException ex) {
 					monitor.ReportError (GettextCatalog.GetString ("Error deleting support file '{0}'.", dest), ex);
 				}
@@ -531,8 +557,8 @@ namespace MonoDevelop.Projects
 		/// </remarks>
 		public FileCopySet GetSupportFileList (ConfigurationSelector configuration)
 		{
-			FileCopySet list = new FileCopySet ();
-			Services.ProjectService.GetExtensionChain (this).PopulateSupportFileList (this, list, configuration);
+			var list = new FileCopySet ();
+			PopulateSupportFileList (list, configuration);
 			return list;
 		}
 
@@ -574,7 +600,7 @@ namespace MonoDevelop.Projects
 		public List<FilePath> GetOutputFiles (ConfigurationSelector configuration)
 		{
 			List<FilePath> list = new List<FilePath> ();
-			Services.ProjectService.GetExtensionChain (this).PopulateOutputFileList (this, list, configuration);
+			PopulateOutputFileList (list, configuration);
 			return list;
 		}
 
@@ -623,28 +649,33 @@ namespace MonoDevelop.Projects
 		protected override void OnClean (IProgressMonitor monitor, ConfigurationSelector configuration)
 		{
 			SetDirty ();
+			
 			ProjectConfiguration config = GetConfiguration (configuration) as ProjectConfiguration;
 			if (config == null) {
 				monitor.ReportError (GettextCatalog.GetString ("Configuration '{0}' not found in project '{1}'", config.Id, Name), null);
 				return;
 			}
 			
-			monitor.BeginTask (GettextCatalog.GetString ("Performing clean..."), 0);
-			// Delete generated files
+			if (UsingMSBuildEngine ()) {
+				DoClean (monitor, config.Selector);
+				return;
+			}
 			
+			monitor.Log.WriteLine ("Removing output files...");
+			
+			// Delete generated files
 			foreach (FilePath file in GetOutputFiles (configuration)) {
 				if (File.Exists (file)) {
-					FileService.DeleteFile (file);
+					file.Delete ();
 					if (file.ParentDirectory.CanonicalPath != config.OutputDirectory.CanonicalPath && Directory.GetFiles (file.ParentDirectory).Length == 0)
-						FileService.DeleteDirectory (file.ParentDirectory);
+						file.ParentDirectory.Delete ();
 				}
 			}
-
+	
 			DeleteSupportFiles (monitor, configuration);
+			
 			DoClean (monitor, config.Selector);
-			monitor.Log.WriteLine ();
 			monitor.Log.WriteLine (GettextCatalog.GetString ("Clean complete"));
-			monitor.EndTask ();
 		}
 
 		protected virtual void DoClean (IProgressMonitor monitor, ConfigurationSelector configuration)
@@ -830,7 +861,9 @@ namespace MonoDevelop.Projects
 			OnFilePropertyChangedInProject (new ProjectFileEventArgs (this, file));
 		}
 
-		List<ProjectFile> unresolvedDeps;
+		// A collection of files that depend on other files for which the dependencies
+		// have not yet been resolved.
+		UnresolvedFileCollection unresolvedDeps;
 
 		void NotifyFileRemovedFromProject (IEnumerable<ProjectFile> objs)
 		{
@@ -843,8 +876,7 @@ namespace MonoDevelop.Projects
 				file.SetProject (null);
 				args.Add (new ProjectFileEventInfo (this, file));
 				if (DependencyResolutionEnabled) {
-					if (unresolvedDeps.Contains (file))
-						unresolvedDeps.Remove (file);
+					unresolvedDeps.Remove (file);
 					foreach (ProjectFile f in file.DependentChildren) {
 						f.DependsOnFile = null;
 						if (!string.IsNullOrEmpty (f.DependsOn))
@@ -878,6 +910,12 @@ namespace MonoDevelop.Projects
 			OnFileAddedToProject (args);
 		}
 
+		internal void UpdateDependency (ProjectFile file, FilePath oldPath)
+		{
+			unresolvedDeps.Remove (file, oldPath);
+			ResolveDependencies (file);
+		}
+
 		internal void ResolveDependencies (ProjectFile file)
 		{
 			if (!DependencyResolutionEnabled)
@@ -887,11 +925,13 @@ namespace MonoDevelop.Projects
 				unresolvedDeps.Add (file);
 
 			List<ProjectFile> resolved = null;
-			foreach (ProjectFile unres in unresolvedDeps) {
+			foreach (ProjectFile unres in unresolvedDeps.GetUnresolvedFilesForPath (file.FilePath)) {
 				if (string.IsNullOrEmpty (unres.DependsOn)) {
+					if (resolved == null)
+						resolved = new List<ProjectFile> ();
 					resolved.Add (unres);
 				}
-				if (unres.ResolveParent ()) {
+				if (unres.ResolveParent (file)) {
 					if (resolved == null)
 						resolved = new List<ProjectFile> ();
 					resolved.Add (unres);
@@ -909,7 +949,7 @@ namespace MonoDevelop.Projects
 				if (value) {
 					if (unresolvedDeps != null)
 						return;
-					unresolvedDeps = new List<ProjectFile> ();
+					unresolvedDeps = new UnresolvedFileCollection ();
 					foreach (ProjectFile file in files)
 						ResolveDependencies (file);
 				} else {
@@ -1039,6 +1079,75 @@ namespace MonoDevelop.Projects
 		private Project project;
 		public Project Project {
 			get { return project; }
+		}
+	}
+
+	class UnresolvedFileCollection
+	{
+		// Holds a dictionary of files that depend on other files, and for which the dependency
+		// has not yet been resolved. The key of the dictionary is the path to a parent
+		// file to be resolved, and the value can be a ProjectFile object or a List<ProjectFile>
+		// (This may happen if several files depend on the same parent file)
+		Dictionary<FilePath,object> unresolvedDeps = new Dictionary<FilePath, object> ();
+
+		public void Remove (ProjectFile file)
+		{
+			Remove (file, null);
+		}
+
+		public void Remove (ProjectFile file, FilePath dependencyPath)
+		{
+			if (dependencyPath.IsNullOrEmpty) {
+				if (string.IsNullOrEmpty (file.DependsOn))
+					return;
+				dependencyPath = file.DependencyPath;
+			}
+
+			object depFile;
+			if (unresolvedDeps.TryGetValue (dependencyPath, out depFile)) {
+				if ((depFile is ProjectFile) && ((ProjectFile)depFile == file))
+					unresolvedDeps.Remove (dependencyPath);
+				else if (depFile is List<ProjectFile>) {
+					var list = (List<ProjectFile>) depFile;
+					list.Remove (file);
+					if (list.Count == 1)
+						unresolvedDeps [dependencyPath] = list[0];
+				}
+			}
+		}
+
+		public void Add (ProjectFile file)
+		{
+			object depFile;
+			if (unresolvedDeps.TryGetValue (file.DependencyPath, out depFile)) {
+				if (depFile is ProjectFile) {
+					if ((ProjectFile)depFile != file) {
+						var list = new List<ProjectFile> ();
+						list.Add ((ProjectFile)depFile);
+						list.Add (file);
+						unresolvedDeps [file.DependencyPath] = list;
+					}
+				}
+				else if (depFile is List<ProjectFile>) {
+					var list = (List<ProjectFile>) depFile;
+					if (!list.Contains (file))
+						list.Add (file);
+				}
+			} else
+				unresolvedDeps [file.DependencyPath] = file;
+		}
+
+		public IEnumerable<ProjectFile> GetUnresolvedFilesForPath (FilePath filePath)
+		{
+			object depFile;
+			if (unresolvedDeps.TryGetValue (filePath, out depFile)) {
+				if (depFile is ProjectFile)
+					yield return (ProjectFile) depFile;
+				else {
+					foreach (var f in (List<ProjectFile>) depFile)
+						yield return f;
+				}
+			}
 		}
 	}
 }

@@ -31,20 +31,29 @@ namespace MonoDevelop.DocFood.Options
 	[System.ComponentModel.ToolboxItem(true)]
 	public partial class ExpansionsPanelWidget : Gtk.Bin
 	{
-		DocConfig config;
+//		DocConfig config;
 		
 		public ExpansionsPanelWidget (DocConfig config)
 		{
-			this.config = config;
+//			this.config = config;
 			this.Build ();
 		}
 	}
 	
 		
+	/// <summary>
+	/// Expansions panel.
+	/// </summary>
 	public class ExpansionsPanel : OptionsPanel
 	{
 		ExpansionsPanelWidget panel;
-		
+
+		/// <summary>
+		/// Creates the panel widget.
+		/// </summary>
+		/// <returns>
+		/// The panel widget.
+		/// </returns>
 		public override Gtk.Widget CreatePanelWidget ()
 		{
 			panel = new ExpansionsPanelWidget (DocConfig.Instance);

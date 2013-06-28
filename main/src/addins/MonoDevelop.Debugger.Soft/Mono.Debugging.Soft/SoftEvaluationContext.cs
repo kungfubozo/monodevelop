@@ -44,8 +44,7 @@ namespace Mono.Debugging.Soft
 		{
 			Frame = frame;
 			Thread = frame.Thread;
-		
-		
+
 			string method = frame.Method.Name;
 			if (frame.Method.DeclaringType != null)
 				method = frame.Method.DeclaringType.FullName + "." + method;
@@ -101,6 +100,16 @@ namespace Mono.Debugging.Soft
 			Thread = other.Thread;
 			session = other.session;
 		}
+
+		static bool IsValueTypeOrPrimitive (TypeMirror type)
+		{
+			return type != null && (type.IsValueType || type.IsPrimitive);
+		}
+
+		static bool IsValueTypeOrPrimitive (Type type)
+		{
+			return type != null && (type.IsValueType || type.IsPrimitive);
+		}
 		
 		public Value RuntimeInvoke (MethodMirror method, object target, Value[] values)
 		{
@@ -110,24 +119,44 @@ namespace Mono.Debugging.Soft
 				if (mparams.Length != values.Length)
 					throw new EvaluatorException ("Invalid number of arguments when calling: " + method.Name);
 				
-				for (int n=0; n<mparams.Length; n++) {
+				for (int n = 0; n < mparams.Length; n++) {
 					TypeMirror tm = mparams [n].ParameterType;
 					if (tm.IsValueType || tm.IsPrimitive)
 						continue;
+
 					object type = Adapter.GetValueType (this, values [n]);
 					TypeMirror argTypeMirror = type as TypeMirror;
 					Type argType = type as Type;
-					if ((argTypeMirror != null && (argTypeMirror.IsValueType || argTypeMirror.IsPrimitive)) || (argType != null && (argType.IsValueType || argType.IsPrimitive))) {
+
+					if (IsValueTypeOrPrimitive (argTypeMirror) || IsValueTypeOrPrimitive (argType)) {
 						// A value type being assigned to a parameter which is not a value type. The value has to be boxed.
 						try {
 							values [n] = Thread.Domain.CreateBoxedValue (values [n]);
 						} catch (NotSupportedException) {
 							// This runtime doesn't support creating boxed values
-							break;
+							throw new EvaluatorException ("This runtime does not support creating boxed values.");
 						}
 					}
 				}
-			}			
+			}
+
+			if (!method.IsStatic && method.DeclaringType.IsClass && !IsValueTypeOrPrimitive (method.DeclaringType)) {
+				object type = Adapter.GetValueType (this, target);
+				TypeMirror targetTypeMirror = type as TypeMirror;
+				Type targetType = type as Type;
+
+				if ((target is StructMirror && ((StructMirror) target).Type != method.DeclaringType) ||
+				    (IsValueTypeOrPrimitive (targetTypeMirror) || IsValueTypeOrPrimitive (targetType))) {
+					// A value type being assigned to a parameter which is not a value type. The value has to be boxed.
+					try {
+						target = Thread.Domain.CreateBoxedValue ((Value) target);
+					} catch (NotSupportedException) {
+						// This runtime doesn't support creating boxed values
+						throw new EvaluatorException ("This runtime does not support creating boxed values.");
+					}
+				}
+			}
+			
 			MethodCall mc = new MethodCall (this, method, target, values);
 			Adapter.AsyncExecute (mc, Options.EvaluationTimeout);
 			return mc.ReturnValue;

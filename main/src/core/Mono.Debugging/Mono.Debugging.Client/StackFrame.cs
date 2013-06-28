@@ -14,6 +14,7 @@ namespace Mono.Debugging.Client
 		string language;
 		int index;
 		bool isExternalCode;
+		bool isDebuggerHidden;
 		bool hasDebugInfo;
 		string fullModuleName;
 		string fullTypeName;
@@ -21,16 +22,22 @@ namespace Mono.Debugging.Client
 		[NonSerialized]
 		DebuggerSession session;
 
-		public StackFrame (long address, string addressSpace, SourceLocation location, string language, bool isExternalCode, bool hasDebugInfo, string fullModuleName, string fullTypeName)
+		public StackFrame (long address, string addressSpace, SourceLocation location, string language, bool isExternalCode, bool hasDebugInfo, bool isDebuggerHidden, string fullModuleName, string fullTypeName)
 		{
 			this.address = address;
 			this.addressSpace = addressSpace;
 			this.location = location;
 			this.language = language;
 			this.isExternalCode = isExternalCode;
+			this.isDebuggerHidden = isDebuggerHidden;
 			this.hasDebugInfo = hasDebugInfo;
 			this.fullModuleName = fullModuleName;
 			this.fullTypeName = fullTypeName;
+		}
+
+		public StackFrame (long address, string addressSpace, SourceLocation location, string language, bool isExternalCode, bool hasDebugInfo, string fullModuleName, string fullTypeName)
+			: this (address, addressSpace, location, language, isExternalCode, hasDebugInfo, false, fullModuleName, fullTypeName)
+		{
 		}
 		
 		public StackFrame (long address, string addressSpace, SourceLocation location, string language)
@@ -94,6 +101,10 @@ namespace Mono.Debugging.Client
 		
 		public bool IsExternalCode {
 			get { return isExternalCode; }
+		}
+
+		public bool IsDebuggerHidden {
+			get { return isDebuggerHidden; }
 		}
 		
 		public bool HasDebugInfo {
@@ -192,7 +203,7 @@ namespace Mono.Debugging.Client
 		
 		public ObjectValue[] GetExpressionValues (string[] expressions, bool evaluateMethods)
 		{
-			EvaluationOptions options = session.EvaluationOptions;
+			EvaluationOptions options = session.EvaluationOptions.Clone ();
 			options.AllowMethodEvaluation = evaluateMethods;
 			return GetExpressionValues (expressions, options);
 		}
@@ -218,7 +229,7 @@ namespace Mono.Debugging.Client
 		
 		public ObjectValue GetExpressionValue (string expression, bool evaluateMethods)
 		{
-			EvaluationOptions options = session.EvaluationOptions;
+			EvaluationOptions options = session.EvaluationOptions.Clone ();
 			options.AllowMethodEvaluation = evaluateMethods;
 			return GetExpressionValue (expression, options);
 		}

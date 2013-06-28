@@ -62,13 +62,11 @@ namespace MonoDevelop.Ide.Gui.Dialogs
 			this.dialog.ConfigurationData.ConfigurationsChanged += OnConfigurationsChanged;
 		}
 		
-		
-		
 		public ItemConfiguration CurrentConfiguration {
 			get {
 				if (allowMixedConfigurations)
 					throw new System.InvalidOperationException ("The options panel is working in multiple configuration selection mode (AllowMixedConfigurations=true). Use the property CurrentConfigurations to get the list of all selected configurations.");
-				return currentConfigs [0];
+				return currentConfigs.Count > 0 ? currentConfigs [0] : null;
 			}
 		}
 
@@ -89,6 +87,7 @@ namespace MonoDevelop.Ide.Gui.Dialogs
 			set {
 				allowMixedConfigurations = value;
 				if (widgetCreated) {
+					SaveConfigurations ();
 					FillConfigurations ();
 					UpdateSelection ();
 				}
@@ -108,7 +107,8 @@ namespace MonoDevelop.Ide.Gui.Dialogs
 			combosBox.PackStart (platformCombo, false, false, 0);
 			cbox.PackStart (new Gtk.HSeparator (), false, false, 0);
 			cbox.ShowAll ();
-			
+
+			cbox.Hidden += OnPageHidden;
 			cbox.Shown += OnPageShown;
 			
 			lastConfigSelection = -1;
@@ -211,18 +211,22 @@ namespace MonoDevelop.Ide.Gui.Dialogs
 				FillPlatforms ();
 				SelectPlatform (dialog.CurrentPlatform);
 			}
-			
+
+			SaveConfigurations ();
 			UpdateCurrentConfiguration ();
+		}
+
+		void SaveConfigurations ()
+		{
+			if (widgetCreated && currentConfigs.Count > 0)
+				ApplyChanges ();
 		}
 
 		void UpdateCurrentConfiguration ()
 		{
 			lastConfigSelection = configCombo.Active;
 			lastPlatformSelection = platformCombo.Active;
-			
-			if (widgetCreated)
-				ApplyChanges ();
-			
+
 			currentConfigs.Clear ();
 			
 			string configName = dialog.CurrentConfig = configCombo.ActiveText;
@@ -247,7 +251,9 @@ namespace MonoDevelop.Ide.Gui.Dialogs
 		{
 			if (!widgetCreated)
 				return;
+
 			lastConfigSelection = -1;
+			SaveConfigurations ();
 			FillConfigurations ();
 			UpdateSelection ();
 		}
@@ -259,12 +265,17 @@ namespace MonoDevelop.Ide.Gui.Dialogs
 			} else {
 				SelectConfiguration (dialog.CurrentConfig);
 			}
+
 			if (lastConfigSelection != configCombo.Active)
 				FillPlatforms ();
 			
 			SelectPlatform (dialog.CurrentPlatform);
-			if (lastConfigSelection != configCombo.Active || lastPlatformSelection != platformCombo.Active)
-				UpdateCurrentConfiguration ();
+			UpdateCurrentConfiguration ();
+		}
+
+		void OnPageHidden (object sender, EventArgs e)
+		{
+			SaveConfigurations ();
 		}
 		
 		void OnPageShown (object s, EventArgs a)
@@ -316,7 +327,8 @@ namespace MonoDevelop.Ide.Gui.Dialogs
 		
 		void IOptionsPanel.ApplyChanges ()
 		{
-			ApplyChanges ();
+			if (currentConfigs.Count > 0)
+				ApplyChanges ();
 		}
 		
 		public abstract void LoadConfigData ();

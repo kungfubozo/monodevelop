@@ -37,7 +37,7 @@ using MonoDevelop.Ide.Gui.Components;
 
 namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 {
-	public class UnknownEntryNodeBuilder: TypeNodeBuilder
+	class UnknownEntryNodeBuilder: TypeNodeBuilder
 	{
 		public override Type NodeDataType {
 			get { return typeof(UnknownSolutionItem); }
@@ -53,7 +53,7 @@ namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 			
 			if (entry.LoadError.Length > 0) {
 				icon = Context.GetIcon (Gtk.Stock.DialogError);
-				label = GettextCatalog.GetString ("{0} <span foreground='red' size='small'>(Load failed)</span>", entry.Name);
+				label = GettextCatalog.GetString ("{0} <span foreground='red' size='small'>(Load failed)</span>", GLib.Markup.EscapeText (entry.Name));
 			} else {
 				icon = Context.GetIcon (MonoDevelop.Ide.Gui.Stock.Project);
 				Gdk.Pixbuf gicon = Context.GetComposedIcon (icon, "fade");
@@ -62,7 +62,7 @@ namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 					Context.CacheComposedIcon (icon, "fade", gicon);
 				}
 				icon = gicon;
-				label = entry.Name;
+				label = GLib.Markup.EscapeText (entry.Name);
 			}
 		}
 		

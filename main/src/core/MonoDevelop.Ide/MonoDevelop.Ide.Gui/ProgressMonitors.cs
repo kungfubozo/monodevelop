@@ -36,6 +36,7 @@ using MonoDevelop.Ide.Gui;
 using MonoDevelop.Core.Execution;
 using MonoDevelop.Core.ProgressMonitoring;
 using MonoDevelop.Ide.FindInFiles;
+using MonoDevelop.Components.Docking;
 
 namespace MonoDevelop.Ide.Gui
 {
@@ -60,12 +61,17 @@ namespace MonoDevelop.Ide.Gui
 			return GetBuildProgressMonitor (GettextCatalog.GetString ("Cleaning..."));
 		}
 		
+		public IProgressMonitor GetRebuildProgressMonitor ()
+		{
+			return GetBuildProgressMonitor (GettextCatalog.GetString ("Rebuilding..."));
+		}
+		
 		private IProgressMonitor GetBuildProgressMonitor (string statusText)
 		{
 			Pad pad = IdeApp.Workbench.GetPad<ErrorListPad> ();
 			ErrorListPad errorPad = (ErrorListPad) pad.Content;
 			AggregatedProgressMonitor mon = new AggregatedProgressMonitor (errorPad.GetBuildProgressMonitor ());
-			mon.AddSlaveMonitor (GetStatusProgressMonitor (statusText, Stock.BuildCombine, false, true, false, pad));
+			mon.AddSlaveMonitor (GetStatusProgressMonitor (statusText, Stock.StatusBuild, false, true, false, pad));
 			return mon;
 		}
 		
@@ -81,7 +87,7 @@ namespace MonoDevelop.Ide.Gui
 		
 		public IProgressMonitor GetLoadProgressMonitor (bool lockGui)
 		{
-			return GetStatusProgressMonitor (GettextCatalog.GetString ("Loading..."), Stock.OpenFileIcon, true, false, lockGui);
+			return GetStatusProgressMonitor (GettextCatalog.GetString ("Loading..."), Stock.StatusSolutionOperation, true, false, lockGui);
 		}
 		
 		public IProgressMonitor GetProjectLoadProgressMonitor (bool lockGui)
@@ -91,12 +97,12 @@ namespace MonoDevelop.Ide.Gui
 		
 		public IProgressMonitor GetSaveProgressMonitor (bool lockGui)
 		{
-			return GetStatusProgressMonitor (GettextCatalog.GetString ("Saving..."), Stock.SaveIcon, true, false, lockGui);
+			return GetStatusProgressMonitor (GettextCatalog.GetString ("Saving..."), Stock.StatusSolutionOperation, true, false, lockGui);
 		}
 		
 		public IConsole CreateConsole (bool closeOnDispose)
 		{
-			return (IConsole) GetOutputProgressMonitor ("MonoDevelop.Ide.ApplicationOutput", GettextCatalog.GetString ("Application Output"), Stock.RunProgramIcon, true, true);
+			return (IConsole) GetOutputProgressMonitor ("MonoDevelop.Ide.ApplicationOutput", GettextCatalog.GetString ("Application Output"), Stock.MessageLog, true, true);
 		}
 		
 		/******************************/
@@ -199,9 +205,9 @@ namespace MonoDevelop.Ide.Gui
 			}
 
 			if (show)
-				pad = IdeApp.Workbench.ShowPad (monitorPad, newPadId, title, basePadId + "/Center Bottom", icon);
+				pad = IdeApp.Workbench.ShowPad (monitorPad, newPadId, title, basePadId + "/Center Bottom", DockItemStatus.AutoHide, icon);
 			else
-				pad = IdeApp.Workbench.AddPad (monitorPad, newPadId, title, basePadId + "/Center Bottom", icon);
+				pad = IdeApp.Workbench.AddPad (monitorPad, newPadId, title, basePadId + "/Center Bottom", DockItemStatus.AutoHide, icon);
 			
 			monitorPad.StatusSourcePad = pad;
 			pad.Sticky = true;
@@ -214,8 +220,6 @@ namespace MonoDevelop.Ide.Gui
 					pad.Destroy ();
 				};
 			}
-			
-			pad.AutoHide = true;
 			
 			if (bringToFront) {
 				pad.Visible = true;

@@ -47,17 +47,20 @@ using MonoDevelop.Ide.Gui;
 using MonoDevelop.Ide.Commands;
 using MonoDevelop.Ide.Desktop;
 using MonoDevelop.MacInterop;
+using MonoDevelop.Components.MainToolbar;
 
 namespace MonoDevelop.MacIntegration
 {
-	class MacPlatformService : PlatformService
+	public class MacPlatformService : PlatformService
 	{
+		const string monoDownloadUrl = "http://www.go-mono.com/mono-downloads/download.html";
+
 		static TimerCounter timer = InstrumentationService.CreateTimerCounter ("Mac Platform Initialization", "Platform Service");
 		static TimerCounter mimeTimer = InstrumentationService.CreateTimerCounter ("Mac Mime Database", "Platform Service");
 		
 		static bool setupFail, initedApp, initedGlobal;
 		
-		static Dictionary<string, string> mimemap;
+		static Lazy<Dictionary<string, string>> mimemap;
 		
 		//this is a BCD value of the form "xxyz", where x = major, y = minor, z = bugfix
 		//eg. 0x1071 = 10.7.1
@@ -69,39 +72,45 @@ namespace MonoDevelop.MacIntegration
 			
 			systemVersion = Carbon.Gestalt ("sysv");
 			
-			LoadMimeMapAsync ();
-			
-			CheckGtkVersion (2, 24, 0);
-			
+			mimemap = new Lazy<Dictionary<string, string>> (LoadMimeMapAsync);
+
 			//make sure the menu app name is correct even when running Mono 2.6 preview, or not running from the .app
 			Carbon.SetProcessName (BrandingService.ApplicationName);
 			
-			MonoDevelop.MacInterop.Cocoa.InitMonoMac ();
-			
+			Cocoa.InitMonoMac ();
+
+			// CheckGtkVersion (2, 24, 14);
+
 			timer.Trace ("Installing App Event Handlers");
 			GlobalSetup ();
 			
 			timer.EndTiming ();
 		}
-		
-		//Mac GTK+ behaviour isn't completely stable even between micro releases
+
 		static void CheckGtkVersion (uint major, uint minor, uint micro)
 		{
-			string url = "http://www.go-mono.com/mono-downloads/download.html";
-			
-			// to require exact version, also check : || Gtk.Global.CheckVersion (major, minor, micro + 1) == null
+			// to require exact version, also check
+			//: || Gtk.Global.CheckVersion (major, minor, micro + 1) == null
+			//
 			if (Gtk.Global.CheckVersion (major, minor, micro) != null) {
 				
-				MonoDevelop.Core.LoggingService.LogFatalError ("GTK+ version is incompatible with required version {0}.{1}.{2}.", major, minor, micro);
+				LoggingService.LogFatalError (
+					"GTK+ version is incompatible with required version {0}.{1}.{2}.",
+					major, minor, micro
+				);
 				
-				AlertButton downloadButton = new AlertButton ("Download...", null);
+				var downloadButton = new AlertButton ("Download Mono Framework", null);
 				if (downloadButton == MessageService.GenericAlert (
 					Stock.Error,
-					"Incompatible Mono Framework Version",
-					"MonoDevelop requires a newer version of the Mono Framework.",
-					new AlertButton ("Cancel", null), downloadButton))
+					GettextCatalog.GetString ("Some dependencies need to be updated"),
+					GettextCatalog.GetString (
+						"{0} requires a newer version of GTK+, which is included with the Mono Framework. Please " +
+						"download and install the latest stable Mono Framework package and restart {0}.",
+						BrandingService.ApplicationName
+					),
+					new AlertButton ("Quit", null), downloadButton))
 				{
-					OpenUrl (url);
+					OpenUrl (monoDownloadUrl);
 				}
 				
 				Environment.Exit (1);
@@ -110,9 +119,10 @@ namespace MonoDevelop.MacIntegration
 
 		protected override string OnGetMimeTypeForUri (string uri)
 		{
-			var ext = System.IO.Path.GetExtension (uri);
-			if (mimemap != null && mimemap.ContainsKey (ext))
-				return mimemap [ext];
+			var ext = Path.GetExtension (uri);
+			string mime = null;
+			if (ext != null && mimemap.Value.TryGetValue (ext, out mime))
+				return mime;
 			return null;
 		}
 
@@ -132,53 +142,43 @@ namespace MonoDevelop.MacIntegration
 		}
 
 		public override string DefaultMonospaceFont {
-			get { return "Monaco 12"; }
+			get { return "Menlo 12"; }
 		}
 		
 		public override string Name {
 			get { return "OSX"; }
 		}
 		
-		private static void LoadMimeMapAsync ()
+		static Dictionary<string, string> LoadMimeMapAsync ()
 		{
+			var map = new Dictionary<string, string> ();
 			// All recent Macs should have this file; if not we'll just die silently
 			if (!File.Exists ("/etc/apache2/mime.types")) {
-				MonoDevelop.Core.LoggingService.LogError ("Apache mime database is missing");
-				return;
+				LoggingService.LogError ("Apache mime database is missing");
+				return map;
 			}
 			
-			System.Threading.ThreadPool.QueueUserWorkItem (delegate {
-				mimeTimer.BeginTiming ();
-				try {
-					var map = new Dictionary<string, string> ();
-					using (var file = File.OpenRead ("/etc/apache2/mime.types")) {
-						using (var reader = new StreamReader (file)) {
-							var mime = new Regex ("([a-zA-Z]+/[a-zA-z0-9+-_.]+)\t+([a-zA-Z]+)", RegexOptions.Compiled);
-							string line;
-							while ((line = reader.ReadLine ()) != null) {
-								Match m = mime.Match (line);
-								if (m.Success)
-									map ["." + m.Groups [2].Captures [0].Value] = m.Groups [1].Captures [0].Value; 
-							}
+			mimeTimer.BeginTiming ();
+			try {
+				using (var file = File.OpenRead ("/etc/apache2/mime.types")) {
+					using (var reader = new StreamReader (file)) {
+						var mime = new Regex ("([a-zA-Z]+/[a-zA-z0-9+-_.]+)\t+([a-zA-Z]+)", RegexOptions.Compiled);
+						string line;
+						while ((line = reader.ReadLine ()) != null) {
+							Match m = mime.Match (line);
+							if (m.Success)
+								map ["." + m.Groups [2].Captures [0].Value] = m.Groups [1].Captures [0].Value; 
 						}
 					}
-					mimemap = map;
-				} catch (Exception ex){
-					MonoDevelop.Core.LoggingService.LogError ("Could not load Apache mime database", ex);
 				}
-				mimeTimer.EndTiming ();
-			});
+			} catch (Exception ex){
+				LoggingService.LogError ("Could not load Apache mime database", ex);
+			}
+			mimeTimer.EndTiming ();
+			return map;
 		}
 		
-		HashSet<object> ignoreCommands = new HashSet<object> () {
-			CommandManager.ToCommandId (HelpCommands.About),
-			CommandManager.ToCommandId (EditCommands.DefaultPolicies),
-			CommandManager.ToCommandId (EditCommands.MonodevelopPreferences),
-			CommandManager.ToCommandId (ToolCommands.AddinManager),
-			CommandManager.ToCommandId (FileCommands.Exit),
-		};
-		
-		public override bool SetGlobalMenu (CommandManager commandManager, string commandMenuAddinPath)
+		public override bool SetGlobalMenu (CommandManager commandManager, string commandMenuAddinPath, string appMenuAddinPath)
 		{
 			if (setupFail)
 				return false;
@@ -186,12 +186,15 @@ namespace MonoDevelop.MacIntegration
 			try {
 				InitApp (commandManager);
 				CommandEntrySet ces = commandManager.CreateCommandEntrySet (commandMenuAddinPath);
-				MacMainMenu.Recreate (commandManager, ces, ignoreCommands);
+				MacMainMenu.Recreate (commandManager, ces);
+
+				CommandEntrySet aes = commandManager.CreateCommandEntrySet (appMenuAddinPath);
+				MacMainMenu.SetAppMenuItems (commandManager, aes);
 			} catch (Exception ex) {
 				try {
 					MacMainMenu.Destroy (true);
 				} catch {}
-				MonoDevelop.Core.LoggingService.LogError ("Could not install global menu", ex);
+				LoggingService.LogError ("Could not install global menu", ex);
 				setupFail = true;
 				return false;
 			}
@@ -203,13 +206,14 @@ namespace MonoDevelop.MacIntegration
 		{
 			if (initedApp)
 				return;
+
+			MacMainMenu.SetAppQuitCommand (CommandManager.ToCommandId (FileCommands.Exit));
 			
 			MacMainMenu.AddCommandIDMappings (new Dictionary<object, CarbonCommandID> ()
 			{
 				{ CommandManager.ToCommandId (EditCommands.Copy), CarbonCommandID.Copy },
 				{ CommandManager.ToCommandId (EditCommands.Cut), CarbonCommandID.Cut },
-				//FIXME: for some reason mapping this causes two menu items to be created
-				// { EditCommands.MonodevelopPreferences, CarbonCommandID.Preferences }, 
+				{ CommandManager.ToCommandId (EditCommands.MonodevelopPreferences), CarbonCommandID.Preferences }, 
 				{ CommandManager.ToCommandId (EditCommands.Redo), CarbonCommandID.Redo },
 				{ CommandManager.ToCommandId (EditCommands.Undo), CarbonCommandID.Undo },
 				{ CommandManager.ToCommandId (EditCommands.SelectAll), CarbonCommandID.SelectAll },
@@ -222,28 +226,22 @@ namespace MonoDevelop.MacIntegration
 				{ CommandManager.ToCommandId (FileCommands.ReloadFile), CarbonCommandID.Revert },
 				{ CommandManager.ToCommandId (HelpCommands.About), CarbonCommandID.About },
 				{ CommandManager.ToCommandId (HelpCommands.Help), CarbonCommandID.AppHelp },
+				{ CommandManager.ToCommandId (MacIntegrationCommands.HideWindow), CarbonCommandID.Hide },
+				{ CommandManager.ToCommandId (MacIntegrationCommands.HideOthers), CarbonCommandID.HideOthers },
 			});
 			
 			//mac-ify these command names
 			commandManager.GetCommand (EditCommands.MonodevelopPreferences).Text = GettextCatalog.GetString ("Preferences...");
 			commandManager.GetCommand (EditCommands.DefaultPolicies).Text = GettextCatalog.GetString ("Custom Policies...");
-			commandManager.GetCommand (HelpCommands.About).Text = string.Format (GettextCatalog.GetString ("About {0}"), BrandingService.ApplicationName);
+			commandManager.GetCommand (HelpCommands.About).Text = GettextCatalog.GetString ("About {0}", BrandingService.ApplicationName);
+			commandManager.GetCommand (MacIntegrationCommands.HideWindow).Text = GettextCatalog.GetString ("Hide {0}", BrandingService.ApplicationName);
 			commandManager.GetCommand (ToolCommands.AddinManager).Text = GettextCatalog.GetString ("Add-in Manager...");
 			
 			initedApp = true;
-			MacMainMenu.SetAppQuitCommand (CommandManager.ToCommandId (FileCommands.Exit));
-			MacMainMenu.AddAppMenuItems (
-				commandManager,
-			    CommandManager.ToCommandId (HelpCommands.About),
-				CommandManager.ToCommandId (MonoDevelop.Ide.Updater.UpdateCommands.CheckForUpdates),
-				CommandManager.ToCommandId (Command.Separator),
-				CommandManager.ToCommandId (EditCommands.MonodevelopPreferences),
-				CommandManager.ToCommandId (EditCommands.DefaultPolicies),
-				CommandManager.ToCommandId (ToolCommands.AddinManager));
 			
 			IdeApp.Workbench.RootWindow.DeleteEvent += HandleDeleteEvent;
 		}
-		
+
 		static void GlobalSetup ()
 		{
 			if (initedGlobal || setupFail)
@@ -252,20 +250,33 @@ namespace MonoDevelop.MacIntegration
 			
 			//FIXME: should we remove these when finalizing?
 			try {
-				ApplicationEvents.Quit += delegate (object sender, ApplicationQuitEventArgs e) {
-					//FIXME: can we avoid replying to the message until the app quits?
-					//There's NSTerminateLate but I'm not sure how to access it from carbon, maybe
-					//we need to swizzle methods into the app's NSApplicationDelegate.
-					//Also, it stops the main CFRunLoop, hopefully GTK dialogs use a child runloop.
-					//For now, just bounce.
-					var topDialog = MessageService.GetDefaultModalParent () as Gtk.Dialog;
-					if (topDialog != null && topDialog.Modal) {
-						NSApplication.SharedApplication.RequestUserAttention (
-							NSRequestUserAttentionType.CriticalRequest);
+				ApplicationEvents.Quit += delegate (object sender, ApplicationQuitEventArgs e)
+				{
+					// Easy case, we're pretty sure a modal dialog isn't running.
+					// All our custom Cocoa dialogs use subclasses, not vanilla NSWindow.
+					// GTK uses NSWindow but we can determine whether it's modal from GTK.
+					var keyWindow = NSApplication.SharedApplication.KeyWindow;
+					if (keyWindow != null && keyWindow.ClassHandle == MonoMac.ObjCRuntime.Class.GetHandle ("NSWindow")) {
+						var windows = Gtk.Window.ListToplevels ();
+						if (!windows.Any (w => w.Modal && w.Visible)) {
+							e.UserCancelled = !IdeApp.Exit ();
+							e.Handled = true;
+							return;
+						}
 					}
-					//FIXME: delay this until all existing modal dialogs were closed
-					if (!IdeApp.Exit ())
-						e.UserCancelled = true;
+
+					// When a modal dialog is running, things are much harder. We can't just shut down MD behind the
+					// dialog, and aborting the dialog may not be appropriate.
+					//
+					// There's NSTerminateLater but I'm not sure how to access it from carbon, maybe
+					// we need to swizzle methods into the app's NSApplicationDelegate.
+					// Also, it stops the main CFRunLoop and enters a special runloop mode, not sure how that would
+					// interact with GTK+.
+
+					// For now, just bounce
+					NSApplication.SharedApplication.RequestUserAttention (NSRequestUserAttentionType.CriticalRequest);
+					// and abort the quit.
+					e.UserCancelled = true;
 					e.Handled = true;
 				};
 				
@@ -296,14 +307,28 @@ namespace MonoDevelop.MacIntegration
 				
 				//if not running inside an app bundle, assume usual MD build layout and load the app icon
 				FilePath exePath = System.Reflection.Assembly.GetExecutingAssembly ().Location;
-				if (!exePath.ToString ().Contains ("MonoDevelop.app")) {
-					var mdSrcMain = exePath.ParentDirectory.ParentDirectory.ParentDirectory;
-					var icons = mdSrcMain.Combine ("theme-icons", "Mac", "monodevelop.icns");
-					if (File.Exists (icons))
-						NSApplication.SharedApplication.ApplicationIconImage = new NSImage (icons);
+				string iconFile = null;
+
+				iconFile = BrandingService.GetString ("ApplicationIcon");
+				if (iconFile != null) {
+					iconFile = BrandingService.GetFile (iconFile);
+				}
+				else if (!exePath.ToString ().Contains ("MonoDevelop.app")) {
+						var mdSrcMain = exePath.ParentDirectory.ParentDirectory.ParentDirectory;
+						iconFile = mdSrcMain.Combine ("theme-icons", "Mac", "monodevelop.icns");
+				} else {
+					//HACK: override the app image
+					//NSApplication doesn't seem to pick up the image correctly, probably due to the
+					//getting confused about the bundle root because of the launch script
+					var bundleContents = exePath.ParentDirectory.ParentDirectory.ParentDirectory
+						.ParentDirectory.ParentDirectory;
+					iconFile = bundleContents.Combine ("Resources", "monodevelop.icns");
+				}
+				if (File.Exists (iconFile)) {
+					NSApplication.SharedApplication.ApplicationIconImage = new NSImage (iconFile);
 				}
 			} catch (Exception ex) {
-				MonoDevelop.Core.LoggingService.LogError ("Could not install app event handlers", ex);
+				LoggingService.LogError ("Could not install app event handlers", ex);
 				setupFail = true;
 			}
 		}
@@ -312,7 +337,53 @@ namespace MonoDevelop.MacIntegration
 		static void HandleDeleteEvent (object o, Gtk.DeleteEventArgs args)
 		{
 			args.RetVal = true;
-			IdeApp.Workbench.RootWindow.Hide ();
+			MacHideOthersHandler.RunMenuCommand (CarbonCommandID.Hide);
+		}
+
+		public static Gdk.Pixbuf GetPixbufFromNSImageRep (NSImageRep rep, int width, int height)
+		{
+			var rect = new RectangleF (0, 0, width, height);
+			var bitmap = rep as NSBitmapImageRep;
+			
+			if (bitmap == null) {
+				using (var cgi = rep.AsCGImage (rect, null, null))
+					bitmap = new NSBitmapImageRep (cgi);
+			}
+			
+			try {
+				byte[] data;
+				using (var tiff = bitmap.TiffRepresentation) {
+					data = new byte[tiff.Length];
+					System.Runtime.InteropServices.Marshal.Copy (tiff.Bytes, data, 0, data.Length);
+				}
+				
+				int pw = bitmap.PixelsWide, ph = bitmap.PixelsHigh;
+				var pixbuf = new Gdk.Pixbuf (data, pw, ph);
+				
+				// if one dimension matches, and the other is same or smaller, use as-is
+				if ((pw == width && ph <= height) || (ph == height && pw <= width))
+					return pixbuf;
+				
+				// otherwise scale proportionally such that the largest dimension matches the desired size
+				if (pw == ph) {
+					pw = width;
+					ph = height;
+				} else if (pw > ph) {
+					ph = (int) (width * ((float) ph / pw));
+					pw = width;
+				} else {
+					pw = (int) (height * ((float) pw / ph));
+					ph = height;
+				}
+				
+				var scaled = pixbuf.ScaleSimple (pw, ph, Gdk.InterpType.Bilinear);
+				pixbuf.Dispose ();
+				
+				return scaled;
+			} finally {
+				if (bitmap != rep)
+					bitmap.Dispose ();
+			}
 		}
 		
 		protected override Gdk.Pixbuf OnGetPixbufForFile (string filename, Gtk.IconSize size)
@@ -339,51 +410,14 @@ namespace MonoDevelop.MacIntegration
 			if (!Gtk.Icon.SizeLookup (Gtk.IconSize.Menu, out w, out h)) {
 				w = h = 22;
 			}
+			
 			var rect = new System.Drawing.RectangleF (0, 0, w, h);
 			
-			var arep = icon.BestRepresentation (rect, null, null);
-			if (arep == null) {
-				return base.OnGetPixbufForFile (filename, size);
-			}
-			
-			var rep = arep as NSBitmapImageRep;
-			if (rep == null) {
-				using (var cgi = arep.AsCGImage (rect, null, null))
-					rep = new NSBitmapImageRep (cgi);
-				arep.Dispose ();
-			}
-			
-			try {
-				byte[] arr;
-				using (var tiff = rep.TiffRepresentation) {
-					arr = new byte[tiff.Length];
-					System.Runtime.InteropServices.Marshal.Copy (tiff.Bytes, arr, 0, arr.Length);
-				}
-				int pw = rep.PixelsWide, ph = rep.PixelsHigh;
-				var px = new Gdk.Pixbuf (arr, pw, ph);
+			using (var rep = icon.BestRepresentation (rect, null, null)) {
+				if (rep == null)
+					return base.OnGetPixbufForFile (filename, size);
 				
-				//if one dimension matches, and the other is same or smaller, use as-is
-				if ((pw == w && ph <= h) || (ph == h && pw <= w))
-					return px;
-				
-				//else scale proportionally such that the largest dimension matches the desired size
-				if (pw == ph) {
-					pw = w;
-					ph = h;
-				} else if (pw > ph) {
-					ph = (int) (w * ((float) ph / pw));
-					pw = w;
-				} else {
-					pw = (int) (h * ((float) pw / ph));
-					ph = h;
-				}
-				
-				var scaled = px.ScaleSimple (pw, ph, Gdk.InterpType.Bilinear);
-				px.Dispose ();
-				return scaled;
-			} finally {
-				if (rep != null)
-					rep.Dispose ();
+				return GetPixbufFromNSImageRep (rep, w, h);
 			}
 		}
 		
@@ -422,6 +456,7 @@ end tell", directory.ToString ().Replace ("\"", "\\\"")));
 			//checkUniquePath.Add (thisPath);
 			
 			checkUniqueName.Add ("MonoDevelop");
+			checkUniqueName.Add (BrandingService.ApplicationName);
 			
 			string def = CoreFoundation.GetApplicationUrl (filename, CoreFoundation.LSRolesMask.All);
 			
@@ -460,17 +495,16 @@ end tell", directory.ToString ().Replace ("\"", "\\\"")));
 		
 		public override Gdk.Rectangle GetUsableMonitorGeometry (Gdk.Screen screen, int monitor_id)
 		{
-			Gdk.Rectangle geometry = screen.GetMonitorGeometry (0);
+			Gdk.Rectangle ygeometry = screen.GetMonitorGeometry (monitor_id);
+			Gdk.Rectangle xgeometry = screen.GetMonitorGeometry (0);
 			NSScreen monitor = NSScreen.Screens[monitor_id];
 			RectangleF visible = monitor.VisibleFrame;
 			RectangleF frame = monitor.Frame;
 			
 			// Note: Frame and VisibleFrame rectangles are relative to monitor 0, but we need absolute
 			// coordinates.
-			visible.X += geometry.X;
-			visible.Y += geometry.Y;
-			frame.X += geometry.X;
-			frame.Y += geometry.Y;
+			visible.X += xgeometry.X;
+			frame.X += xgeometry.X;
 			
 			// VisibleFrame.Y is the height of the Dock if it is at the bottom of the screen, so in order
 			// to get the menu height, we just figure out the difference between the visibleFrame height
@@ -481,14 +515,14 @@ end tell", directory.ToString ().Replace ("\"", "\\\"")));
 			float x, y, width, height;
 			
 			if (visible.Height <= frame.Height) {
-				float dockHeight = visible.Y;
+				float dockHeight = visible.Y - frame.Y;
 				float menubarHeight = (frame.Height - visible.Height) - dockHeight;
 				
 				height = frame.Height - menubarHeight - dockHeight;
-				y = menubarHeight;
+				y = ygeometry.Y + menubarHeight;
 			} else {
 				height = frame.Height;
-				y = frame.Y;
+				y = ygeometry.Y;
 			}
 			
 			// Takes care of the possibility of the Dock being positioned on the left or right edge of the screen.
@@ -502,6 +536,87 @@ end tell", directory.ToString ().Replace ("\"", "\\\"")));
 		{
 			window.Present ();
 			NSApplication.SharedApplication.ActivateIgnoringOtherApps (true);
+		}
+
+		static Cairo.Color ConvertColor (NSColor color)
+		{
+			float r, g, b, a;
+			if (color.ColorSpaceName == NSColorSpace.DeviceWhite) {
+				a = 1.0f;
+				r = g = b = color.WhiteComponent;
+			} else {
+				color.GetRgba (out r, out g, out b, out a);
+			}
+			return new Cairo.Color (r, g, b, a);
+		}
+
+		static int GetTitleBarHeight ()
+		{
+			var frame = new RectangleF (0, 0, 100, 100);
+			var rect = NSWindow.ContentRectFor (frame, NSWindowStyle.Titled);
+			return (int)(frame.Height - rect.Height);
+		}
+
+
+		static NSImage LoadImage (string resource)
+		{
+			byte[] buffer;
+			using (var stream = typeof (MacPlatformService).Assembly.GetManifestResourceStream (resource)) {
+				buffer = new byte [stream.Length];
+				stream.Read (buffer, 0, (int)stream.Length);
+			}
+
+			// Workaround: loading from file name.
+			var tmp = Path.GetTempFileName ();
+			File.WriteAllBytes (tmp, buffer);
+			var img = new NSImage (tmp);
+			File.Delete (tmp);
+			return img;
+		}
+
+		internal override void SetMainWindowDecorations (Gtk.Window window)
+		{
+			NSWindow w = GtkQuartz.GetWindow (window);
+			w.IsOpaque = false;
+			
+			var resource = "maintoolbarbg.png";
+			NSImage img = LoadImage (resource);
+			w.BackgroundColor = NSColor.FromPatternImage (img);
+			w.StyleMask |= NSWindowStyle.TexturedBackground;
+		}
+
+		internal override MainToolbar CreateMainToolbar (Gtk.Window window)
+		{
+			NSApplication.Init ();
+			
+			NSWindow w = GtkQuartz.GetWindow (window);
+			w.IsOpaque = false;
+			
+			var resource = "maintoolbarbg.png";
+			NSImage img = LoadImage (resource);
+			var c = NSColor.FromPatternImage (img);
+			w.BackgroundColor = c;
+			w.StyleMask |= NSWindowStyle.TexturedBackground;
+
+			var result = new MainToolbar () {
+				Background = MonoDevelop.Components.CairoExtensions.LoadImage (typeof (MacPlatformService).Assembly, resource),
+				TitleBarHeight = GetTitleBarHeight ()
+			};
+
+			result.RemoveDecorationsWorkaround = delegate(Gtk.Window wnd) {
+				if (wnd == null)
+					throw new ArgumentNullException ("wnd");
+				var popupWindow = GtkQuartz.GetWindow (wnd);
+				popupWindow.HasShadow = false;
+			};
+			//		File.Delete (tempName);
+			
+			return result;
+		}
+
+		protected override RecentFiles CreateRecentFilesProvider ()
+		{
+			return new FdoRecentFiles (UserProfile.Current.LocalConfigDir.Combine ("RecentlyUsed.xml"));
 		}
 	}
 }

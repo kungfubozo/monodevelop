@@ -43,6 +43,8 @@ namespace MonoDevelop.Core
 		static XDocument localizedBrandingDocument;
 		
 		public static readonly string ApplicationName;
+		public static readonly string SuiteName;
+		public static readonly string ProfileDirectoryName;
 		
 		static BrandingService ()
 		{
@@ -73,12 +75,20 @@ namespace MonoDevelop.Core
 					}
 				}
 				ApplicationName = GetString ("ApplicationName");
+				SuiteName = GetString ("SuiteName");
+				ProfileDirectoryName = GetString ("ProfileDirectoryName");
 			} catch (Exception ex) {
 				LoggingService.LogError ("Could not read branding document", ex);
 			}
 			
 			if (string.IsNullOrEmpty (ApplicationName))
 				ApplicationName = "MonoDevelop";
+
+			if (string.IsNullOrEmpty (SuiteName))
+				SuiteName = ApplicationName;
+
+			if (string.IsNullOrEmpty (ProfileDirectoryName))
+				ProfileDirectoryName = ApplicationName;
 		}
 		
 		public static string GetString (params string[] keyPath)
@@ -129,22 +139,40 @@ namespace MonoDevelop.Core
 		}
 		
 		[MethodImpl (MethodImplOptions.NoInlining)]
-		public static Stream GetStream (string name)
+		public static FilePath GetFile (string name)
 		{
-			//read branding directory, then calling assembly's resources
 			if (localizedBrandingDir != null) {
 				var file = localizedBrandingDir.Combine (name);
 				if (File.Exists (file))
-					return File.OpenRead (file);
+					return file;
 			}
 			
 			if (brandingDir != null) {
 				var file = brandingDir.Combine (name);
 				if (File.Exists (file))
-					return File.OpenRead (file);
+					return file;
 			}
 			
-			return Assembly.GetCallingAssembly ().GetManifestResourceStream (name);
+			return null;
+		}
+		
+		[MethodImpl (MethodImplOptions.NoInlining)]
+		public static Stream GetStream (string name, bool lookInCallingAssembly=false)
+		{
+			//read branding directory, then calling assembly's resources
+			var file = GetFile (name);
+			if (file != null)
+				return File.OpenRead (file);
+			
+			if (lookInCallingAssembly)
+				return Assembly.GetCallingAssembly ().GetManifestResourceStream (name);
+			
+			return null;
+		}
+
+		public static string BrandApplicationName (string s)
+		{
+			return s.Replace ("MonoDevelop", ApplicationName);
 		}
 	}
 }

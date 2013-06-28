@@ -35,14 +35,14 @@ using System.Linq;
 
 namespace MonoDevelop.Debugger
 {
-	public abstract class DebugTextMarker : StyleTextMarker, IIconBarMarker
+	public abstract class DebugTextMarker : StyleTextLineMarker, IIconBarMarker
 	{
 		protected Mono.TextEditor.TextEditor editor;
 		
 		public override StyleFlag IncludedStyles {
 			get {
 				// check, if a message bubble is active in that line.
-				if (LineSegment != null && LineSegment.Markers.Any (m => m != this && (m is IExtendingTextMarker)))
+				if (LineSegment != null && LineSegment.Markers.Any (m => m != this && (m is IExtendingTextLineMarker)))
 					return StyleFlag.None;
 				return base.IncludedStyles;
 			}
@@ -56,18 +56,27 @@ namespace MonoDevelop.Debugger
 		{
 			this.editor = editor;
 		}
-		
-		public void DrawIcon (Mono.TextEditor.TextEditor editor, Cairo.Context cr, LineSegment line, int lineNumber, double x, double y, double width, double height)
+
+
+		public override void Draw (TextEditor editor, Cairo.Context cr, Pango.Layout layout, bool selected, int startOffset, int endOffset, double y, double startXPos, double endXPos)
+		{
+			if (!(this is CurrentDebugLineTextMarker) && LineSegment.Markers.Any (m => m is CurrentDebugLineTextMarker))
+				return;
+			base.Draw (editor, cr, layout, selected, startOffset, endOffset, y, startXPos, endXPos);
+		}
+
+		public void DrawIcon (Mono.TextEditor.TextEditor editor, Cairo.Context cr, DocumentLine line, int lineNumber, double x, double y, double width, double height)
 		{
 			double size;
 			if (width > height) {
-				x += (width - height) / 2;
 				size = height;
 			} else {
-				y += (height - width) / 2;
 				size = width;
 			}
-			
+			double borderLineWidth = cr.LineWidth;
+			x = Math.Floor (x + (width - borderLineWidth - size) / 2);
+			y = Math.Floor (y + (height - size) / 2);
+
 			DrawIcon (cr, x, y, size);
 		}
 		
@@ -166,7 +175,7 @@ namespace MonoDevelop.Debugger
 			IncludedStyles |= StyleFlag.BackgroundColor | StyleFlag.Color;
 			IsTracepoint = isTracePoint;
 		}
-		
+
 		protected override void DrawIcon (Cairo.Context cr, double x, double y, double size)
 		{
 			Cairo.Color color1 = editor.ColorStyle.BreakpointMarkerColor1;

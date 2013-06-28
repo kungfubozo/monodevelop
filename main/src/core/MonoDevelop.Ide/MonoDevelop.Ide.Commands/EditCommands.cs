@@ -69,7 +69,8 @@ namespace MonoDevelop.Ide.Commands
 		/// convenient to fire the Delete command when pressing Delete (for example, while editing the name of
 		/// a file in the solution pad.
 		/// </summary>
-		DeleteKey
+		DeleteKey,
+		InsertGuid
 	}
 	
 	internal class MonodevelopPreferencesHandler: CommandHandler
@@ -254,7 +255,7 @@ namespace MonoDevelop.Ide.Commands
 		protected override void Update (CommandInfo info)
 		{
 			Document doc = IdeApp.Workbench.ActiveDocument;
-			if (doc != null && doc.Editor != null && doc.Editor.HasFocus) {
+			if (doc != null && doc.Editor != null) {
 				info.Enabled = doc.CommentTags != null;
 			} else
 				info.Enabled = false;

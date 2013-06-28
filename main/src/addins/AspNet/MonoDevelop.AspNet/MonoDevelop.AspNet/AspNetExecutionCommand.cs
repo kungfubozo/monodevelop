@@ -34,6 +34,8 @@ namespace MonoDevelop.AspNet
 {
 	public class AspNetExecutionCommand: ExecutionCommand
 	{
+		IDictionary<string, string> environmentVariables;
+    
 		public AspNetExecutionCommand()
 		{
 		}
@@ -51,10 +53,15 @@ namespace MonoDevelop.AspNet
 		public TargetFramework TargetFramework { get; set; }
 		
 		public IList<string> UserAssemblyPaths { get; set; }
-		
-		public override string CommandString {
+
+		public IDictionary<string, string> EnvironmentVariables {
 			get {
-				return "[asp-net]";
+				if (environmentVariables == null)
+					environmentVariables = new Dictionary<string, string> ();
+				return environmentVariables;
+			}
+			set {
+				environmentVariables = value;
 			}
 		}
 	}

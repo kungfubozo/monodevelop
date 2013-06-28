@@ -26,14 +26,15 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-using System;
+
 using System.IO;
 using System.Collections.Generic;
 
 using MonoDevelop.Projects;
-using MonoDevelop.Projects.Dom;
-using MonoDevelop.Projects.Dom.Parser;
 using MonoDevelop.Ide;
+using MonoDevelop.Ide.TypeSystem;
+using ICSharpCode.NRefactory.TypeSystem;
+using System;
 
 namespace MonoDevelop.NUnit
 {
@@ -42,7 +43,13 @@ namespace MonoDevelop.NUnit
 		DotNetProject project;
 		string resultsPath;
 		string storeId;
-		
+
+		public override IList<string> UserAssemblyPaths {
+			get {
+				return project.GetUserAssemblyPaths (project.ParentSolution.DefaultConfigurationSelector);
+			}
+		}
+
 		public NUnitProjectTestSuite (DotNetProject project): base (project.Name, project)
 		{
 			storeId = Path.GetFileName (project.FileName);
@@ -55,24 +62,37 @@ namespace MonoDevelop.NUnit
 		
 		public static NUnitProjectTestSuite CreateTest (DotNetProject project)
 		{
-			foreach (ProjectReference p in project.References)
+			foreach (var p in project.References)
 				if (p.Reference.IndexOf("nunit.framework", StringComparison.OrdinalIgnoreCase) != -1 || p.Reference.IndexOf("nunit.core", StringComparison.OrdinalIgnoreCase) != -1)
 					return new NUnitProjectTestSuite (project);
 			return null;
 		}
 
-		protected override SourceCodeLocation GetSourceCodeLocation (string fullClassName, string methodName)
+		protected override SourceCodeLocation GetSourceCodeLocation (string fixtureTypeNamespace, string fixtureTypeName, string methodName)
 		{
-			ProjectDom ctx = ProjectDomService.GetProjectDom (project);
-			IType cls = ctx.GetType (fullClassName);
+			if (fixtureTypeName == null)
+				return null;
+			var ctx = TypeSystemService.GetCompilation (project);
+			var cls = ctx.MainAssembly.GetTypeDefinition (fixtureTypeNamespace, fixtureTypeName, 0);
 			if (cls == null)
 				return null;
 			
-			foreach (IMethod met in cls.Methods) {
-				if (met.Name == methodName)
-					return new SourceCodeLocation (cls.CompilationUnit.FileName, met.Location.Line, met.Location.Column);
+			if (cls.Name != methodName) {
+				foreach (var met in cls.GetMethods ()) {
+					if (met.Name == methodName)
+						return new SourceCodeLocation (met.Region.FileName, met.Region.BeginLine, met.Region.BeginColumn);
+				}
+				
+				int idx = methodName != null ? methodName.IndexOf ('(') : -1;
+				if (idx > 0) {
+					methodName = methodName.Substring (0, idx);
+					foreach (var met in cls.GetMethods ()) {
+						if (met.Name == methodName)
+							return new SourceCodeLocation (met.Region.FileName, met.Region.BeginLine, met.Region.BeginColumn);
+					}
+				}
 			}
-			return new SourceCodeLocation (cls.CompilationUnit.FileName, cls.Location.Line, cls.Location.Column);
+			return new SourceCodeLocation (cls.Region.FileName, cls.Region.BeginLine, cls.Region.BeginColumn);
 		}
 		
 		public override void Dispose ()
@@ -94,6 +114,14 @@ namespace MonoDevelop.NUnit
 			if (RefreshRequired)
 				UpdateTests ();
 		}
+
+		protected override UnitTestResult OnRun (TestContext testContext)
+		{
+			TestRunnerType = (string) project.ExtendedProperties ["TestRunnerType"];
+			var asm = project.ExtendedProperties ["TestRunnerAssembly"];
+			TestRunnerAssembly = asm != null ? project.BaseDirectory.Combine (asm.ToString ()).ToString () : null;
+			return base.OnRun (testContext);
+		}
 	
 		protected override string AssemblyPath {
 			get { return project.GetOutputFileName (IdeApp.Workspace.ActiveConfiguration); }
@@ -108,7 +136,7 @@ namespace MonoDevelop.NUnit
 				// Referenced assemblies which are not in the gac and which are not localy copied have to be preloaded
 				DotNetProject project = base.OwnerSolutionItem as DotNetProject;
 				if (project != null) {
-					foreach (ProjectReference pr in project.References) {
+					foreach (var pr in project.References) {
 						if (pr.ReferenceType != ReferenceType.Package && !pr.LocalCopy) {
 							foreach (string file in pr.GetReferencedFileNames (IdeApp.Workspace.ActiveConfiguration))
 								yield return file;

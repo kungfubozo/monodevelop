@@ -51,6 +51,8 @@ using MonoDevelop.Core.Execution;
 using MonoDevelop.Core.Instrumentation;
 using System.Diagnostics;
 using MonoDevelop.Projects;
+using System.Collections.Generic;
+using MonoDevelop.Core.LogReporting;
 
 namespace MonoDevelop.Ide
 {
@@ -62,32 +64,26 @@ namespace MonoDevelop.Ide
 		internal static string DefaultTheme;
 		static readonly int ipcBasePort = 41000;
 		
-		public int Run (string[] args)
+		int IApplication.Run (string[] args)
+		{
+			var options = MonoDevelopOptions.Parse (args);
+			if (options.Error != null || options.ShowHelp)
+				return options.Error != null? -1 : 0;
+			return Run (options);
+		}
+		
+		int Run (MonoDevelopOptions options)
 		{
 			Counters.Initialization.BeginTiming ();
 			
-			var options = new MonoDevelopOptions ();
-			var optionsSet = new Mono.Options.OptionSet () {
-				{ "nologo", "Do not display splash screen.", s => options.NoLogo = true },
-				{ "ipc-tcp", "Use the Tcp channel for inter-process comunication.", s => options.IpcTcp = true },
-				{ "newwindow", "Do not open in an existing instance of " + BrandingService.ApplicationName, s => options.NewWindow = true },
-				{ "h|?|help", "Show help", s => options.ShowHelp = true },
-				{ "clog", "Log internal counter data", s => options.LogCounters = true },
-				{ "clog-interval=", "Interval between counter logs (in miliseconds)", s => options.LogCountersInterval = int.Parse (s) },
-			};
-			var remainingArgs = optionsSet.Parse (args);
-			if (options.ShowHelp) {
-				Console.WriteLine ("MonoDevelop IDE " + MonoDevelop.Ide.BuildVariables.PackageVersionLabel);
-				Console.WriteLine ("Options:");
-				optionsSet.WriteOptionDescriptions (Console.Out);
-				return 0;
-			}
-			
-			if (options.LogCounters) {
-				string logFile = Path.Combine (Environment.CurrentDirectory, "monodevelop.clog");
+			if (options.PerfLog) {
+				string logFile = Path.Combine (Environment.CurrentDirectory, "monodevelop.perf-log");
 				LoggingService.LogInfo ("Logging instrumentation service data to file: " + logFile);
 				InstrumentationService.StartAutoSave (logFile, 1000);
 			}
+
+			//ensure native libs initialized before we hit anything that p/invokes
+			Platform.Initialize ();
 			
 			Counters.Initialization.Trace ("Initializing GTK");
 			SetupExceptionManager ();
@@ -97,10 +93,17 @@ namespace MonoDevelop.Ide
 			} catch (Exception ex) {
 				LoggingService.LogError ("Error initialising GLib logging.", ex);
 			}
-			
-			//OSXFIXME
-			Gtk.Application.Init ("monodevelop", ref args);
-			
+
+			SetupTheme ();
+
+			var args = options.RemainingArgs.ToArray ();
+			Gtk.Application.Init (BrandingService.ApplicationName, ref args);
+
+			FilePath p = typeof(IdeStartup).Assembly.Location;
+			Assembly.LoadFrom (p.ParentDirectory.Combine ("Xwt.Gtk.dll"));
+			Xwt.Application.Initialize (Xwt.ToolkitType.Gtk);
+			Xwt.Engine.Toolkit.ExitUserCode (null);
+
 			//default to Windows IME on Windows
 			if (Platform.IsWindows && Mono.TextEditor.GtkWorkarounds.GtkMinorVersion >= 16) {
 				var settings = Gtk.Settings.Default;
@@ -120,11 +123,11 @@ namespace MonoDevelop.Ide
 			
 			AddinManager.AddinLoadError += OnAddinError;
 			
-			var startupInfo = new StartupInfo (remainingArgs);
+			var startupInfo = new StartupInfo (args);
 			
 			// If a combine was specified, force --newwindow.
 			
-			if(!options.NewWindow && startupInfo.HasFiles) {
+			if (!options.NewWindow && startupInfo.HasFiles) {
 				Counters.Initialization.Trace ("Pre-Initializing Runtime to load files in existing window");
 				Runtime.Initialize (true);
 //				foreach (var file in startupInfo.RequestedFileList) {
@@ -135,6 +138,11 @@ namespace MonoDevelop.Ide
 //				}
 			}
 			
+			Counters.Initialization.Trace ("Initializing Runtime");
+			Runtime.Initialize (true);
+
+			Counters.Initialization.Trace ("Initializing theme and splash window");
+
 			DefaultTheme = Gtk.Settings.Default.ThemeName;
 			if (!string.IsNullOrEmpty (IdeApp.Preferences.UserInterfaceTheme))
 				Gtk.Settings.Default.ThemeName = IdeApp.Preferences.UserInterfaceTheme;
@@ -142,22 +150,19 @@ namespace MonoDevelop.Ide
 			//don't show the splash screen on the Mac, so instead we get the expected "Dock bounce" effect
 			//this also enables the Mac platform service to subscribe to open document events before the GUI loop starts.
 			if (Platform.IsMac)
-				options.NoLogo = true;
+				options.NoSplash = true;
 			
 			IProgressMonitor monitor;
 			
-			if (options.NoLogo) {
+			if (options.NoSplash) {
 				monitor = new MonoDevelop.Core.ProgressMonitoring.ConsoleProgressMonitor ();
 			} else {
 				monitor = SplashScreenForm.SplashScreen;
 				SplashScreenForm.SplashScreen.ShowAll ();
 			}
 			
-			Counters.Initialization.Trace ("Initializing Runtime");
-			monitor.BeginTask (GettextCatalog.GetString ("Starting " + BrandingService.ApplicationName), 3);
-			monitor.Step (1);
-			Runtime.Initialize (true);
-			
+			monitor.BeginTask (GettextCatalog.GetString ("Starting {0}", BrandingService.ApplicationName), 2);
+
 			//make sure that the platform service is initialised so that the Mac platform can subscribe to open-document events
 			Counters.Initialization.Trace ("Initializing Platform Service");
 			DesktopService.Initialize ();
@@ -256,7 +261,7 @@ namespace MonoDevelop.Ide
 			if (error != null) {
 				LoggingService.LogFatalError (null, error);
 				MessageService.ShowException (error,
-				                              GettextCatalog.GetString ("MonoDevelop failed to start. The following error has been reported: ") + error.Message);
+				                              BrandingService.BrandApplicationName (GettextCatalog.GetString ("MonoDevelop failed to start. The following error has been reported: ") + error.Message));
 				return 1;
 			}
 
@@ -285,10 +290,6 @@ namespace MonoDevelop.Ide
 				
 			AddinManager.AddExtensionNodeHandler("/MonoDevelop/Ide/InitCompleteHandlers", OnExtensionChanged);
 			
-			string logAgentEnabled = Environment.GetEnvironmentVariable ("MONODEVELOP_LOG_AGENT_ENABLED");
-			if (string.Equals (logAgentEnabled, "true", StringComparison.OrdinalIgnoreCase))
-				LaunchCrashMonitoringService ();
-			
 			IdeApp.Run ();
 			
 			// unloading services
@@ -298,8 +299,18 @@ namespace MonoDevelop.Ide
 			Runtime.Shutdown ();
 			InstrumentationService.Stop ();
 			
-			System.Environment.Exit (0);
 			return 0;
+		}
+
+		void SetupTheme ()
+		{
+			// Use the bundled gtkrc only if the Xamarin theme is installed
+			if (File.Exists (Path.Combine (Gtk.Rc.ModuleDir, "libxamarin.so")) || File.Exists (Path.Combine (Gtk.Rc.ModuleDir, "libxamarin.dll"))) {
+				if (Platform.IsWindows)
+					Environment.SetEnvironmentVariable ("GTK2_RC_FILES", PropertyService.EntryAssemblyPath.Combine ("gtkrc.win32"));
+				else
+					Environment.SetEnvironmentVariable ("GTK2_RC_FILES", PropertyService.EntryAssemblyPath.Combine ("gtkrc"));
+			}
 		}
 		
 		public bool Initialized {
@@ -326,45 +337,6 @@ namespace MonoDevelop.Ide
 				errorsList.Add (new AddinError (args.AddinId, args.Message, args.Exception, false));
 		}
 		
-		void LaunchCrashMonitoringService ()
-		{
-			string enabledKey = "MonoDevelop.CrashMonitoring.Enabled";
-			
-			if (Platform.IsMac) {
-				var crashmonitor = Path.Combine (PropertyService.EntryAssemblyPath, "MonoDevelopLogAgent.app");
-				var pid = Process.GetCurrentProcess ().Id;
-				var logPath = UserProfile.Current.LogDir.Combine ("LogAgent");
-				var email = FeedbackService.ReporterEMail;
-				var logOnly = "";
-				
-				var fileInfo = new FileInfo (Path.Combine (logPath, "crashlogs.xml"));
-				if (!PropertyService.HasValue (enabledKey) && fileInfo.Exists && fileInfo.Length > 0) {
-					var result = MessageService.AskQuestion ("A crash has been detected",
-						"MonoDevelop has crashed recently. Details of this crash along with your configured " +
-						"email address can be uploaded to Xamarin to help diagnose the issue. This information " +
-						"will be used to help diagnose the crash and notify you of potential workarounds " +
-						"or fixes. Do you wish to upload this information?",
-						AlertButton.Yes, AlertButton.No);
-					PropertyService.Set (enabledKey, result == AlertButton.Yes);
-				}
-				
-				if (string.IsNullOrEmpty (email))
-					email = AuthorInformation.Default.Email;
-				if (string.IsNullOrEmpty (email))
-					email = "unknown@email.com";
-				if (!PropertyService.Get<bool> (enabledKey))
-					logOnly = "-logonly";
-
-				var psi = new ProcessStartInfo ("open", string.Format ("-a {0} -n --args -p {1} -l {2} -email {3} {4}", crashmonitor, pid, logPath, email, logOnly)) {
-					UseShellExecute = false,
-				};
-				Process.Start (psi);
-			}
-			//else {
-			//	LoggingService.LogError ("Could not launch crash reporter process. MonoDevelop will not be able to automatically report any crash information.");
-			//}
-		}
-
 		void ListenCallback (IAsyncResult state)
 		{
 			Socket sock = (Socket)state.AsyncState;
@@ -436,7 +408,7 @@ namespace MonoDevelop.Ide
 						string msg = "Inotify watch limit is too low (" + n + ").\n";
 						msg += "MonoDevelop will switch to managed file watching.\n";
 						msg += "See http://monodevelop.com/Inotify_Watches_Limit for more info.";
-						LoggingService.LogWarning (msg);
+						LoggingService.LogWarning (BrandingService.BrandApplicationName (msg));
 						Runtime.ProcessService.EnvironmentVariableOverrides["MONO_MANAGED_WATCHER"] = 
 							Environment.GetEnvironmentVariable ("MONO_MANAGED_WATCHER");
 						Environment.SetEnvironmentVariable ("MONO_MANAGED_WATCHER", "1");
@@ -485,7 +457,10 @@ namespace MonoDevelop.Ide
 				bool fail2 = Addin.CompareVersions (current_gnomevfs, required_gnomevfs) == 1;
 				
 				if (fail1 || fail2) {
-					string msg = GettextCatalog.GetString ("Some packages installed in your system are not compatible with MonoDevelop:\n");
+					string msg = GettextCatalog.GetString (
+						"Some packages installed in your system are not compatible with {0}:\n",
+						BrandingService.ApplicationName
+					);
 					if (fail1)
 						msg += "\nlibgda " + current_libgda + " ("+ GettextCatalog.GetString ("version required: {0}", required_libgda) + ")";
 					if (fail2)
@@ -512,17 +487,28 @@ namespace MonoDevelop.Ide
 		
 		void SetupExceptionManager ()
 		{
+			System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (sender, e) => {
+				HandleException (e.Exception.Flatten (), false);
+				e.SetObserved ();
+			};
 			GLib.ExceptionManager.UnhandledException += delegate (GLib.UnhandledExceptionArgs args) {
-				var ex = (Exception)args.ExceptionObject;
-				LoggingService.LogError ("Unhandled Exception", ex);
-				MessageService.ShowException (ex, "Unhandled Exception");
+				HandleException ((Exception)args.ExceptionObject, args.IsTerminating);
 			};
 			AppDomain.CurrentDomain.UnhandledException += delegate (object sender, UnhandledExceptionEventArgs args) {
-				//FIXME: try to save all open files, since we can't prevent the runtime from terminating
-				var ex = (Exception)args.ExceptionObject;
-				LoggingService.LogFatalError ("Unhandled Exception", ex);
-				MessageService.ShowException (ex, "Unhandled Exception. MonoDevelop will now close.");
+				HandleException ((Exception)args.ExceptionObject, args.IsTerminating);
 			};
+			Xwt.Application.UnhandledException += (sender, e) => {
+				HandleException (e.ErrorException, false);
+			};
+		}
+		
+		void HandleException (Exception ex, bool willShutdown)
+		{
+			// Log the crash to the MonoDevelop.log file first:
+			LoggingService.LogError (string.Format ("An unhandled exception has occured. Terminating MonoDevelop? {0}", willShutdown), ex);
+			
+			// Pass it off to the reporting service now.
+			LogReportingService.ReportUnhandledException (ex, willShutdown);
 		}
 		
 		/// <summary>SDBM-style hash, bounded to a range of 1000.</summary>
@@ -540,23 +526,34 @@ namespace MonoDevelop.Ide
 		
 		public static int Main (string[] args)
 		{
-			bool retry = false;
-
-			EnableFileLogging ();
+			var options = MonoDevelopOptions.Parse (args);
+			if (options.ShowHelp || options.Error != null)
+				return options.Error != null? -1 : 0;
 			
+			LoggingService.Initialize (options.RedirectOutput);
+			
+			int ret = -1;
+			bool retry = false;
 			do {
 				try {
-					Runtime.SetProcessName (BrandingService.ApplicationName);
+					var exename = Path.GetFileNameWithoutExtension (Assembly.GetEntryAssembly ().Location);
+					Runtime.SetProcessName (exename);
 					var app = new IdeStartup ();
-					return app.Run (args);
+					ret = app.Run (options);
+					break;
 				} catch (Exception ex) {
 					if (!retry && AddinManager.IsInitialized) {
-						LoggingService.LogWarning (BrandingService.ApplicationName + " failed to start. Rebuilding addins registry.");
+						LoggingService.LogWarning (BrandingService.ApplicationName + " failed to start. Rebuilding addins registry.", ex);
 						AddinManager.Registry.Rebuild (new Mono.Addins.ConsoleProgressStatus (true));
-						LoggingService.LogInfo ("Addin registry rebuilt. Restarting MonoDevelop.");
+						LoggingService.LogInfo ("Addin registry rebuilt. Restarting {0}.", BrandingService.ApplicationName);
 						retry = true;
 					} else {
-						LoggingService.LogFatalError (BrandingService.ApplicationName + " failed to start. Some of the assemblies required to run MonoDevelop (for example gtk-sharp, gnome-sharp or gtkhtml-sharp) may not be properly installed in the GAC.", ex);
+						LoggingService.LogFatalError (
+							string.Format (
+								"{0} failed to start. Some of the assemblies required to run {0} (for example gtk-sharp)" +
+								"may not be properly installed in the GAC.",
+								BrandingService.ApplicationName
+							), ex);
 						retry = false;
 					}
 				} finally {
@@ -565,62 +562,66 @@ namespace MonoDevelop.Ide
 			}
 			while (retry);
 
-			if (logFile != null)
-				logFile.Close ();
+			LoggingService.Shutdown ();
 
-			return -1;
-		}
-
-		static StreamWriter logFile;
-
-		static void EnableFileLogging ( )
-		{
-			if (Path.DirectorySeparatorChar != '\\')
-				return;
-
-			// On Windows log all output to a log file
-
-			FilePath logDir = UserProfile.Current.LogDir;
-			if (!Directory.Exists (logDir))
-				Directory.CreateDirectory (logDir);
-
-			string file = logDir.Combine ("log.txt");
-			try {
-				logFile = new StreamWriter (file);
-				logFile.AutoFlush = true;
-
-				var tw = new MonoDevelop.Core.ProgressMonitoring.LogTextWriter ();
-				tw.ChainWriter (logFile);
-				tw.ChainWriter (Console.Out);
-				Console.SetOut (tw);
-
-				tw = new MonoDevelop.Core.ProgressMonitoring.LogTextWriter ();
-				tw.ChainWriter (logFile);
-				tw.ChainWriter (Console.Error);
-				Console.SetError (tw);
-			}
-			catch {
-			}
+			return ret;
 		}
 	}
 	
-#pragma warning disable 0618
 	public class MonoDevelopOptions
 	{
-		public MonoDevelopOptions ()
+		MonoDevelopOptions ()
 		{
 			IpcTcp = (PlatformID.Unix != Environment.OSVersion.Platform);
+			RedirectOutput = true;
 		}
 		
-		public bool NoLogo { get; set; }
+		Mono.Options.OptionSet GetOptionSet ()
+		{
+			return new Mono.Options.OptionSet () {
+				{ "no-splash", "Do not display splash screen.", s => NoSplash = true },
+				{ "ipc-tcp", "Use the Tcp channel for inter-process comunication.", s => IpcTcp = true },
+				{ "new-window", "Do not open in an existing instance of " + BrandingService.ApplicationName, s => NewWindow = true },
+				{ "h|?|help", "Show help", s => ShowHelp = true },
+				{ "perf-log", "Enable performance counter logging", s => PerfLog = true },
+				{ "no-redirect", "Disable redirection of stdout/stderr to a log file", s => RedirectOutput = false },
+			};
+		}
+		
+		public static MonoDevelopOptions Parse (string[] args)
+		{
+			var opt = new MonoDevelopOptions ();
+			var optSet = opt.GetOptionSet ();
+			
+			try {
+				opt.RemainingArgs = optSet.Parse (args);
+			} catch (Mono.Options.OptionException ex) {
+				opt.Error = ex.ToString ();
+			}
+			
+			if (opt.Error != null) {
+				Console.WriteLine ("ERROR: {0}", opt.Error);
+				Console.WriteLine ("Pass --help for usage information.");
+			}
+			
+			if (opt.ShowHelp) {
+				Console.WriteLine (BrandingService.ApplicationName + " " + BuildVariables.PackageVersionLabel);
+				Console.WriteLine ("Options:");
+				optSet.WriteOptionDescriptions (Console.Out);
+			}
+			
+			return opt;
+		}
+		
+		public bool NoSplash { get; set; }
 		public bool IpcTcp { get; set; }
 		public bool NewWindow { get; set; }
 		public bool ShowHelp { get; set; }
-		public bool LogCounters { get; set; }
-		public int LogCountersInterval { get; set; }
+		public bool PerfLog { get; set; }
+		public bool RedirectOutput { get; set; }
+		public string Error { get; set; }
+		public IList<string> RemainingArgs { get; set; }
 	}
-	
-#pragma warning restore 0618
 	
 	public class AddinError
 	{

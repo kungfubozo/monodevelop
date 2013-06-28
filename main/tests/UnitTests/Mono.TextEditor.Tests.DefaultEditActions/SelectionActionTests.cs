@@ -27,10 +27,10 @@
 using System;
 using NUnit.Framework;
 
-namespace Mono.TextEditor.Tests
+namespace Mono.TextEditor.Tests.Actions
 {
 	[TestFixture()]
-	public class SelectionActionTests
+	public class SelectionActionTests : TextEditorTestBase
 	{
 		[Test()]
 		public void TestMoveLeft ()
@@ -43,7 +43,7 @@ namespace Mono.TextEditor.Tests
 			SelectionActions.MoveLeft (data);
 			Assert.AreEqual (new Selection (DocumentLocation.MinLine + 2, DocumentLocation.MinColumn +  4, DocumentLocation.MinLine + 2, DocumentLocation.MinColumn + 3), data.MainSelection);
 		}
-		
+
 		[Test()]
 		public void TestMoveRight ()
 		{
@@ -145,8 +145,7 @@ namespace Mono.TextEditor.Tests
 			Assert.IsTrue (data.IsSomethingSelected);
 			
 			Assert.AreEqual (data.SelectionRange.Offset, 0);
-			Assert.AreEqual (data.SelectionRange.EndOffset, data.Document.Length);
-			Assert.AreEqual (data.SelectionRange.EndOffset, data.Caret.Offset);
+			Assert.AreEqual (data.SelectionRange.EndOffset, data.Document.TextLength);
 		}
 		
 		
@@ -156,24 +155,85 @@ namespace Mono.TextEditor.Tests
 		[Test()]
 		public void TestSelectAllBug362983 ()
 		{
-			TextEditorData data = new Mono.TextEditor.TextEditorData  ();
+			TextEditorData data = new Mono.TextEditor.TextEditorData ();
 			data.Document.Text = "Test";
 			Assert.IsFalse (data.IsSomethingSelected);
 			SelectionActions.SelectAll (data);
 			Assert.IsTrue (data.IsSomethingSelected);
-			data.Caret.Offset = 0;
+			data.Caret.Offset++;
 			Assert.IsFalse (data.IsSomethingSelected);
 		}
-		
-		[TestFixtureSetUp] 
-		public void SetUp()
+
+		[Test()]
+		public void TestSelectAllCaretMovement ()
 		{
-			Gtk.Application.Init ();
+			TextEditorData data = new Mono.TextEditor.TextEditorData  ();
+			data.Document.Text = 
+				@"123456789
+123456789
+123456789
+123456789
+123456789
+123456789";
+			
+			Assert.IsFalse (data.IsSomethingSelected);
+			var loc = new DocumentLocation (3, 3);
+			data.Caret.Location = loc;
+			SelectionActions.SelectAll (data);
+			Assert.IsTrue (data.IsSomethingSelected);
+			
+			Assert.AreEqual (data.SelectionRange.Offset, 0);
+			Assert.AreEqual (data.SelectionRange.EndOffset, data.Document.TextLength);
+			Assert.AreEqual (loc, data.Caret.Location);
 		}
-		
-		[TestFixtureTearDown] 
-		public void Dispose()
+
+		[Test()]
+		public void ExpandSelectionToLine ()
 		{
+			var data = Create (@"1234567890
+1234567890
+1234$567890
+1234567890
+1234567890");
+			SelectionActions.ExpandSelectionToLine (data);
+			Check (data, @"1234567890
+1234567890
+<-1234567890
+->$1234567890
+1234567890");
 		}
+
+		[Test()]
+		public void ExpandSelectionToLineWithSelection ()
+		{
+			var data = Create (@"1234567890
+1234567890
+<-1234567890
+->$1234567890
+1234567890");
+			SelectionActions.ExpandSelectionToLine (data);
+			Check (data, @"1234567890
+1234567890
+<-1234567890
+1234567890
+->$1234567890");
+		}
+
+		[Test()]
+		public void ExpandSelectionToLineWithSelectionCase2 ()
+		{
+			var data = Create (@"1234567890
+1234567890
+12345$<-67890
+->1234567890
+1234567890");
+			SelectionActions.ExpandSelectionToLine (data);
+			Check (data, @"1234567890
+1234567890
+<-1234567890
+->$1234567890
+1234567890");
+		}
+
 	}
 }

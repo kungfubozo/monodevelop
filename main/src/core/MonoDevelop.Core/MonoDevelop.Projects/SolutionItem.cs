@@ -38,6 +38,7 @@ using MonoDevelop.Core.Collections;
 using MonoDevelop.Core.StringParsing;
 using MonoDevelop.Core.Instrumentation;
 using MonoDevelop.Projects.Policies;
+using MonoDevelop.Core.Execution;
 
 namespace MonoDevelop.Projects
 {
@@ -178,6 +179,7 @@ namespace MonoDevelop.Projects
 			}
 			internal set {
 				parentSolution = value;
+				NotifyBoundToSolution (true);
 			}
 		}
 
@@ -364,10 +366,35 @@ namespace MonoDevelop.Projects
 			}
 			internal set {
 				parentFolder = value;
-				if (internalChildren != null)
+				if (internalChildren != null) {
 					internalChildren.ParentFolder = value;
+				}
+				if (value != null && value.ParentSolution != null) {
+					NotifyBoundToSolution (false);
+				}
 			}
 		}
+
+		// Normally, the ParentFolder setter fires OnBoundToSolution. However, when deserializing, child
+		// ParentFolder hierarchies can become connected before the ParentSolution becomes set. This method
+		// enables us to recursively fire the OnBoundToSolution call in those cases.
+		void NotifyBoundToSolution (bool includeInternalChildren)
+		{
+			var folder = this as SolutionFolder;
+			if (folder != null) {
+				var items = folder.GetItemsWithoutCreating ();
+				if (items != null) {
+					foreach (var item in items) {
+						item.NotifyBoundToSolution (includeInternalChildren);
+					}
+				}
+			}
+			if (includeInternalChildren && internalChildren != null) {
+				internalChildren.NotifyBoundToSolution (includeInternalChildren);
+			}
+			OnBoundToSolution ();
+		}
+
 
 		/// <summary>
 		/// Gets a value indicating whether this <see cref="MonoDevelop.Projects.SolutionItem"/> has been disposed.
@@ -461,13 +488,18 @@ namespace MonoDevelop.Projects
 		{
 			ITimeTracker tt = Counters.BuildProjectTimer.BeginTiming ("Cleaning " + Name);
 			try {
+				//SolutionFolder handles the begin/end task itself, don't duplicate
+				if (this is SolutionFolder) {
+					RunTarget (monitor, ProjectService.CleanTarget, configuration);
+					return;
+				}
+				
 				try {
 					SolutionEntityItem it = this as SolutionEntityItem;
 					SolutionItemConfiguration iconf = it != null ? it.GetConfiguration (configuration) : null;
 					string confName = iconf != null ? iconf.Id : configuration.ToString ();
 					monitor.BeginTask (GettextCatalog.GetString ("Cleaning: {0} ({1})", Name, confName), 1);
 					RunTarget (monitor, ProjectService.CleanTarget, configuration);
-					monitor.Step (1);
 				} finally {
 					monitor.EndTask ();
 				}
@@ -510,7 +542,12 @@ namespace MonoDevelop.Projects
 				if (!buildReferences) {
 					if (!NeedsBuilding (solutionConfiguration))
 						return new BuildResult (new CompilerResults (null), "");
-						
+					
+					//SolutionFolder's OnRunTarget handles the begin/end task itself, don't duplicate
+					if (this is SolutionFolder) {
+						return RunTarget (monitor, ProjectService.BuildTarget, solutionConfiguration);
+					}
+					
 					try {
 						SolutionEntityItem it = this as SolutionEntityItem;
 						SolutionItemConfiguration iconf = it != null ? it.GetConfiguration (solutionConfiguration) : null;
@@ -624,6 +661,11 @@ namespace MonoDevelop.Projects
 		public bool CanExecute (ExecutionContext context, ConfigurationSelector configuration)
 		{
 			return Services.ProjectService.GetExtensionChain (this).CanExecute (this, context, configuration);
+		}
+
+		public IEnumerable<ExecutionTarget> GetExecutionTargets (ConfigurationSelector configuration)
+		{
+			return Services.ProjectService.GetExtensionChain (this).GetExecutionTargets (this, configuration);
 		}
 		
 		/// <summary>
@@ -1002,6 +1044,15 @@ namespace MonoDevelop.Projects
 		internal protected virtual bool OnGetCanExecute (ExecutionContext context, ConfigurationSelector configuration)
 		{
 			return false;
+		}
+
+		internal protected virtual IEnumerable<ExecutionTarget> OnGetExecutionTargets (ConfigurationSelector configuration)
+		{
+			yield break;
+		}
+
+		protected virtual void OnBoundToSolution ()
+		{
 		}
 		
 		/// <summary>

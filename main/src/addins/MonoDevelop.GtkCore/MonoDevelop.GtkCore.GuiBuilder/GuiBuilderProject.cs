@@ -36,9 +36,10 @@ using System.CodeDom.Compiler;
 
 using MonoDevelop.Core;
 using MonoDevelop.Projects;
-using MonoDevelop.Projects.Dom;
-using MonoDevelop.Projects.Dom.Parser;
 using MonoDevelop.Ide;
+using ICSharpCode.NRefactory.TypeSystem;
+using MonoDevelop.Ide.TypeSystem;
+using System.Linq;
 
 namespace MonoDevelop.GtkCore.GuiBuilder
 {
@@ -70,6 +71,7 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 			this.fileName = fileName;
 			this.project = project;
 			Counters.GuiProjectsLoaded++;
+			GuiBuilderService.NotifyGuiProjectLoaded ();
 		}
 		
 		void Load ()
@@ -190,7 +192,21 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 			}
 		}
 		
-		public void Save (bool saveMdProject)
+		public void SaveAll (bool saveMdProject)
+		{
+			if (gproject != null)
+				gproject.SetAllWidgetsModified ();
+			SaveProject (saveMdProject);
+		}
+
+		public void SaveWindow (bool saveMdProject, string modifiedWindow)
+		{
+			if (gproject != null)
+				gproject.SetWidgetModified (modifiedWindow);
+			SaveProject (saveMdProject);
+		}
+
+		public void SaveProject (bool saveMdProject)
 		{
 			if (disposed)
 				return;
@@ -232,6 +248,7 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 		{
 			if (disposed)
 				return;
+			GuiBuilderService.NotifyGuiProjectUnloaded ();
 			Counters.GuiProjectsLoaded--;
 			disposed = true;
 			if (watcher != null)
@@ -320,15 +337,15 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 		void OnFileAdded (object sender, ProjectFileEventArgs e)
 		{
 			foreach (ProjectFileEventInfo args in e) {
-				ParsedDocument doc = ProjectDomService.GetParsedDocument (ProjectDomService.GetProjectDom (args.Project), args.ProjectFile.Name);
-				if (doc == null || doc.CompilationUnit == null)
+				var doc = TypeSystemService.ParseFile (args.Project, args.ProjectFile.Name);
+				if (doc == null)
 					continue;
 	
 				string dir = Path.Combine (Path.Combine (Environment.GetFolderPath (Environment.SpecialFolder.ApplicationData), "stetic"), "deleted-designs");
 				if (!Directory.Exists (dir) || Directory.GetFiles (dir).Length == 0)
 					continue;
 	
-				foreach (IType t in doc.CompilationUnit.Types) {
+				foreach (var t in doc.TopLevelTypeDefinitions) {
 					string path = Path.Combine (dir, t.FullName + ".xml");
 					if (!System.IO.File.Exists (path))
 						continue;
@@ -345,11 +362,11 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 			ArrayList toDelete = new ArrayList ();
 
 			foreach (ProjectFileEventInfo args in e) {
-				ParsedDocument doc = ProjectDomService.GetParsedDocument (ProjectDomService.GetProjectDom (args.Project), args.ProjectFile.Name);
-				if (doc == null || doc.CompilationUnit == null)
+				var doc = TypeSystemService.ParseFile (args.Project, args.ProjectFile.Name);
+				if (doc == null)
 					continue;
 	
-				foreach (IType t in doc.CompilationUnit.Types) {
+				foreach (var t in doc.TopLevelTypeDefinitions) {
 					GuiBuilderWindow win = GetWindowForClass (t.FullName);
 					if (win != null)
 						toDelete.Add (win);
@@ -373,7 +390,7 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 			string pref = GetReferenceLibraryPath (args.ProjectReference);
 			if (pref != null) {
 				gproject.AddWidgetLibrary (pref);
-				Save (false);
+				SaveProject (false);
 			}
 		}
 		
@@ -384,11 +401,11 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 			string pref = GetReferenceLibraryPath (args.ProjectReference);
 			if (pref != null) {
 				gproject.RemoveWidgetLibrary (pref);
-				Save (false);
+				SaveProject (false);
 			}
 		}
 
-		string GetReferenceLibraryPath (ProjectReference pref)
+		string GetReferenceLibraryPath (MonoDevelop.Projects.ProjectReference pref)
 		{
 			string path = null;
 			
@@ -414,7 +431,7 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 			dlg.AddAllFilesFilter ();
 			if (dlg.Run ()) {
 				SteticProject.ImportGlade (dlg.SelectedFile);
-				Save (true);
+				SaveAll (true);
 			}
 		}
 		
@@ -472,58 +489,58 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 
 		public FilePath GetSourceCodeFile (Stetic.ProjectItemInfo obj, bool getUserClass)
 		{
-			IType cls = GetClass (obj, getUserClass);
-			if (cls != null && cls.CompilationUnit != null)
-				return cls.CompilationUnit.FileName;
+			var cls = GetClass (obj, getUserClass);
+			if (cls != null)
+				return cls.Region.FileName;
 			return null;
 		}
 		
-		IType GetClass (Stetic.ProjectItemInfo obj, bool getUserClass)
+		IUnresolvedTypeDefinition GetClass (Stetic.ProjectItemInfo obj, bool getUserClass)
 		{
 			string name = CodeBinder.GetClassName (obj);
 			return FindClass (name, getUserClass);
 		}
 		
-		public IType FindClass (string className)
+		public IUnresolvedTypeDefinition FindClass (string className)
 		{
 			return FindClass (className, true);
 		}
 		
-		public IType FindClass (string className, bool getUserClass)
+		public IUnresolvedTypeDefinition FindClass (string className, bool getUserClass)
 		{
 			FilePath gui_folder = GtkDesignInfo.FromProject (project).GtkGuiFolder;
-			ProjectDom ctx = GetParserContext ();
+			var ctx = GetParserContext ();
 			if (ctx == null)
 				return null;
-			IEnumerable<IType> classes = ctx.Types;
+			var classes = ctx.MainAssembly.GetAllTypeDefinitions ();
 			if (classes == null)
 				return null;
-			foreach (IType cls in classes) {
+			foreach (var cls in classes) {
 				if (cls.FullName == className) {
 					if (getUserClass) {
 						// Return this class only if it is declared outside the gtk-gui
 						// folder. Generated partial classes will be ignored.
-						foreach (IType part in cls.Parts) {
-							if (part.CompilationUnit != null && !part.CompilationUnit.FileName.IsNullOrEmpty && !part.CompilationUnit.FileName.IsChildPathOf (gui_folder)) {
+						foreach (var part in cls.Parts) {
+							if (!string.IsNullOrEmpty (part.Region.FileName) && !((FilePath)cls.Region.FileName).IsChildPathOf (gui_folder)) {
 								return part;
 							}
 						}
 						continue;
 					}
-					if (getUserClass && cls.CompilationUnit != null && !string.IsNullOrEmpty (cls.CompilationUnit.FileName) && cls.CompilationUnit.FileName.IsChildPathOf (gui_folder))
+					if (getUserClass && !string.IsNullOrEmpty (cls.Region.FileName) && ((FilePath)cls.Region.FileName).IsChildPathOf (gui_folder))
 						continue;
-					return cls;
+					return cls.Parts.First ();
 				}
 			}
 			return null;
 		}
 		
-		public ProjectDom GetParserContext ()
+		public ICompilation GetParserContext ()
 		{
-			ProjectDom dom = ProjectDomService.GetProjectDom (Project);
+			var dom = TypeSystemService.GetCompilation (Project);
 			if (dom != null && needsUpdate) {
 				needsUpdate = false;
-				dom.ForceUpdate ();
+//				dom.ForceUpdate ();
 			}
 			return dom;
 		}
@@ -547,7 +564,7 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 			ArrayList libs = new ArrayList ();
 			string[] internalLibs;
 			
-			foreach (ProjectReference pref in project.References) {
+			foreach (var pref in project.References) {
 				string wref = GetReferenceLibraryPath (pref);
 				if (wref != null)
 					libs.Add (wref);
@@ -580,7 +597,7 @@ namespace MonoDevelop.GtkCore.GuiBuilder
 			}
 			
 			if (needsSave)
-				Save (true);
+				SaveAll (true);
 		}
 		
 		bool LibrariesChanged (string[] oldLibs, string[] internalLibs, string[] newLibs)

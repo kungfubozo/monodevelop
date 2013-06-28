@@ -28,6 +28,7 @@
 
 using System;
 using System.Collections.Generic;
+using Gdk;
 
 namespace Mono.TextEditor
 {
@@ -348,6 +349,14 @@ namespace Mono.TextEditor
 			keyBindings.Add (GetKeyCode (Gdk.Key.KP_Page_Up), action);
 			keyBindings.Add (GetKeyCode (Gdk.Key.Page_Up), action);
 			
+			action = CaretMoveActions.PageDown;
+			keyBindings.Add (GetKeyCode (Gdk.Key.KP_Page_Down, Gdk.ModifierType.Mod1Mask), action);
+			keyBindings.Add (GetKeyCode (Gdk.Key.Page_Down, Gdk.ModifierType.Mod1Mask), action);
+			
+			action = CaretMoveActions.PageUp;
+			keyBindings.Add (GetKeyCode (Gdk.Key.KP_Page_Up, Gdk.ModifierType.Mod1Mask), action);
+			keyBindings.Add (GetKeyCode (Gdk.Key.Page_Up, Gdk.ModifierType.Mod1Mask), action);
+			
 			action = SelectionActions.MovePageUp;
 			keyBindings.Add (GetKeyCode (Gdk.Key.KP_Page_Up, Gdk.ModifierType.ShiftMask), action);
 			keyBindings.Add (GetKeyCode (Gdk.Key.Page_Up, Gdk.ModifierType.ShiftMask), action);
@@ -387,6 +396,21 @@ namespace Mono.TextEditor
 		{
 			keyBindings.Add (GetKeyCode (key), action);
 		}
+
+		public override void SelectValidShortcut (KeyboardShortcut[] accels, out Gdk.Key key, out ModifierType mod)
+		{
+			foreach (var accel in accels) {
+				int keyCode = GetKeyCode (accel.Key, accel.Modifier);
+				if (keyBindings.ContainsKey (keyCode)) {
+					key = accel.Key;
+					mod = accel.Modifier;
+					return;
+				}
+			}
+			key = accels [0].Key;
+			mod = accels [0].Modifier;
+		}
+
 		
 		protected override void HandleKeypress (Gdk.Key key, uint unicodeKey, Gdk.ModifierType modifier)
 		{

@@ -31,75 +31,165 @@ using System.Text;
 using MonoDevelop.Core;
 using Gtk;
 using MonoDevelop.Components;
+using ICSharpCode.NRefactory.Completion;
+using MonoDevelop.Ide.Gui.Content;
+using System.Collections.Generic;
+using MonoDevelop.Ide.Fonts;
 
 namespace MonoDevelop.Ide.CodeCompletion
 {
-	class ParameterInformationWindow: TooltipWindow
+	class ParameterInformationWindow : PopoverWindow
 	{
-		Gtk.Label desc;
-		Gtk.Label count;
-		Gtk.Arrow goPrev;
-		Gtk.Arrow goNext;
-		HBox mainBox;
-		
+		CompletionTextEditorExtension ext;
+		public CompletionTextEditorExtension Ext {
+			get {
+				return ext;
+			}
+			set {
+				ext = value;
+			}
+		}
+
+		ICompletionWidget widget;
+		public ICompletionWidget Widget {
+			get {
+				return widget;
+			}
+			set {
+				widget = value;
+			}
+		}
+
+		VBox descriptionBox = new VBox (false, 0);
+		VBox vb2 = new VBox (false, 0);
+		Gdk.Color foreColor;
+		MonoDevelop.Components.FixedWidthWrapLabel headlabel;
+
 		public ParameterInformationWindow ()
 		{
-			desc = new Gtk.Label ("");
-			desc.Xalign = 0;
-			desc.Wrap = true;
-			count = new Gtk.Label ("");
+			TypeHint = Gdk.WindowTypeHint.Tooltip;
+			this.SkipTaskbarHint = true;
+			this.SkipPagerHint = true;
+			if (IdeApp.Workbench != null)
+				this.TransientFor = IdeApp.Workbench.RootWindow;
+			this.AllowShrink = false;
+			this.AllowGrow = false;
+			this.CanFocus = false;
+			this.CanDefault = false;
 
-			mainBox = new HBox (false, 2);
-			mainBox.BorderWidth = 3;
-
-			HBox arrowHBox = new HBox ();
-
-			goPrev = new Gtk.Arrow (Gtk.ArrowType.Up, ShadowType.None);
-			arrowHBox.PackStart (goPrev, false, false, 0);
-			arrowHBox.PackStart (count, false, false, 0);
-			goNext = new Gtk.Arrow (Gtk.ArrowType.Down, ShadowType.None);
-			arrowHBox.PackStart (goNext, false, false, 0);
-
-			VBox vBox = new VBox ();
-			vBox.PackStart (arrowHBox, false, false, 0);
+			headlabel = new MonoDevelop.Components.FixedWidthWrapLabel ();
+			headlabel.Indent = -20;
+			var des = FontService.GetFontDescription ("Editor");
 			
-			mainBox.PackStart (vBox, false, false, 0);
-			mainBox.PackStart (desc, true, true, 0);
-			mainBox.ShowAll ();
-			this.Add (mainBox);
+			headlabel.FontDescription = des;
 			
-			EnableTransparencyControl = true;
+			headlabel.Wrap = Pango.WrapMode.WordChar;
+			headlabel.BreakOnCamelCasing = true;
+			headlabel.BreakOnPunctuation = true;
+			descriptionBox.Spacing = 4;
+			VBox vb = new VBox (false, 0);
+			vb.PackStart (headlabel, true, true, 0);
+			vb.PackStart (descriptionBox, true, true, 0);
+			
+			HBox hb = new HBox (false, 0);
+			hb.PackStart (vb, true, true, 0);
+			
+			
+			vb2.Spacing = 4;
+			vb2.PackStart (hb, true, true, 0);
+			ContentBox.Add (vb2);
+			var scheme = Mono.TextEditor.Highlighting.SyntaxModeService.GetColorStyle (IdeApp.Preferences.ColorScheme);
+			Theme.SetSchemeColors (scheme);
+
+			foreColor = scheme.Default.Color;
+			headlabel.ModifyFg (StateType.Normal, foreColor);
+			ShowAll ();
+			IdeApp.Workbench.Toolbar.RemoveDecorationsWorkaround (this);
 		}
-		
-		public Gtk.Requisition ShowParameterInfo (IParameterDataProvider provider, int overload, int currentParam)
+
+		int lastParam = -2;
+		public void ShowParameterInfo (ParameterDataProvider provider, int overload, int _currentParam, int maxSize)
 		{
 			if (provider == null)
 				throw new ArgumentNullException ("provider");
 			int numParams = System.Math.Max (0, provider.GetParameterCount (overload));
-			
-			string[] paramText = new string[numParams];
-			for (int i = 0; i < numParams; i++) {
-				string txt = provider.GetParameterMarkup (overload, i);
-				if (i == currentParam)
-					txt = "<u><span foreground='" + LinkColor + "'>" + txt + "</span></u>";
-				paramText [i] = txt;
+			var currentParam = System.Math.Min (_currentParam, numParams - 1);
+			if (numParams > 0 && currentParam < 0)
+				currentParam = 0;
+			if (lastParam == currentParam) {
+				return;
 			}
-			string text = provider.GetMethodMarkup (overload, paramText, currentParam);
-			desc.Markup = text;
-			
-			if (provider.OverloadCount > 1) {
-				count.Show ();
-				goPrev.Show ();
-				goNext.Show ();
-				count.Text = GettextCatalog.GetString ("{0} of {1}", overload+1, provider.OverloadCount);
-			} else {
-				count.Hide ();
-				goPrev.Hide ();
-				goNext.Hide ();
+
+			lastParam = currentParam;
+			ClearDescriptions ();
+			var o = provider.CreateTooltipInformation (overload, _currentParam, false);
+
+			Theme.NumPages = provider.Count;
+			Theme.CurrentPage = overload;
+			if (provider.Count > 1) {
+				Theme.DrawPager = true;
+				Theme.PagerVertical = true;
 			}
-			Gtk.Requisition req = mainBox.SizeRequest ();
-			Resize (req.Width, req.Height);
-			return req;
-		}		
+
+			headlabel.Markup = o.SignatureMarkup;
+			headlabel.Visible = true;
+			if (Theme.DrawPager)
+				headlabel.WidthRequest = headlabel.RealWidth + 70;
+			
+			foreach (var cat in o.Categories) {
+				descriptionBox.PackStart (CreateCategory (cat.Item1, cat.Item2), true, true, 4);
+			}
+			
+			if (!string.IsNullOrEmpty (o.SummaryMarkup)) {
+				descriptionBox.PackStart (CreateCategory (GettextCatalog.GetString ("Summary"), o.SummaryMarkup), true, true, 4);
+			}
+			descriptionBox.ShowAll ();
+			QueueResize ();
+		}
+
+		void ClearDescriptions ()
+		{
+			while (descriptionBox.Children.Length > 0) {
+				var child = descriptionBox.Children [0];
+				descriptionBox.Remove (child);
+				child.Destroy ();
+			}
+		}
+
+		VBox CreateCategory (string categoryName, string categoryContentMarkup)
+		{
+			var vbox = new VBox ();
+			
+			vbox.Spacing = 2;
+			
+			var catLabel = new MonoDevelop.Components.FixedWidthWrapLabel ();
+			catLabel.Text = categoryName;
+			catLabel.ModifyFg (StateType.Normal, foreColor);
+			
+			vbox.PackStart (catLabel, false, true, 0);
+			
+			var contentLabel = new MonoDevelop.Components.FixedWidthWrapLabel ();
+			contentLabel.MaxWidth = Math.Max (440, this.Allocation.Width);
+			contentLabel.Wrap = Pango.WrapMode.WordChar;
+			contentLabel.BreakOnCamelCasing = true;
+			contentLabel.BreakOnPunctuation = true;
+			contentLabel.Markup = categoryContentMarkup.Trim ();
+			contentLabel.ModifyFg (StateType.Normal, foreColor);
+			
+			vbox.PackStart (contentLabel, true, true, 0);
+			
+			return vbox;
+		}
+
+		public void ChangeOverload ()
+		{
+			lastParam = -2;
+		}
+		
+		public void HideParameterInfo ()
+		{
+			ChangeOverload ();
+			Hide ();
+		}
 	}
 }

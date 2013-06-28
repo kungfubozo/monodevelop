@@ -36,6 +36,10 @@ namespace MonoDevelop.VersionControl.Views
 		VersionControlDocumentInfo info;
 		Mono.TextEditor.TextEditor diffTextEditor;
 		MonoDevelop.VersionControl.Views.ComparisonWidget comparisonWidget;
+		Gtk.Button buttonNext;
+		Gtk.Button buttonPrev;
+		Gtk.Button buttonDiff;
+		Gtk.Label labelOverview;
 
 		internal ComparisonWidget ComparisonWidget {
 			get {
@@ -75,8 +79,11 @@ namespace MonoDevelop.VersionControl.Views
 			this.info = info;
 			this.Build ();
 			comparisonWidget = new MonoDevelop.VersionControl.Views.ComparisonWidget (viewOnly);
+			buttonNext = new DocumentToolButton (Gtk.Stock.GoUp, GettextCatalog.GetString ("Previous Change"));
+			buttonPrev = new DocumentToolButton (Gtk.Stock.GoDown, GettextCatalog.GetString ("Next Change"));
+			labelOverview = new Gtk.Label () { Xalign = 0 };
+			buttonDiff = new Gtk.Button (GettextCatalog.GetString ("Unified Diff"));
 			
-			fixed1.SetSizeRequest (16, 16);
 			this.buttonNext.Clicked += (sender, args) => ComparisonWidget.GotoNext ();
 			this.buttonPrev.Clicked += (sender, args) => ComparisonWidget.GotoPrev ();
 			notebook1.Page = 0;
@@ -89,15 +96,25 @@ namespace MonoDevelop.VersionControl.Views
 			};
 			comparisonWidget.SetVersionControlInfo (info);
 			this.buttonDiff.Clicked += HandleButtonDiffhandleClicked;
-			diffTextEditor = new global::Mono.TextEditor.TextEditor (new Mono.TextEditor.Document (), new CommonTextEditorOptions ());
+			diffTextEditor = new global::Mono.TextEditor.TextEditor (new Mono.TextEditor.TextDocument (), new CommonTextEditorOptions ());
 			diffTextEditor.Document.MimeType = "text/x-diff";
 			
 			diffTextEditor.Options.ShowFoldMargin = false;
 			diffTextEditor.Options.ShowIconMargin = false;
+			diffTextEditor.Options.DrawIndentationMarkers = PropertyService.Get ("DrawIndentationMarkers", false);
 			diffTextEditor.Document.ReadOnly = true;
 			scrolledwindow1.Child = diffTextEditor;
 			diffTextEditor.Show ();
 			SetButtonSensitivity ();
+		}
+
+		internal void SetToolbar (DocumentToolbar toolbar)
+		{
+			toolbar.Add (labelOverview, true);
+			toolbar.Add (buttonDiff);
+			toolbar.Add (buttonPrev);
+			toolbar.Add (buttonNext);
+			toolbar.ShowAll ();
 		}
 		
 		void SetButtonSensitivity ()
@@ -109,20 +126,26 @@ namespace MonoDevelop.VersionControl.Views
 		{
 			if (notebook1.Page == 0) {
 				buttonDiff.Label = GettextCatalog.GetString ("_Compare");
-				diffTextEditor.Document.Text = Mono.TextEditor.Utils.Diff.GetDiffString (comparisonWidget.Diff,
-					comparisonWidget.DiffEditor.Document,
-					comparisonWidget.OriginalEditor.Document,
-					(info.Item.Path) + "\t\t"+ GetRevisionText (comparisonWidget.DiffEditor, comparisonWidget.diffRevision),
-					(info.Item.Path) + "\t\t"+ GetRevisionText (comparisonWidget.OriginalEditor, comparisonWidget.originalRevision)
-				);
-				
 				notebook1.Page = 1;
+				UpdatePatchView ();
 			} else {
 				buttonDiff.Label = GettextCatalog.GetString ("_Patch");
 				notebook1.Page = 0;
 			}
 			
 			SetButtonSensitivity ();
+		}
+		
+		public void UpdatePatchView ()
+		{
+			if (notebook1.Page == 1) {
+				diffTextEditor.Document.Text = Mono.TextEditor.Utils.Diff.GetDiffString (comparisonWidget.Diff,
+					comparisonWidget.DiffEditor.Document,
+					comparisonWidget.OriginalEditor.Document,
+					(info.Item.Path) + "\t\t"+ GetRevisionText (comparisonWidget.DiffEditor, comparisonWidget.diffRevision),
+					(info.Item.Path) + "\t\t"+ GetRevisionText (comparisonWidget.OriginalEditor, comparisonWidget.originalRevision)
+				);
+			}
 		}
 		
 		string GetRevisionText (Mono.TextEditor.TextEditor editor, Revision rev)

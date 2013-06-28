@@ -51,7 +51,6 @@ namespace MonoDevelop.AspNet.Gui
 	{
 		HtmlSchema schema;
 		bool resolvedDocType;
-		string docType;
 		
 		protected HtmlSchema Schema {
 			get {
@@ -107,7 +106,7 @@ namespace MonoDevelop.AspNet.Gui
 			
 			//FIXME: don't show this after any elements
 			if (DocType == null)
-				list.Add ("!DOCTYPE", "md-literal", GettextCatalog.GetString ("Character data"));
+				list.Add ("!DOCTYPE", "md-literal", GettextCatalog.GetString ("Document type"));
 		}
 		
 		protected override CompletionDataList GetDocTypeCompletions ()

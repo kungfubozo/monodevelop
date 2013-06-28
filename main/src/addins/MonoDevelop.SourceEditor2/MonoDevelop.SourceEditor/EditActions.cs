@@ -60,11 +60,11 @@ namespace MonoDevelop.SourceEditor
 		static int GetNextNonWsCharOffset (TextEditorData data, int offset)
 		{
 			int result = offset;
-			if (result >= data.Document.Length)
+			if (result >= data.Document.TextLength)
 				return -1;
 			while (Char.IsWhiteSpace (data.Document.GetCharAt (result))) {
 				result++;
-				if (result >= data.Document.Length)
+				if (result >= data.Document.TextLength)
 					return -1;
 			}
 			return result;
@@ -72,17 +72,15 @@ namespace MonoDevelop.SourceEditor
 		
 		static void RemoveCharBeforCaret (TextEditorData data)
 		{
-			if (((ISourceEditorOptions)data.Options).AutoInsertMatchingBracket) {
+			if (!data.IsSomethingSelected && ((ISourceEditorOptions)data.Options).AutoInsertMatchingBracket) {
 				if (data.Caret.Offset > 0) {
 					var line = data.GetLine (data.Caret.Line);
 					var stack = line.StartSpan.Clone();
-					Mono.TextEditor.Highlighting.SyntaxModeService.ScanSpans (data.Document, data.Document.SyntaxMode, data.Document.SyntaxMode, stack, line.Offset, data.Caret.Offset - 1);
 					if (stack.Any (s => s.Color == "string.other")) {
 						DeleteActions.Backspace (data);
 						return;
 					}
 					stack = line.StartSpan.Clone();
-					Mono.TextEditor.Highlighting.SyntaxModeService.ScanSpans (data.Document, data.Document.SyntaxMode, data.Document.SyntaxMode, stack, line.Offset, data.Caret.Offset);
 					if (stack.Any (s => s.Color == "string.other")) {
 						DeleteActions.Backspace (data);
 						return;
@@ -94,10 +92,7 @@ namespace MonoDevelop.SourceEditor
 					if (idx >= 0) {
 						int nextCharOffset = GetNextNonWsCharOffset (data, data.Caret.Offset);
 						if (nextCharOffset >= 0 && closing[idx] == data.Document.GetCharAt (nextCharOffset)) {
-							bool updateToEnd = data.Document.OffsetToLineNumber (nextCharOffset) != data.Caret.Line;
 							data.Remove (data.Caret.Offset, nextCharOffset - data.Caret.Offset + 1);
-							if (updateToEnd)
-								data.Document.CommitLineToEndUpdate (data.Caret.Line);
 						}
 					}
 				}

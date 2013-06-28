@@ -39,15 +39,16 @@ using MonoDevelop.Ide.CodeCompletion;
 
 using CBinding.Parser;
 using MonoDevelop.Core;
+using ICSharpCode.NRefactory.Completion;
 
 namespace CBinding
 {
-	public class ParameterDataProvider : IParameterDataProvider
+	public class ParameterDataProvider : MonoDevelop.Ide.CodeCompletion.ParameterDataProvider
 	{
 		private Mono.TextEditor.TextEditorData editor;
 		private List<Function> functions = new List<Function> ();
-		
-		public ParameterDataProvider (Document document, ProjectInformation info, string functionName)
+
+		public ParameterDataProvider (int startOffset, Document document, ProjectInformation info, string functionName) :base (startOffset)
 		{
 			this.editor = document.Editor;
 			
@@ -71,7 +72,7 @@ namespace CBinding
 		}
 		
 		// Returns the number of methods
-		public int OverloadCount {
+		public override int Count {
 			get { return functions.Count; }
 		}
 		
@@ -108,7 +109,7 @@ namespace CBinding
 		
 		// Returns the markup to use to represent the specified method overload
 		// in the parameter information window.
-		public string GetMethodMarkup (int overload, string[] parameterMarkup, int currentParameter)
+		public string GetHeading (int overload, string[] parameterMarkup, int currentParameter)
 		{
 			Function function = functions[overload];
 			string paramTxt = string.Join (", ", parameterMarkup);
@@ -127,8 +128,13 @@ namespace CBinding
 			return prename + "<b>" + function.Name + "</b>" + " (" + paramTxt + ")" + cons;
 		}
 		
+		public string GetDescription (int overload, int currentParameter)
+		{
+			return "";
+		}
+		
 		// Returns the text to use to represent the specified parameter
-		public string GetParameterMarkup (int overload, int paramIndex)
+		public string GetParameterDescription (int overload, int paramIndex)
 		{
 			Function function = functions[overload];
 			
@@ -136,9 +142,17 @@ namespace CBinding
 		}
 		
 		// Returns the number of parameters of the specified method
-		public int GetParameterCount (int overload)
+		public override int GetParameterCount (int overload)
 		{
 			return functions[overload].Parameters.Length;
+		}
+		public override string GetParameterName (int overload, int paramIndex)
+		{
+			return "";
+		}
+		public override bool AllowParameterList (int overload)
+		{
+			return false;
 		}
 	}
 	

@@ -1,6 +1,3 @@
 main
-extras/JavaBinding
-extras/ValaBinding
 extras/MonoDevelop.Database
 extras/MonoDevelop.Debugger.Gdb
-extras/PyBinding

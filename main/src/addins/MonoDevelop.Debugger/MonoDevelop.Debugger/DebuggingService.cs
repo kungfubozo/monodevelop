@@ -37,14 +37,15 @@ using MonoDevelop.Ide;
 using MonoDevelop.Ide.Gui;
 using MonoDevelop.Ide.Gui.Content;
 using MonoDevelop.Projects;
-using MonoDevelop.Projects.Dom;
-using MonoDevelop.Projects.Text;
 using MonoDevelop.Debugger.Viewers;
+using ICSharpCode.NRefactory.TypeSystem;
+using ICSharpCode.NRefactory.Semantics;
 
 /*
  * Some places we should be doing some error handling we used to toss
  * exceptions, now we error out silently, this needs a real solution.
  */
+using MonoDevelop.Ide.TextEditing;
 
 namespace MonoDevelop.Debugger
 {
@@ -69,7 +70,9 @@ namespace MonoDevelop.Debugger
 		static DebuggerSession session;
 		static Backtrace currentBacktrace;
 		static int currentFrame;
-
+		
+		static ExceptionCaughtMessage exceptionDialog;
+		
 		static BusyEvaluatorDialog busyDialog;
 		static bool isBusy;
 		static StatusBarIcon busyStatusIcon;
@@ -87,15 +90,17 @@ namespace MonoDevelop.Debugger
 			
 		static public event EventHandler EvaluationOptionsChanged;
 		
-		static DebuggingService()
+		static DebuggingService ()
 		{
 			executionHandlerFactory = new DebugExecutionHandlerFactory ();
-			TextFileService.LineCountChanged += OnLineCountChanged;
+			TextEditorService.LineCountChanged += OnLineCountChanged;
 			IdeApp.Initialized += delegate {
 				IdeApp.Workspace.StoringUserPreferences += OnStoreUserPrefs;
 				IdeApp.Workspace.LoadingUserPreferences += OnLoadUserPrefs;
 				IdeApp.Workspace.LastWorkspaceItemClosed += OnSolutionClosed;
 				busyDialog = new BusyEvaluatorDialog ();
+				busyDialog.TransientFor = MessageService.RootWindow;
+				busyDialog.DestroyWithParent = true;
 			};
 			AddinManager.AddExtensionNodeHandler (FactoriesPath, delegate {
 				// Regresh the engine list
@@ -279,12 +284,33 @@ namespace MonoDevelop.Debugger
 		
 		public static void ShowExceptionCaughtDialog ()
 		{
-			ExceptionInfo val = CurrentFrame.GetException ();
+			EvaluationOptions ops = session.EvaluationOptions.Clone ();
+			ops.MemberEvaluationTimeout = 0;
+			ops.EvaluationTimeout = 0;
+			ops.EllipsizeStrings = false;
+			
+			ExceptionInfo val = CurrentFrame.GetException (ops);
 			if (val != null) {
-				ExceptionCaughtDialog dlg = new ExceptionCaughtDialog (val);
-				dlg.TransientFor = IdeApp.Workbench.RootWindow;
-				MessageService.PlaceDialog (dlg, IdeApp.Workbench.RootWindow);
-				dlg.Show ();
+				HideExceptionCaughtDialog ();
+				exceptionDialog = new ExceptionCaughtMessage (val, CurrentFrame.SourceLocation.FileName, CurrentFrame.SourceLocation.Line, CurrentFrame.SourceLocation.Column);
+				exceptionDialog.ShowButton ();
+				exceptionDialog.Closed += (o, args) => {
+					exceptionDialog = null;
+				};
+			}
+		}
+
+		static void HideExceptionCaughtDialog ()
+		{
+			if (exceptionDialog != null) {
+				exceptionDialog.Dispose ();
+				exceptionDialog = null;
+			}
+		}
+
+		internal static ExceptionCaughtMessage ExceptionCaughtMessage {
+			get {
+				return exceptionDialog;
 			}
 		}
 
@@ -306,7 +332,7 @@ namespace MonoDevelop.Debugger
 			session.BreakpointTraceHandler = BreakpointTraceHandler;
 			session.GetExpressionEvaluator = OnGetExpressionEvaluator;
 			session.ConnectionDialogCreator = delegate {
-				return new GtkConnectionDialog ();
+				return new StatusBarConnectionDialog ();
 			};
 
 			console.CancelRequested += OnCancelRequested;
@@ -326,6 +352,7 @@ namespace MonoDevelop.Debugger
 				oldLayout = null;
 				// Dispatch asynchronously to avoid start/stop races
 				DispatchService.GuiSyncDispatch (delegate {
+					IdeApp.Workbench.HideCommandBar ("Debug");
 					if (IdeApp.Workbench.CurrentLayout == "Debug")
 						IdeApp.Workbench.CurrentLayout = layout;
 				});
@@ -335,6 +362,8 @@ namespace MonoDevelop.Debugger
 			
 			if (!IsDebugging)
 				return;
+
+			HideExceptionCaughtDialog ();
 
 			if (busyStatusIcon != null) {
 				busyStatusIcon.Dispose ();
@@ -349,7 +378,6 @@ namespace MonoDevelop.Debugger
 			session.TypeResolverHandler = null;
 			session.BreakpointTraceHandler = null;
 			session.GetExpressionEvaluator = null;
-			console.CancelRequested -= OnCancelRequested;
 			
 			// Dispose the session at the end, since it may take a while.
 			DebuggerSession oldSession = session;
@@ -361,6 +389,7 @@ namespace MonoDevelop.Debugger
 			});
 			
 			if (console != null) {
+				console.CancelRequested -= OnCancelRequested;
 				console.Dispose ();
 				console = null;
 			}
@@ -380,6 +409,12 @@ namespace MonoDevelop.Debugger
 		public static bool IsDebugging {
 			get {
 				return session != null;
+			}
+		}
+
+		public static bool IsConnected {
+			get {
+				return IsDebugging && session.IsConnected;
 			}
 		}
 
@@ -432,23 +467,26 @@ namespace MonoDevelop.Debugger
 		
 		public static DebuggerSessionOptions GetUserOptions ()
 		{
-			EvaluationOptions eops = EvaluationOptions.DefaultOptions;
-			eops.AllowTargetInvoke = PropertyService.Get ("MonoDevelop.Debugger.DebuggingService.AllowTargetInvoke", true);
-			eops.AllowToStringCalls = PropertyService.Get ("MonoDevelop.Debugger.DebuggingService.AllowToStringCalls", true);
-			eops.EvaluationTimeout = PropertyService.Get ("MonoDevelop.Debugger.DebuggingService.EvaluationTimeout", 2500);
-			eops.FlattenHierarchy = PropertyService.Get ("MonoDevelop.Debugger.DebuggingService.FlattenHierarchy", false);
-			eops.GroupPrivateMembers = PropertyService.Get ("MonoDevelop.Debugger.DebuggingService.GroupPrivateMembers", true);
-			eops.GroupStaticMembers = PropertyService.Get ("MonoDevelop.Debugger.DebuggingService.GroupStaticMembers", true);
-			eops.MemberEvaluationTimeout = eops.EvaluationTimeout * 2;
+			EvaluationOptions eval = EvaluationOptions.DefaultOptions;
+			eval.AllowTargetInvoke = PropertyService.Get ("MonoDevelop.Debugger.DebuggingService.AllowTargetInvoke", true);
+			eval.AllowToStringCalls = PropertyService.Get ("MonoDevelop.Debugger.DebuggingService.AllowToStringCalls", true);
+			eval.EvaluationTimeout = PropertyService.Get ("MonoDevelop.Debugger.DebuggingService.EvaluationTimeout", 2500);
+			eval.FlattenHierarchy = PropertyService.Get ("MonoDevelop.Debugger.DebuggingService.FlattenHierarchy", false);
+			eval.GroupPrivateMembers = PropertyService.Get ("MonoDevelop.Debugger.DebuggingService.GroupPrivateMembers", true);
+			eval.GroupStaticMembers = PropertyService.Get ("MonoDevelop.Debugger.DebuggingService.GroupStaticMembers", true);
+			eval.MemberEvaluationTimeout = eval.EvaluationTimeout * 2;
 			return new DebuggerSessionOptions () {
+				StepOverPropertiesAndOperators = PropertyService.Get ("MonoDevelop.Debugger.DebuggingService.StepOverPropertiesAndOperators", true),
 				ProjectAssembliesOnly = PropertyService.Get ("MonoDevelop.Debugger.DebuggingService.ProjectAssembliesOnly", true),
-				EvaluationOptions = eops,
+				EvaluationOptions = eval,
 			};
 		}
 		
 		public static void SetUserOptions (DebuggerSessionOptions options)
 		{
+			PropertyService.Set ("MonoDevelop.Debugger.DebuggingService.StepOverPropertiesAndOperators", options.StepOverPropertiesAndOperators);
 			PropertyService.Set ("MonoDevelop.Debugger.DebuggingService.ProjectAssembliesOnly", options.ProjectAssembliesOnly);
+			
 			PropertyService.Set ("MonoDevelop.Debugger.DebuggingService.AllowTargetInvoke", options.EvaluationOptions.AllowTargetInvoke);
 			PropertyService.Set ("MonoDevelop.Debugger.DebuggingService.AllowToStringCalls", options.EvaluationOptions.AllowToStringCalls);
 			PropertyService.Set ("MonoDevelop.Debugger.DebuggingService.EvaluationTimeout", options.EvaluationOptions.EvaluationTimeout);
@@ -500,6 +538,7 @@ namespace MonoDevelop.Debugger
 			DispatchService.GuiSyncDispatch (delegate {
 				oldLayout = IdeApp.Workbench.CurrentLayout;
 				IdeApp.Workbench.CurrentLayout = "Debug";
+				IdeApp.Workbench.ShowCommandBar ("Debug");
 			});
 			
 			try {
@@ -508,6 +547,7 @@ namespace MonoDevelop.Debugger
 				Cleanup ();
 				throw;
 			}
+
 		}
 		
 		static bool ExceptionHandler (Exception ex)
@@ -549,7 +589,7 @@ namespace MonoDevelop.Debugger
 						busyStatusIcon.SetAlertMode (100);
 						busyStatusIcon.ToolTip = GettextCatalog.GetString ("The Debugger is waiting for an expression evaluation to finish.");
 						busyStatusIcon.EventBox.ButtonPressEvent += delegate {
-							busyDialog.Show ();
+							MessageService.PlaceDialog (busyDialog, MessageService.RootWindow);
 						};
 					}
 				} else {
@@ -564,7 +604,7 @@ namespace MonoDevelop.Debugger
 		static bool CheckIsBusy ()
 		{
 			if (isBusy && !busyDialog.Visible)
-				busyDialog.Show ();
+				MessageService.PlaceDialog (busyDialog, MessageService.RootWindow);
 			return isBusy;
 		}
 		
@@ -572,6 +612,7 @@ namespace MonoDevelop.Debugger
 		{
 			currentBacktrace = null;
 			DispatchService.GuiDispatch (delegate {
+				HideExceptionCaughtDialog ();
 				if (ResumedEvent != null)
 					ResumedEvent (null, a);
 				NotifyCallStackChanged ();
@@ -583,8 +624,6 @@ namespace MonoDevelop.Debugger
 		static void OnTargetEvent (object sender, TargetEventArgs args)
 		{
 			try {
-				Console.WriteLine ("OnTargetEvent, type - {0}", args.Type);
-
 				switch (args.Type) {
 					case TargetEventType.TargetExited:
 						Cleanup ();
@@ -602,8 +641,8 @@ namespace MonoDevelop.Debugger
 					default:
 						break;
 				}
-			} catch (Exception e) {
-				Console.WriteLine ("OnTargetEvent, {0}", e.ToString ());
+			} catch (Exception ex) {
+				LoggingService.LogError ("Error handling debugger target event", ex);
 			}
 		}
 		
@@ -769,7 +808,7 @@ namespace MonoDevelop.Debugger
 			if (currentBacktrace != null) {
 				var sf = GetCurrentVisibleFrame ();
 				if (!string.IsNullOrEmpty (sf.SourceLocation.FileName) && System.IO.File.Exists (sf.SourceLocation.FileName) && sf.SourceLocation.Line != -1) {
-					Document document = IdeApp.Workbench.OpenDocument (sf.SourceLocation.FileName, sf.SourceLocation.Line, 1, OpenDocumentOptions.BringToFront);
+					Document document = IdeApp.Workbench.OpenDocument (sf.SourceLocation.FileName, sf.SourceLocation.Line, 1, OpenDocumentOptions.Debugger);
 					OnDisableConditionalCompilation (new DocumentEventArgs (document));
 				}
 			}
@@ -831,14 +870,14 @@ namespace MonoDevelop.Debugger
 		
 		static void OnLineCountChanged (object ob, LineCountEventArgs a)
 		{
-			List<Breakpoint> bps = new List<Breakpoint> (breakpoints.GetBreakpoints ());
-			foreach (Breakpoint bp in bps) {
+			foreach (Breakpoint bp in breakpoints.GetBreakpoints ()) {
 				if (bp.FileName == a.TextFile.Name) {
 					if (bp.Line > a.LineNumber) {
-						// If the line that has the breakpoint is deleted, delete the breakpoint
-						breakpoints.Remove (bp);
+						// If the line that has the breakpoint is deleted, delete the breakpoint, otherwise update the line #.
 						if (bp.Line + a.LineCount >= a.LineNumber)
-							breakpoints.Add (bp.FileName, bp.Line + a.LineCount);
+							breakpoints.UpdateBreakpointLine (bp, bp.Line + a.LineCount);
+						else
+							breakpoints.Remove (bp);
 					}
 					else if (bp.Line == a.LineNumber && a.LineCount < 0)
 						breakpoints.Remove (bp);
@@ -876,13 +915,13 @@ namespace MonoDevelop.Debugger
 			if (doc != null) {
 				ITextEditorResolver textEditorResolver = doc.GetContent <ITextEditorResolver> ();
 				if (textEditorResolver != null) {
-					ResolveResult rr = textEditorResolver.GetLanguageItem (doc.Editor.Document.LocationToOffset (location.Line, 1), identifier);
-					NamespaceResolveResult ns = rr as NamespaceResolveResult;
+					var rr = textEditorResolver.GetLanguageItem (doc.Editor.Document.LocationToOffset (location.Line, 1), identifier);
+					var ns = rr as NamespaceResolveResult;
 					if (ns != null)
-						return ns.Namespace;
-					MemberResolveResult result = rr as MemberResolveResult;
-					if (result != null && (result.ResolvedMember == null || result.ResolvedMember is IType) && result.ResolvedType != null)
-						return result.ResolvedType.FullName;
+						return ns.NamespaceName;
+					var result = rr as TypeResolveResult;
+					if (result != null && !result.IsError)
+						return result.Type.FullName;
 				}
 			}
 			return null;
@@ -942,12 +981,30 @@ namespace MonoDevelop.Debugger
 			return h.Execute (command, console);
 		}
 	}
+
+	internal class StatusBarConnectionDialog : IConnectionDialog
+	{
+		public event EventHandler UserCancelled;
+
+		public void SetMessage (DebuggerStartInfo dsi, string message, bool listening, int attemptNumber)
+		{
+			Gtk.Application.Invoke (delegate {
+				IdeApp.Workbench.StatusBar.ShowMessage (MonoDevelop.Ide.Gui.Stock.StatusConnecting, message);
+			});
+		}
+
+		public void Dispose ()
+		{
+			Gtk.Application.Invoke (delegate {
+				IdeApp.Workbench.StatusBar.ShowReady ();
+			});
+		}
+	}
 	
 	internal class GtkConnectionDialog : IConnectionDialog
 	{
 		bool disposed;
-		Gtk.Dialog dialog;
-		Gtk.Label label;
+		System.Threading.CancellationTokenSource cts;
 		
 		public event EventHandler UserCancelled;
 		
@@ -957,26 +1014,16 @@ namespace MonoDevelop.Debugger
 
 		public void SetMessage (DebuggerStartInfo dsi, string message, bool listening, int attemptNumber)
 		{
-			if (disposed)
+			//FIXME: we don't support changing the message
+			if (disposed || cts != null)
 				return;
 			
-			if (string.IsNullOrEmpty (message))
-				message = DefaultListenMessage;
+			cts = new System.Threading.CancellationTokenSource ();
 			
-			if (dialog == null) {
-				Gtk.Application.Invoke (delegate {
-					if (disposed)
-						return;
-					RunDialog (message);
-				});
-			} else {
-				Gtk.Application.Invoke (delegate {
-					if (disposed)
-						return;
-					if (label != null)
-						label.Text = message;
-				});
-			}
+			//MessageService is threadsafe but we want this to be async
+			Gtk.Application.Invoke (delegate {
+				RunDialog (message);
+			});
 		}
 		
 		void RunDialog (string message)
@@ -984,24 +1031,29 @@ namespace MonoDevelop.Debugger
 			if (disposed)
 				return;
 			
-			dialog = new Gtk.Dialog () {
-				Title = "Waiting for debugger"
-			};
+			string title;
 			
-			var label = new Gtk.Alignment (0.5f, 0.5f, 1f, 1f) {
-				Child = new Gtk.Label (message),
-				BorderWidth = 12
-			};
-			dialog.VBox.PackStart (label);
-			label.ShowAll ();
+			if (message == null) {
+				title = GettextCatalog.GetString ("Waiting for debugger");
+			} else {
+				message = message.Trim ();
+				int i = message.IndexOfAny (new char[] { '\n', '\r' });
+				if (i > 0) {
+					title = message.Substring (0, i).Trim ();
+					message = message.Substring (i).Trim ();
+				} else {
+					title = message;
+					message = null;
+				}
+			}
+
+			var gm = new GenericMessage (title, message, cts.Token);
+			gm.Buttons.Add (AlertButton.Cancel);
+			gm.DefaultButton = 0;
+			MessageService.GenericAlert (gm);
+			cts = null;
 			
-			dialog.AddButton ("Cancel", Gtk.ResponseType.Cancel);
-			
-			int response = MonoDevelop.Ide.MessageService.ShowCustomDialog (dialog);
-			dialog.Destroy ();
-			dialog = null;
-			
-			if (!disposed && response != (int) Gtk.ResponseType.Ok && UserCancelled != null) {
+			if (!disposed && UserCancelled != null) {
 				UserCancelled (null, null);
 			}
 		}
@@ -1011,13 +1063,9 @@ namespace MonoDevelop.Debugger
 			if (disposed)
 				return;
 			disposed = true;
-			
-			if (dialog != null) {
-				Gtk.Application.Invoke (delegate {
-					if (dialog != null)
-						dialog.Respond (Gtk.ResponseType.Ok);
-				});
-			}
+			var c = cts;
+			if (c != null)
+				c.Cancel ();
 		}
 	}
 }

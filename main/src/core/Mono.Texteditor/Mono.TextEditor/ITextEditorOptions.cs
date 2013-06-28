@@ -29,6 +29,12 @@ using Mono.TextEditor.Highlighting;
 
 namespace Mono.TextEditor
 {
+	public enum ShowWhitespaces {
+		Never,
+		Selection,
+		Always
+	}
+
 	public interface ITextEditorOptions : IDisposable
 	{
 		double Zoom { get; set; }
@@ -38,36 +44,43 @@ namespace Mono.TextEditor
 		void ZoomIn ();
 		void ZoomOut ();
 		void ZoomReset ();
+		
 		string IndentationString { get; }
+		
 		IWordFindStrategy WordFindStrategy { get; set; }
+		
 		bool AllowTabsAfterNonTabs { get; set; }
 		bool HighlightMatchingBracket { get; set; }
-		bool RemoveTrailingWhitespaces { get; set; }
 		bool TabsToSpaces { get; set; }
 		int IndentationSize { get; set; }
 		int TabSize { get; set; }
 		bool ShowIconMargin { get; set; }
 		bool ShowLineNumberMargin { get; set; }
 		bool ShowFoldMargin { get; set; }
-		bool ShowInvalidLines { get; set; }
-		bool ShowTabs { get; set; }
-		bool ShowEolMarkers { get; set; }
 		bool HighlightCaretLine { get; set; }
-		bool ShowSpaces { get; set; }
 		int RulerColumn { get; set; }
 		bool ShowRuler { get; set; }
-		bool AutoIndent { get; set; }
+		IndentStyle IndentStyle { get; set; }
 		bool OverrideDocumentEolMarker { get; set; }
 		bool EnableSyntaxHighlighting { get; set; }
 		bool EnableAnimations { get; }
+		bool EnableSelectionWrappingKeys { get; }
+
+		bool EnableQuickDiff { get; set; }
+
+		bool DrawIndentationMarkers { get; set; }
+
 		bool UseAntiAliasing { get; set; }
+		bool WrapLines { get; set; }
 		string FontName { get;  set; }
 		Pango.FontDescription Font { get;  }
 		
 		string ColorScheme { get; set;  }
 		string DefaultEolMarker { get; set; }
-		
-		ColorSheme GetColorStyle (Gtk.Style widgetStyle);
+
+		ShowWhitespaces ShowWhitespaces { get; set; }
+
+		ColorScheme GetColorStyle ();
 		
 		event EventHandler Changed;
 	}

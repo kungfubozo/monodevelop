@@ -51,18 +51,12 @@ namespace MonoDevelop.Ide.Gui
 		
 		public T GetContent <T>() where T : class
 		{
-			return window.ActiveViewContent.GetContent<T> ();
+			return (T) window.ActiveViewContent.GetContent (typeof(T));
 		}
 		
 		object ICommandRouter.GetNextCommandTarget ()
 		{
 			return doc.ExtendedCommandTargetChain;
-		}
-		
-		[CommandHandler (FileCommands.CloseFile)]
-		protected void OnCloseFile ()
-		{
-			window.CloseWindow (false, true, 0);
 		}
 		
 		[CommandHandler (FileCommands.Save)]
@@ -277,7 +271,7 @@ namespace MonoDevelop.Ide.Gui
 		protected void OnUppercaseSelection (CommandInfo info)
 		{
 			IEditableTextBuffer buffer = GetContent <IEditableTextBuffer> ();
-			info.Enabled = buffer != null && buffer.CursorPosition < buffer.Length;
+			info.Enabled = buffer != null;
 		}
 		
 		[CommandHandler (EditCommands.LowercaseSelection)]
@@ -318,7 +312,7 @@ namespace MonoDevelop.Ide.Gui
 		protected void OnLowercaseSelection (CommandInfo info)
 		{
 			IEditableTextBuffer buffer = GetContent <IEditableTextBuffer> ();
-			info.Enabled = buffer != null && buffer.CursorPosition < buffer.Length;
+			info.Enabled = buffer != null;
 		}
 		
 
@@ -410,7 +404,7 @@ namespace MonoDevelop.Ide.Gui
 		protected void OnDeleteLine ()
 		{
 			var line = doc.Editor.Document.GetLine (doc.Editor.Caret.Line);
-			doc.Editor.Remove (line.Offset, line.Length);
+			doc.Editor.Remove (line.Offset, line.LengthIncludingDelimiter);
 		}
 		
 		struct RemoveInfo
@@ -437,7 +431,7 @@ namespace MonoDevelop.Ide.Gui
 				return ch == ' ' || ch == '\t' || ch == '\v';
 			}
 			
-			public static RemoveInfo GetRemoveInfo (Mono.TextEditor.Document document, ref int pos)
+			public static RemoveInfo GetRemoveInfo (Mono.TextEditor.TextDocument document, ref int pos)
 			{
 				int len = 0;
 				while (pos > 0 && IsWhiteSpace (document.GetCharAt (pos))) {
@@ -465,7 +459,7 @@ namespace MonoDevelop.Ide.Gui
 				return;
 			
 			System.Collections.Generic.List<RemoveInfo> removeList = new System.Collections.Generic.List<RemoveInfo> ();
-			int pos = data.Document.Length - 1;
+			int pos = data.Document.TextLength - 1;
 			RemoveInfo removeInfo = RemoveInfo.GetRemoveInfo (data.Document, ref pos);
 			if (!removeInfo.IsEmpty)
 				removeList.Add (removeInfo);
@@ -484,10 +478,9 @@ namespace MonoDevelop.Ide.Gui
 			}
 			using (var undo = data.OpenUndoGroup ()) {
 				foreach (var info in removeList) {
-					((Mono.TextEditor.IBuffer)data.Document).Remove (info.Position, info.Length);
+					data.Document.Remove (info.Position, info.Length);
 					data.Document.CommitLineUpdate (data.Document.OffsetToLineNumber (info.Position));
 				}
-				data.Caret.Offset = Math.Min (data.Caret.Offset, data.Document.Length - 1);
 			}
 		}
 		
@@ -498,11 +491,18 @@ namespace MonoDevelop.Ide.Gui
 		}
 		
 		#region Folding
+		bool IsFoldMarkerMarginEnabled {
+			get {
+				return PropertyService.Get ("ShowFoldMargin", false);
+			}
+		}
+
 		[CommandUpdateHandler (EditCommands.ToggleAllFoldings)]
 		[CommandUpdateHandler (EditCommands.FoldDefinitions)]
+		[CommandUpdateHandler (EditCommands.ToggleFolding)]
 		protected void UpdateFoldCommands (CommandInfo info)
 		{
-			info.Enabled = GetContent <IFoldable> () != null;
+			info.Enabled = GetContent <IFoldable> () != null && IsFoldMarkerMarginEnabled;
 		}
 		
 		[CommandHandler (EditCommands.ToggleAllFoldings)]
@@ -516,13 +516,7 @@ namespace MonoDevelop.Ide.Gui
 		{
 			GetContent <IFoldable> ().FoldDefinitions ();
 		}
-		
-		[CommandUpdateHandler (EditCommands.ToggleFolding)]
-		protected void UpdateToggleFolding (CommandInfo info)
-		{
-			info.Enabled = GetContent <IFoldable> () != null;
-		}
-		
+
 		[CommandHandler (EditCommands.ToggleFolding)]
 		protected void ToggleFolding ()
 		{

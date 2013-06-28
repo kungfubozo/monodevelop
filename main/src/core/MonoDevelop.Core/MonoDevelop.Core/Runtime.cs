@@ -38,6 +38,9 @@ using MonoDevelop.Core.Assemblies;
 using MonoDevelop.Core.Execution;
 using MonoDevelop.Core.Instrumentation;
 using MonoDevelop.Core.Setup;
+using System.Security.Cryptography.X509Certificates;
+using System.Net.Security;
+using System.Net;
 
 
 namespace MonoDevelop.Core
@@ -56,13 +59,22 @@ namespace MonoDevelop.Core
 				return;
 			Counters.RuntimeInitialization.BeginTiming ();
 			SetupInstrumentation ();
-			
-			if (Platform.IsMac)
-				InitMacFoundation ();
+
+			Platform.Initialize ();
 			
 			// Set a default sync context
 			if (SynchronizationContext.Current == null)
 				SynchronizationContext.SetSynchronizationContext (new SynchronizationContext ());
+
+			// Hook up the SSL certificate validation codepath
+			System.Net.ServicePointManager.ServerCertificateValidationCallback += delegate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors) {
+				if (sslPolicyErrors == SslPolicyErrors.None)
+					return true;
+				
+				if (sender is WebRequest)
+					sender = ((WebRequest)sender).RequestUri.Host;
+				return WebCertificateService.GetIsCertificateTrusted (sender as string, certificate.GetPublicKeyString ());
+			};
 			
 			AddinManager.AddinLoadError += OnLoadError;
 			AddinManager.AddinLoaded += OnLoad;
@@ -171,6 +183,7 @@ namespace MonoDevelop.Core
 		static void OnLoadError (object s, AddinErrorEventArgs args)
 		{
 			string msg = "Add-in error (" + args.AddinId + "): " + args.Message;
+			LogReporting.LogReportingService.ReportUnhandledException (args.Exception, false, true);
 			LoggingService.LogError (msg, args.Exception);
 		}
 		
@@ -263,14 +276,6 @@ namespace MonoDevelop.Core
 					setproctitle (Encoding.ASCII.GetBytes ("%s\0"), Encoding.ASCII.GetBytes (name + "\0"));
 				} catch (EntryPointNotFoundException) {}
 			}
-		}
-		
-		[DllImport ("libc")]
-		extern static IntPtr dlopen (string name, int mode);
-		
-		static void InitMacFoundation ()
-		{
-			dlopen ("/System/Library/Frameworks/Foundation.framework/Foundation", 0x1);
 		}
 		
 		public static event EventHandler ShuttingDown;

@@ -34,7 +34,6 @@ using MonoDevelop.Core;
 using MonoDevelop.Ide.Gui.Dialogs;
 using MonoDevelop.Components;
 using MonoDevelop.Ide.Tasks;
-using MonoDevelop.Projects.Dom.Parser;
 using Gtk;
 
 namespace MonoDevelop.Ide.Gui.OptionPanels
@@ -75,7 +74,7 @@ namespace MonoDevelop.Ide.Gui.OptionPanels
 			string modified = String.Empty;
 			foreach (char ch in entryToken.Text)
 			{
-				if (!Char.IsLetterOrDigit (ch))
+				if (!Char.IsLetterOrDigit (ch) && ch != '\\')
 				{
 					modified += '_';
 					continue;
@@ -166,7 +165,7 @@ namespace MonoDevelop.Ide.Gui.OptionPanels
 		
 		public void Load ()
 		{
-			foreach (CommentTag ctag in ProjectDomService.SpecialCommentTags)
+			foreach (var ctag in CommentTag.SpecialCommentTags)
 				tokensStore.AppendValues (ctag.Tag, ctag.Priority);
 			
 			colorbuttonHighPrio.Color = StringToColor ((string)PropertyService.Get ("Monodevelop.UserTasksHighPrioColor", ""));
@@ -180,7 +179,7 @@ namespace MonoDevelop.Ide.Gui.OptionPanels
 			foreach (object[] row in tokensStore)
 				tags.Add (new CommentTag ((string)row[0], (int)row[1]));
 
-			ProjectDomService.SpecialCommentTags = new CommentTagSet (tags);
+			CommentTag.SpecialCommentTags = tags;
 			
 			PropertyService.Set ("Monodevelop.UserTasksHighPrioColor", ColorToString (colorbuttonHighPrio.Color));
 			PropertyService.Set ("Monodevelop.UserTasksNormalPrioColor", ColorToString (colorbuttonNormalPrio.Color));

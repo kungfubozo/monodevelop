@@ -30,8 +30,30 @@ using System;
 
 namespace MonoDevelop.Components.Commands
 {
+	/// <summary>
+	/// A visitor for the command route
+	/// </summary>
 	public interface ICommandTargetVisitor
 	{
+		/// <summary>
+		/// Called when a visit operation is started
+		/// </summary>
+		void Start ();
+
+		/// <summary>
+		/// Called for every object in the hierarchy
+		/// </summary>
+		/// <param name='ob'>
+		/// Visited object
+		/// </param>
+		/// <returns>
+		/// True if the visit operation has to be stopped
+		/// </returns>
 		bool Visit (object ob);
+
+		/// <summary>
+		/// Called when the visit operation ends
+		/// </summary>
+		void End ();
 	}
 }

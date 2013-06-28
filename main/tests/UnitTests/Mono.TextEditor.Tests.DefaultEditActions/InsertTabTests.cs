@@ -28,23 +28,20 @@
 using System;
 using NUnit.Framework;
 
-namespace Mono.TextEditor.Tests
+namespace Mono.TextEditor.Tests.Actions
 {
 	[TestFixture()]
-	public class InsertTabTests
+	public class InsertTabTests : TextEditorTestBase
 	{
-		
-		public static ISegment GetSelection (TextEditorData data, bool reverse)
+		public static TextEditorData Create (string input, bool reverse)
 		{
-			int offset1 = data.Document.Text.IndexOf ('[');
-			int offset2 = data.Document.Text.IndexOf (']');
-			return new Segment (offset1, offset2 - offset1);
-		}
-
-		public static void SetSelection (TextEditorData data, bool reverse)
-		{
-			ISegment selection = GetSelection (data, reverse);
+			TextEditorData data = new Mono.TextEditor.TextEditorData ();
 			
+			int offset1 = input.IndexOf ('[');
+			int offset2 = input.IndexOf (']');
+			var selection = new TextSegment (offset1, offset2 - offset1 - 1);
+
+			data.Text = input.Substring (0, offset1) + input.Substring (offset1 + 1, (offset2 - offset1) - 1) + input.Substring (offset2 + 1);
 			if (reverse) {
 				data.Caret.Offset = selection.Offset;
 				data.SelectionAnchor = selection.EndOffset;
@@ -54,182 +51,127 @@ namespace Mono.TextEditor.Tests
 				data.SelectionAnchor = selection.Offset;
 				data.ExtendSelectionTo (selection.EndOffset);
 			}
+			return data;
+		}
+
+		public static void Check (TextEditorData data, string output, bool reverse)
+		{
+			int offset1 = output.IndexOf ('[');
+			int offset2 = output.IndexOf (']');
+			string expected = output.Substring (0, offset1) + output.Substring (offset1 + 1, (offset2 - offset1) - 1) + output.Substring (offset2 + 1);
+			offset2--;
+			Assert.AreEqual (expected, data.Text);
+			Assert.AreEqual (data.OffsetToLocation (reverse ? offset2 : offset1), data.MainSelection.Anchor);
+			Assert.AreEqual (data.OffsetToLocation (reverse ? offset1 : offset2), data.MainSelection.Lead);
 		}
 		
-		[Test()]
-		public void TestInsertTabLine ()
+		[TestCase(false)]
+		[TestCase(true)]
+		public void TestInsertTabLine (bool reverse)
 		{
-			TextEditorData data = new Mono.TextEditor.TextEditorData  ();
-			data.Document.Text = 
-@"123456789
+			var data = Create (@"123456789
 123[456789
 123d456789
 123]456789
 123456789
-123456789";
-			SetSelection (data, false);
-			
+123456789", reverse);
+
 			MiscActions.InsertTab (data);
-/*			ISegment currentSelection = GetSelection (data, false);
 			
-			Assert.AreEqual (currentSelection.Offset, data.SelectionRange.Offset);
-			Assert.AreEqual (currentSelection.EndOffset, data.SelectionRange.EndOffset);
-			Assert.AreEqual (currentSelection.EndOffset, data.Caret.Offset);*/
-			
-			Assert.IsTrue (data.Document.GetLine (DocumentLocation.MinLine + 1).Length > data.Document.GetLine (DocumentLocation.MinLine + 0).Length);
-			Assert.IsTrue (data.Document.GetLine (DocumentLocation.MinLine + 2).Length > data.Document.GetLine (DocumentLocation.MinLine + 0).Length);
-			Assert.IsTrue (data.Document.GetLine (DocumentLocation.MinLine + 3).Length > data.Document.GetLine (DocumentLocation.MinLine + 0).Length);
-			Assert.AreEqual (data.Document.GetLine (DocumentLocation.MinLine + 0).Length, data.Document.GetLine (DocumentLocation.MinLine + 4).Length);
-			Assert.AreEqual (data.Document.GetLine (DocumentLocation.MinLine + 1).Length, data.Document.GetLine (DocumentLocation.MinLine + 2).Length);
-			Assert.AreEqual (data.Document.GetLine (DocumentLocation.MinLine + 1).Length, data.Document.GetLine (DocumentLocation.MinLine + 3).Length);
-		}
-		
-		[Test()]
-		public void TestInsertTabLineReverse ()
-		{
-			TextEditorData data = new Mono.TextEditor.TextEditorData  ();
-			data.Document.Text = 
-@"123456789
-123[456789
-123d456789
-123]456789
+			Check (data, @"123456789
+	123[456789
+	123d456789
+	123]456789
 123456789
-123456789";
-			SetSelection (data, true);
-			
-			MiscActions.InsertTab (data);
-/*			ISegment currentSelection = GetSelection (data, true);
-			
-			Assert.AreEqual (currentSelection.Offset, data.SelectionRange.Offset);
-			Assert.AreEqual (currentSelection.EndOffset, data.SelectionRange.EndOffset);
-			Assert.AreEqual (currentSelection.Offset, data.Caret.Offset);*/
-			
-			Assert.IsTrue (data.Document.GetLine (DocumentLocation.MinLine + 1).Length > data.Document.GetLine (DocumentLocation.MinLine + 0).Length);
-			Assert.IsTrue (data.Document.GetLine (DocumentLocation.MinLine + 2).Length > data.Document.GetLine (DocumentLocation.MinLine + 0).Length);
-			Assert.IsTrue (data.Document.GetLine (DocumentLocation.MinLine + 3).Length > data.Document.GetLine (DocumentLocation.MinLine + 0).Length);
-			Assert.AreEqual (data.Document.GetLine (DocumentLocation.MinLine + 0).Length, data.Document.GetLine (DocumentLocation.MinLine + 4).Length);
-			Assert.AreEqual (data.Document.GetLine (DocumentLocation.MinLine + 1).Length, data.Document.GetLine (DocumentLocation.MinLine + 2).Length);
-			Assert.AreEqual (data.Document.GetLine (DocumentLocation.MinLine + 1).Length, data.Document.GetLine (DocumentLocation.MinLine + 3).Length);
+123456789", reverse);
 		}
 		
-		[Test()]
-		public void TestInsertTabLineCase2 ()
+
+		[TestCase(false)]
+		[TestCase(true)]
+		public void TestInsertTabLineCase2 (bool reverse)
 		{
-			TextEditorData data = new Mono.TextEditor.TextEditorData  ();
-			data.Document.Text = 
-@"123d456789
+			var data = Create (@"123d456789
 123[456789
 123d456789
 ]123456789
 123456789
-123456789";
-			SetSelection (data, false);
-			
+123456789", reverse);
+
 			MiscActions.InsertTab (data);
-/*			ISegment currentSelection = GetSelection (data, false);
-			
-			Assert.AreEqual (currentSelection.Offset, data.SelectionRange.Offset);
-			Assert.AreEqual (currentSelection.EndOffset, data.SelectionRange.EndOffset);
-			Assert.AreEqual (currentSelection.EndOffset, data.Caret.Offset);*/
-			
-			Assert.IsTrue (data.Document.GetLine (DocumentLocation.MinLine + 1).Length > data.Document.GetLine (DocumentLocation.MinLine + 0).Length);
-			Assert.IsTrue (data.Document.GetLine (DocumentLocation.MinLine + 2).Length > data.Document.GetLine (DocumentLocation.MinLine + 0).Length);
-			
-			Assert.AreEqual (data.Document.GetLine (DocumentLocation.MinLine + 0).Length, data.Document.GetLine (DocumentLocation.MinLine + 3).Length);
-			Assert.AreEqual (data.Document.GetLine (DocumentLocation.MinLine + 1).Length, data.Document.GetLine (DocumentLocation.MinLine + 2).Length);
-		}
-		
-		[Test()]
-		public void TestInsertTabLineCase3 ()
-		{
-			TextEditorData data = new Mono.TextEditor.TextEditorData  ();
-			data.Document.Text = 
-@"123d456789
-123[456789
-123d456789
+			Check (data, @"123d456789
+	123[456789
+	123d456789
 ]123456789
 123456789
-123456789";
-			SetSelection (data, false);
-			
-			MiscActions.InsertTab (data);
-/*			ISegment currentSelection = GetSelection (data, false);
-			
-			Assert.AreEqual (currentSelection.Offset, data.SelectionRange.Offset);
-			Assert.AreEqual (currentSelection.EndOffset, data.SelectionRange.EndOffset);
-			Assert.AreEqual (currentSelection.EndOffset, data.Caret.Offset);*/
-			
-			Assert.IsTrue (data.Document.GetLine (DocumentLocation.MinLine + 1).Length > data.Document.GetLine (DocumentLocation.MinLine + 0).Length);
-			Assert.IsTrue (data.Document.GetLine (DocumentLocation.MinLine + 2).Length > data.Document.GetLine (DocumentLocation.MinLine + 0).Length);
-			
-			Assert.AreEqual (data.Document.GetLine (DocumentLocation.MinLine + 0).Length, data.Document.GetLine (DocumentLocation.MinLine + 3).Length);
-			Assert.AreEqual (data.Document.GetLine (DocumentLocation.MinLine + 1).Length, data.Document.GetLine (DocumentLocation.MinLine + 2).Length);
+123456789", reverse);
 		}
-		
-		[Test()]
-		public void TestInsertTabLineCase3Reverse ()
+
+		[TestCase(false)]
+		[TestCase(true)]
+		public void TestInsertTabLineCase3 (bool reverse)
 		{
-			TextEditorData data = new Mono.TextEditor.TextEditorData  ();
-			data.Document.Text = 
-@"123d456789
-123[456789
-123d456789
-]123456789
-123456789
-123456789";
-			SetSelection (data, true);
-			
-			MiscActions.InsertTab (data);
-/*			ISegment currentSelection = GetSelection (data, true);
-			
-			Assert.AreEqual (currentSelection.Offset, data.SelectionRange.Offset);
-			Assert.AreEqual (currentSelection.EndOffset, data.SelectionRange.EndOffset);
-			Assert.AreEqual (currentSelection.Offset, data.Caret.Offset);*/
-			
-			Assert.IsTrue (data.Document.GetLine (DocumentLocation.MinLine + 1).Length > data.Document.GetLine (DocumentLocation.MinLine + 0).Length);
-			Assert.IsTrue (data.Document.GetLine (DocumentLocation.MinLine + 2).Length > data.Document.GetLine (DocumentLocation.MinLine + 0).Length);
-			
-			Assert.AreEqual (data.Document.GetLine (DocumentLocation.MinLine + 0).Length, data.Document.GetLine (DocumentLocation.MinLine + 3).Length);
-			Assert.AreEqual (data.Document.GetLine (DocumentLocation.MinLine + 1).Length, data.Document.GetLine (DocumentLocation.MinLine + 2).Length);
-		}
-		
-		[Test()]
-		public void TestInsertTabLineCase4 ()
-		{
-			TextEditorData data = new Mono.TextEditor.TextEditorData  ();
-			data.Document.Text = 
-@"123d456789
+			var data = Create (@"123d456789
 [123456789
 123d456789
 123]456789
 123456789
-123456789";
-			SetSelection (data, false);
-			
+123456789", reverse);
+
 			MiscActions.InsertTab (data);
-/*			ISegment currentSelection = GetSelection (data, false);
-			
-			Assert.AreEqual (currentSelection.EndOffset, data.SelectionRange.EndOffset);
-			Assert.AreEqual (currentSelection.EndOffset, data.Caret.Offset);*/
-			
-			Assert.AreEqual (data.Document.GetLine (DocumentLocation.MinLine + 1).Offset, data.SelectionRange.Offset);
-			
-			Assert.IsTrue (data.Document.GetLine (DocumentLocation.MinLine + 1).Length > data.Document.GetLine (DocumentLocation.MinLine + 0).Length);
-			Assert.IsTrue (data.Document.GetLine (DocumentLocation.MinLine + 2).Length > data.Document.GetLine (DocumentLocation.MinLine + 0).Length);
-			Assert.IsTrue (data.Document.GetLine (DocumentLocation.MinLine + 3).Length > data.Document.GetLine (DocumentLocation.MinLine + 0).Length);
-			
-			Assert.AreEqual (data.Document.GetLine (DocumentLocation.MinLine + 1).Length, data.Document.GetLine (DocumentLocation.MinLine + 2).Length);
+
+			Check (data, @"123d456789
+	[123456789
+	123d456789
+	123]456789
+123456789
+123456789", reverse);
 		}
-		
-		[TestFixtureSetUp] 
-		public void SetUp()
+
+		/// <summary>
+		/// Bug 5223 - Tab to indent with tab-to-spaces does not adjust selection correctly
+		/// </summary>
+		[Test]
+		public void TestBug5223 ()
 		{
-			Gtk.Application.Init ();
+			var data = Create (@"    123d456789
+    123$<-456789
+    123d456789
+    ->123456789
+    123456789
+    123456789", new TextEditorOptions () { TabsToSpaces = true } );
+
+			MiscActions.InsertTab (data);
+			Check (data, @"    123d456789
+        123$<-456789
+        123d456789
+        ->123456789
+    123456789
+    123456789");
 		}
-		
-		[TestFixtureTearDown] 
-		public void Dispose()
+
+
+		/// <summary>
+		/// Bug 5373 - Indenting selected block should not indent blank lines in it
+		/// </summary>
+		[Test]
+		public void TestBug5373 ()
 		{
+			var data = Create (@"	123d456789
+	123$<-456789
+
+	123d456789
+
+	->123456789", new TextEditorOptions () { IndentStyle = IndentStyle.Virtual } );
+			data.IndentationTracker = SmartIndentModeTests.IndentTracker;
+
+			MiscActions.InsertTab (data);
+			Check (data, @"	123d456789
+		123$<-456789
+
+		123d456789
+
+		->123456789");
 		}
 	}
 }

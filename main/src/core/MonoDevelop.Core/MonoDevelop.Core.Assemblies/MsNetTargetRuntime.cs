@@ -36,20 +36,27 @@ namespace MonoDevelop.Core.Assemblies
 	{
 		FilePath rootDir;
 		FilePath newFxDir;
+		FilePath msbuildDir;
 		bool running;
 		MsNetExecutionHandler execHandler;
 		string winDir;
+
+		// ProgramFilesX86 is broken on 32-bit WinXP, this is a workaround
+		static string GetProgramFilesX86 ()
+		{
+			return Environment.GetFolderPath (IntPtr.Size == 8?
+				Environment.SpecialFolder.ProgramFilesX86 : Environment.SpecialFolder.ProgramFiles);
+		}
 		
 		public MsNetTargetRuntime (bool running)
 		{
 			winDir = Path.GetFullPath (Environment.SystemDirectory + "\\..");
 			rootDir = winDir + "\\Microsoft.NET\\Framework";
 			
-			// ProgramFilesX86 is broken on 32-bit WinXP
-			string programFilesX86 = Environment.GetFolderPath (
-				IntPtr.Size == 8? Environment.SpecialFolder.ProgramFilesX86 : Environment.SpecialFolder.ProgramFiles);
-			
+			string programFilesX86 = GetProgramFilesX86 ();
 			newFxDir = programFilesX86 + "\\Reference Assemblies\\Microsoft\\Framework";
+			msbuildDir = programFilesX86 + "\\MSBuild";
+			
 			this.running = running;
 			execHandler = new MsNetExecutionHandler ();
 		}
@@ -151,6 +158,11 @@ namespace MonoDevelop.Core.Assemblies
 					return path;
 			}
 			return rootDir.Combine ("v2.0.50727");
+		}
+		
+		public override string GetMSBuildExtensionsPath ()
+		{
+			return msbuildDir;
 		}
 		
 		void AddPackage (string name, string version, string folder, TargetFramework fx)

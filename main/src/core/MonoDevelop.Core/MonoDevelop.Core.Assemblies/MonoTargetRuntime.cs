@@ -104,6 +104,8 @@ namespace MonoDevelop.Core.Assemblies
 					return base.DisplayName;
 			}
 		}
+
+		public bool HasMultitargetingMcs { get; private set; }
 		
 		public override IEnumerable<FilePath> GetReferenceFrameworkDirectories ()
 		{
@@ -148,6 +150,12 @@ namespace MonoDevelop.Core.Assemblies
 			pinfo.FileName = Path.Combine (Path.Combine (MonoRuntimeInfo.Prefix, "bin"), "mono");
 		}
 
+		public override string GetToolPath (TargetFramework fx, string toolName)
+		{
+			if (fx.ClrVersion == ClrVersion.Net_2_0 && toolName == "al")
+				toolName = "al2";
+			return base.GetToolPath (fx, toolName);
+		}
 		
 		internal protected override IEnumerable<string> GetGacDirectories ()
 		{
@@ -165,6 +173,11 @@ namespace MonoDevelop.Core.Assemblies
 		public override string GetMSBuildBinPath (TargetFramework fx)
 		{
 			return Path.Combine (monoDir, "2.0");
+		}
+		
+		public override string GetMSBuildExtensionsPath ()
+		{
+			return Path.Combine (monoDir, "xbuild");
 		}
 		
 		public IEnumerable<string> PkgConfigDirs {
@@ -199,7 +212,7 @@ namespace MonoDevelop.Core.Assemblies
 				return;
 			foreach (string pcfile in GetAllPkgConfigFiles ()) {
 				try {
-					ParsePCFile (pcfile);
+					ParsePCFile (FileService.ResolveFullPath (pcfile));
 					if (ShuttingDown)
 						return;
 				}
@@ -207,6 +220,11 @@ namespace MonoDevelop.Core.Assemblies
 					LoggingService.LogError ("Could not parse file '" + pcfile + "'", ex);
 				}
 			}
+
+			// Mono 2.11 is the first release with either 4.5 framework and multitargeting mcs
+			// so by detecting the 4.5 profile, we know we have multitargeting mcs
+			HasMultitargetingMcs = File.Exists (Path.Combine (monoDir, "4.5", "mscorlib.dll"));
+
 			PcFileCache.Save ();
 		}
 

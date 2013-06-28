@@ -30,6 +30,7 @@ using Gdk;
 using Pango;
 using System;
 using System.Text;
+using Mono.TextEditor;
 
 namespace Mono.TextEditor.PopupWindow
 {
@@ -43,7 +44,7 @@ namespace Mono.TextEditor.PopupWindow
 	
 	public class ListWindow<T> : Gtk.Window
 	{
-		VScrollbar scrollbar;
+		ScrolledWindow scrollbar;
 		ListWidget<T> list;
 		IListDataProvider<T> provider;
 		Widget footer;
@@ -59,27 +60,30 @@ namespace Mono.TextEditor.PopupWindow
 			HBox box = new HBox ();
 			list = new ListWidget<T> (this);
 			list.SelectionChanged += new EventHandler (OnSelectionChanged);
-			list.ScrollEvent += new ScrollEventHandler (OnScrolled);
-			box.PackStart (list, true, true, 0);
-			this.BorderWidth = 1;
+			this.BorderWidth = 0;
 			
-			scrollbar = new VScrollbar (null);
-			scrollbar.ValueChanged += new EventHandler (OnScrollChanged); 
-			box.PackStart (scrollbar, false, false, 0);
+			scrollbar = new Gtk.ScrolledWindow ();
+			scrollbar.Child = list;
+			box.PackStart (scrollbar, true, true, 0);
 			list.ButtonPressEvent += delegate (object o, ButtonPressEventArgs args) {
 				if (args.Event.Button == 1 && args.Event.Type == Gdk.EventType.TwoButtonPress)
-					DoubleClick ();
+					OnDoubleClicked (EventArgs.Empty);
 			};
 			vbox.PackStart (box, true, true, 0);
 			Add (vbox);
 			
 			this.TypeHint = WindowTypeHint.Menu;
 		}
-		
-		protected virtual void DoubleClick ()
+
+		public event EventHandler DoubleClicked;
+
+		protected virtual void OnDoubleClicked (EventArgs e)
 		{
+			EventHandler handler = this.DoubleClicked;
+			if (handler != null)
+				handler (this, e);
 		}
-		
+
 		public new void Show ()
 		{
 			this.ShowAll ();
@@ -125,15 +129,6 @@ namespace Mono.TextEditor.PopupWindow
 		
 		void ResetSizes ()
 		{
-			scrollbar.Adjustment.Lower = 0;
-			scrollbar.Adjustment.Upper = System.Math.Max(0, provider.Count - list.VisibleRows);
-			scrollbar.Adjustment.PageIncrement = list.VisibleRows - 1;
-			scrollbar.Adjustment.StepIncrement = 1;
-			
-			if (list.VisibleRows >= provider.Count) {
-				this.scrollbar.Hide();
-			}
-
 			this.Resize(this.list.WidthRequest, this.list.HeightRequest);
 		}
 		
@@ -331,7 +326,7 @@ namespace Mono.TextEditor.PopupWindow
 			if (hasMismatches)
 				list.SelectionDisabled = true;
 		}
-		
+		/*
 		void OnScrollChanged (object o, EventArgs args)
 		{
 			list.Page = (int) scrollbar.Value;
@@ -339,15 +334,33 @@ namespace Mono.TextEditor.PopupWindow
 
 		void OnScrolled (object o, ScrollEventArgs args)
 		{
-			if (args.Event.Direction == Gdk.ScrollDirection.Up)
-				scrollbar.Value --;
-			else if (args.Event.Direction == Gdk.ScrollDirection.Down)
-				scrollbar.Value ++;
+			if (!scrollbar.Visible)
+				return;
+			
+			var adj = scrollbar.Adjustment;
+			var alloc = Allocation;
+			
+			//This widget is a special case because it's always aligned to items as it scrolls.
+			//Although this means we can't use the pixel deltas for true smooth scrolling, we 
+			//can still make use of the effective scrolling velocity by basing the calculation 
+			//on pixels and rounding to the nearest item.
+			
+			double dx, dy;
+			args.Event.GetPageScrollPixelDeltas (0, alloc.Height, out dx, out dy);
+			if (dy == 0)
+				return;
+			
+			var itemDelta = dy / (alloc.Height / adj.PageSize);
+			double discreteItemDelta = System.Math.Round (itemDelta);
+			if (discreteItemDelta == 0.0 && dy != 0.0)
+				discreteItemDelta = dy > 0? 1.0 : -1.0;
+			
+			adj.AddValueClamped (discreteItemDelta);
+			args.RetVal = true;
 		}
-		
+		*/
 		void OnSelectionChanged (object o, EventArgs args)
 		{
-			scrollbar.Value = list.Page;
 			OnSelectionChanged ();
 		}
 		

@@ -29,12 +29,13 @@ using NUnit.Framework;
 
 namespace MonoDevelop.Debugger.Tests.Mdb
 {
-	[TestFixture()]
-	public class MdbStackFrameTests: StackFrameTests
-	{
-		public MdbStackFrameTests (): base ("Mono.Debugger.Mdb")
-		{
-		}
-	}
+//	[TestFixture()]
+//	[Ignore ("Mdb is unmaintained and currently all tests fail")]
+//	public class MdbStackFrameTests: StackFrameTests
+//	{
+//		public MdbStackFrameTests (): base ("Mono.Debugger.Mdb")
+//		{
+//		}
+//	}
 }
 

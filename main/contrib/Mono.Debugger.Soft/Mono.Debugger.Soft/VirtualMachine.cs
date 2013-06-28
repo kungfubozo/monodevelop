@@ -154,10 +154,21 @@ namespace Mono.Debugger.Soft
 			conn.VM_Exit (exitCode);
 		}
 
-		public void Dispose () {
+		public void Detach () {
 			conn.VM_Dispose ();
 			conn.Close ();
 			notify_vm_event (EventType.VMDisconnect, SuspendPolicy.None, 0, 0, null);
+		}
+
+		[Obsolete ("This method was poorly named; use the Detach() method instead")]
+		public void Dispose ()
+		{
+			Detach ();
+		}
+
+		public void ForceDisconnect ()
+		{
+			conn.ForceDisconnect ();
 		}
 
 		public IList<ThreadMirror> GetThreads () {
@@ -467,6 +478,13 @@ namespace Mono.Debugger.Soft
 			}
 	    }
 
+		internal TypeMirror[] GetTypes (long[] ids) {
+			var res = new TypeMirror [ids.Length];
+			for (int i = 0; i < ids.Length; ++i)
+				res [i] = GetType (ids [i]);
+			return res;
+		}
+
 		Dictionary <long, ObjectMirror> objects;
 		object objects_lock = new object ();
 
@@ -596,6 +614,11 @@ namespace Mono.Debugger.Soft
 			for (int i = 0; i < values.Count; ++i)
 				res [i] = EncodeValue (values [i]);
 			return res;
+		}
+
+		internal void CheckProtocolVersion (int major, int minor) {
+			if (!conn.Version.AtLeast (major, minor))
+				throw new NotSupportedException ("This request is not supported by the protocol version implemented by the debuggee.");
 		}
     }
 

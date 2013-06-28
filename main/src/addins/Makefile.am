@@ -26,10 +26,7 @@ SUBDIRS = \
 	MonoDevelop.RegexToolkit \
 	CBinding \
 	MonoDevelop.AssemblyBrowser \
-	MonoDevelop.Moonlight \
-	MonoDevelop.CodeMetrics \
 	MonoDevelop.Debugger.Soft \
 	WindowsPlatform \
 	MonoDevelop.HexEditor \
-	MonoDevelop.DocFood \
-	MonoDevelop.MacDev
+	MonoDevelop.DocFood

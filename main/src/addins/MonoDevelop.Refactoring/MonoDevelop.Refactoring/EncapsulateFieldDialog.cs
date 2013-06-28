@@ -59,11 +59,11 @@ namespace MonoDevelop.Refactoring {
 		private const int colReadOnlyIndex = 4;
 		private const int colFieldIndex = 5;
 
-		public EncapsulateFieldDialog (MonoDevelop.Ide.Gui.Document editor, ProjectDom ctx, IType declaringType)
+		public EncapsulateFieldDialog (MonoDevelop.Ide.Gui.Document editor, ITypeResolveContext ctx, IType declaringType)
 			: this (editor, declaringType, null)
 		{}
 
-		public EncapsulateFieldDialog (MonoDevelop.Ide.Gui.Document editor, ProjectDom ctx, IField field)
+		public EncapsulateFieldDialog (MonoDevelop.Ide.Gui.Document editor, ITypeResolveContext ctx, IField field)
 			: this (editor, field.DeclaringType, field)
 		{}
 
@@ -420,11 +420,11 @@ namespace MonoDevelop.Refactoring {
 			mode.HelpWindow = helpWindow;
 			mode.CurIndex = mode.InsertionPoints.Count - 1;
 			int idx = -1, i = 0;
-			DomLocation lastLocation = DomLocation.Empty;
+			TextLocation lTextLocation = TextLocation.Empty;
 			foreach (IMember member in declaringType.Members) {
-				if (lastLocation != member.Location && data.Any (d => d.Field.Location == member.Location))
+				if (lTextLocation != member.Location && data.Any (d => d.Field.Location == member.Location))
 					idx = i;
-				lastLocation = member.Location;
+				lTextLocation = member.Location;
 				i++;
 			}
 			if (idx >= 0)
@@ -432,7 +432,7 @@ namespace MonoDevelop.Refactoring {
 			mode.StartMode ();
 			mode.Exited += delegate(object s, InsertionCursorEventArgs args) {
 				if (args.Success) {
-					CodeGenerator generator =  CodeGenerator.CreateGenerator (editor.Editor.Document.MimeType, editor.Editor.Options.TabsToSpaces, editor.Editor.Options.TabSize, editor.Editor.EolMarker);
+					CodeGenerator generator =  CodeGenerator.CreateGenerator (editor.Editor.Document.MimeType, editor.Editor.TabsToSpaces, editor.Editor.Options.TabSize, editor.Editor.EolMarker);
 					StringBuilder code = new StringBuilder ();
 					for (int j = 0; j < data.Count; j++) {
 						if (j > 0) {

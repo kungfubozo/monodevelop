@@ -42,7 +42,7 @@ using System.Linq;
 
 namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 {
-	public class SystemFileNodeBuilder: TypeNodeBuilder
+	class SystemFileNodeBuilder: TypeNodeBuilder
 	{
 		public override Type NodeDataType {
 			get { return typeof(SystemFile); }
@@ -65,7 +65,7 @@ namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 		public override void BuildNode (ITreeBuilder treeBuilder, object dataObject, ref string label, ref Gdk.Pixbuf icon, ref Gdk.Pixbuf closedIcon)
 		{
 			SystemFile file = (SystemFile) dataObject;
-			label = file.Name;
+			label = GLib.Markup.EscapeText (file.Name);
 			
 			icon = DesktopService.GetPixbufForFile (file.Path, Gtk.IconSize.Menu);
 			
@@ -89,7 +89,7 @@ namespace MonoDevelop.Ide.Gui.Pads.ProjectPad
 		}
 	}
 	
-	public class SystemFileNodeCommandHandler: NodeCommandHandler
+	class SystemFileNodeCommandHandler: NodeCommandHandler
 	{
 		public override void RenameItem (string newName)
 		{

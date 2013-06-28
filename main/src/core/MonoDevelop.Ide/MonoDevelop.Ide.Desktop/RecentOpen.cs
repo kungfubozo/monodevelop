@@ -61,14 +61,24 @@ namespace MonoDevelop.Ide.Desktop
 			remove { recentFiles.RecentFilesChanged -= value; }
 		}
 		
-		public override IList<RecentFile> GetProjects ()
+		protected override IList<RecentFile> OnGetProjects ()
 		{
-			return Get (projGroup);
+			try {
+				return Get (projGroup);
+			} catch (Exception e) {
+				LoggingService.LogError ("Can't get recent projects list.", e);
+				return new List <RecentFile> ();
+			}
 		}
 		
-		public override IList<RecentFile> GetFiles ()
+		protected override IList<RecentFile> OnGetFiles ()
 		{
-			return Get (fileGroup);
+			try {
+				return Get (fileGroup);
+			} catch (Exception e) {
+				LoggingService.LogError ("Can't get recent files list.", e);
+				return new List <RecentFile> ();
+			}
 		}
 		
 		IList<RecentFile> Get (string grp)
@@ -79,12 +89,20 @@ namespace MonoDevelop.Ide.Desktop
 		
 		public override void ClearProjects ()
 		{
-			recentFiles.ClearGroup (projGroup);
+			try {
+				recentFiles.ClearGroup (projGroup);
+			} catch (Exception e) {
+				LoggingService.LogError ("Can't clear recent projects list.", e);
+			}
 		}
 		
 		public override void ClearFiles ()
 		{
-			recentFiles.ClearGroup (fileGroup);
+			try {
+				recentFiles.ClearGroup (fileGroup);
+			} catch (Exception e) {
+				LoggingService.LogError ("Can't get recent files list.", e);
+			}
 		}
 		
 		public override void AddFile (string fileName, string displayName)
@@ -100,19 +118,37 @@ namespace MonoDevelop.Ide.Desktop
 		void Add (string grp, string fileName, string displayName)
 		{
 			var mime = DesktopService.GetMimeTypeForUri (fileName);
-			var uri = RecentFileStorage.ToUri (fileName);
-			var recentItem = new RecentItem (uri, mime, grp) { Private = displayName };
-			recentFiles.AddWithLimit (recentItem, grp, ItemLimit);
+			System.Threading.ThreadPool.QueueUserWorkItem (_ => {
+				try {
+					var uri = RecentFileStorage.ToUri (fileName);
+					var recentItem = new RecentItem (uri, mime, grp) { Private = displayName };
+					recentFiles.AddWithLimit (recentItem, grp, ItemLimit);
+				} catch (Exception e) {
+					LoggingService.LogError ("Failed to add item to recent files list.", e);
+				}
+			});
 		}
 		
 		public override void NotifyFileRemoved (string fileName)
 		{
-			recentFiles.RemoveItem (RecentFileStorage.ToUri (fileName));
+			System.Threading.ThreadPool.QueueUserWorkItem (_ => {
+				try {
+					recentFiles.RemoveItem (RecentFileStorage.ToUri (fileName));
+				} catch (Exception e) {
+					LoggingService.LogError ("Can't remove from recent files list.", e);
+				}
+			});
 		}
 		
 		public override void NotifyFileRenamed (string oldName, string newName)
 		{
-			recentFiles.RenameItem (RecentFileStorage.ToUri (oldName), RecentFileStorage.ToUri (newName));
+			System.Threading.ThreadPool.QueueUserWorkItem (_ => {
+				try {
+					recentFiles.RenameItem (RecentFileStorage.ToUri (oldName), RecentFileStorage.ToUri (newName));
+				} catch (Exception e) {
+					LoggingService.LogError ("Can't rename file in recent files list.", e);
+				}
+			});
 		}
 		
 		public void Dispose ()
@@ -124,8 +160,47 @@ namespace MonoDevelop.Ide.Desktop
 		
 	public abstract class RecentFiles
 	{
-		public abstract IList<RecentFile> GetFiles ();
-		public abstract IList<RecentFile> GetProjects ();
+		List<string> favoriteFiles;
+		const string FavoritesConfigKey = "FavoriteRecentFiles";
+
+		public RecentFiles ()
+		{
+			favoriteFiles = PropertyService.Get (FavoritesConfigKey, new List<string> ());
+		}
+
+		public IList<RecentFile> GetProjects ()
+		{
+			var projects = OnGetProjects ();
+			List<RecentFile> result = new List<RecentFile> ();
+			List<string> toRemove = null;
+			foreach (var f in favoriteFiles) {
+				if (!File.Exists (f)) {
+					if (toRemove == null)
+						toRemove = new List<string> ();
+					toRemove.Add (f);
+					continue;
+				}
+				var entry = projects.FirstOrDefault (p => f == p.FileName);
+				if (entry != null)
+					result.Add (entry);
+				else
+					result.Add (new RecentFile (f, Path.GetFileNameWithoutExtension (f), DateTime.Now));
+			}
+			if (toRemove != null) {
+				foreach (var f in toRemove)
+					favoriteFiles.Remove (f);
+			}
+			foreach (var e in projects)
+				if (!result.Contains (e))
+					result.Add (e);
+			return result;
+		}
+
+		public IList<RecentFile> GetFiles ()
+		{
+			return OnGetFiles ();
+		}
+
 		public abstract event EventHandler Changed;
 		public abstract void ClearProjects ();
 		public abstract void ClearFiles ();
@@ -134,6 +209,9 @@ namespace MonoDevelop.Ide.Desktop
 		public abstract void NotifyFileRemoved (string filename);
 		public abstract void NotifyFileRenamed (string oldName, string newName);
 		
+		protected abstract IList<RecentFile> OnGetProjects ();
+		protected abstract IList<RecentFile> OnGetFiles ();
+
 		public void AddFile (string fileName, MonoDevelop.Projects.Project project)
 		{
 			var projectName = project != null? project.Name : null;
@@ -142,18 +220,43 @@ namespace MonoDevelop.Ide.Desktop
 				: Path.GetFileName (fileName);
 			AddFile (fileName, displayName);
 		}
+
+		internal void SetFavoriteFile (FilePath file, bool favorite)
+		{
+			if (favorite)
+				favoriteFiles.Add (file);
+			else
+				favoriteFiles.Remove (file);
+
+			PropertyService.Set (FavoritesConfigKey, favoriteFiles);
+			PropertyService.SaveProperties ();
+		}
+
+		internal bool IsFavoriteFile (FilePath file)
+		{
+			return favoriteFiles.Contains (file);
+		}
 	}
 	
 	public class RecentFile
 	{
 		string displayName, fileName;
 		DateTime timestamp;
-		
+
 		public RecentFile (string fileName, string displayName, DateTime timestamp)
 		{
 			this.fileName = fileName;
 			this.displayName = displayName;
 			this.timestamp = timestamp;
+		}
+
+		public bool IsFavorite {
+			get {
+				return DesktopService.RecentFiles.IsFavoriteFile (fileName);
+			}
+			set {
+				DesktopService.RecentFiles.SetFavoriteFile (fileName, value);
+			}
 		}
 
 		public string FileName { get { return fileName; } }
