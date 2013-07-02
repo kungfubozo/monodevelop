@@ -110,9 +110,9 @@ system("xcopy /s /y \"$gtkPath/share\" \"$mdRoot/share\"");
 system("xcopy /s /y \"$gtkPath/lib/Mono.Posix\" \"$mdRoot/bin\"");
 system("xcopy /s /y \"$gtkPath/lib/gtk-sharp-2.0\" \"$mdRoot/bin\"");
 system("xcopy /s /y \"$gtkPath/lib/Mono.Cairo\" \"$mdRoot/bin\"");
-system("xcopy /y \"$root/monodevelop/dependencies/monodoc.dll\" \"$mdRoot/bin\"");
 # TODO: An installer should execute "gdk-pixbuf-query-loaders.exe > ../etc/gtk-2.0/gdk-pixbuf.loaders" after installing files to get a proper loader file
 copy "$root/monodevelop/dependencies/gdk-pixbuf.loaders", "$mdRoot/etc/gtk-2.0";
+copy "$root/monodevelop/dependencies/monodoc.dll", "$mdRoot/bin";
 
 # Mono Libraries dependency files
 # system("xcopy /s /y \"$monolibPath\" \"$mdRoot/bin\"");
@@ -120,7 +120,7 @@ copy "$root/monodevelop/dependencies/gdk-pixbuf.loaders", "$mdRoot/etc/gtk-2.0";
 my $monoLib;
 foreach $monoLib (('ICSharpCode.SharpZipLib.dll', 'Mono.GetOptions.dll', 'Mono.Security.dll'))
 {
-	system ("xcopy /y \"$monolibPath/$monoLib\" \"$mdRoot/bin\"");
+	copy "$monolibPath/$monoLib", "$mdRoot/bin";
 }
 
 chdir "$root/boo";
