@@ -114,7 +114,13 @@ system("xcopy /s /y \"$gtkPath/lib/Mono.Cairo\" \"$mdRoot/bin\"");
 copy "$root/monodevelop/dependencies/gdk-pixbuf.loaders", "$mdRoot/etc/gtk-2.0";
 
 # Mono Libraries dependency files
-system("xcopy /s /y \"$monolibPath\" \"$mdRoot/bin\"");
+# system("xcopy /s /y \"$monolibPath\" \"$mdRoot/bin\"");
+
+my $monoLib;
+foreach $monoLib (('ICSharpCode.SharpZipLib.dll', 'Mono.GetOptions.dll', 'Mono.Security.dll'))
+{
+	system ("xcopy /y \"$monolibPath/$monoLib\" \"$mdRoot/bin\"");
+}
 
 chdir "$root/boo";
 system("$nant -t:net-4.0 rebuild") && die ("Failed to build Boo");
