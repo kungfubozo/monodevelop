@@ -813,7 +813,7 @@
 	<Command id = "MonoDevelop.Ide.Commands.SearchCommands.GotoLineNumber"
 			_label = "_Go to Line..." 
 			_description = "Go to a specific line"
-			shortcut = "Control|I"
+			shortcut = "Control|G"
 			macShortcut = "Meta|L"
 			icon = "gtk-jump-to" />
 	<Command id = "MonoDevelop.Ide.Commands.SearchCommands.UseSelectionForFind"
