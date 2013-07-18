@@ -138,5 +138,21 @@ namespace MonoDevelop.Ide.Templates
 			} else
 				return ns;
 		}
+
+		public override bool SupportsProject (Project project, string projectPath)
+		{
+			if (!(base.SupportsProject (project, projectPath) && (project != null)))
+				return false;
+
+			foreach (string language in project.SupportedLanguages) {
+				if (string.IsNullOrEmpty (language))
+					continue;
+				var binding = GetLanguageBinding (language) as IDotNetLanguageBinding;
+				if (binding != null && binding.GetCodeDomProvider () != null)
+					return true;
+			}
+
+			return false;
+		}
 	}
 }
