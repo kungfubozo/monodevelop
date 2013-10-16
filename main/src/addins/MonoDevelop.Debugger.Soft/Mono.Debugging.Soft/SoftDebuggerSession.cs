@@ -1736,6 +1736,7 @@ namespace Mono.Debugging.Soft
 								bp.ParamTypes = GetParamTypes (method);
 							
 							bp.SetResolvedFileName (loc.SourceFile);
+							bi.AssemblyLocation = type.Assembly.Location;
 							ResolvePendingBreakpoint (bi, loc);
 							
 							// Note: if the type or method is generic, there may be more instances so don't assume we are done resolving the breakpoint
@@ -1763,6 +1764,7 @@ namespace Mono.Debugging.Soft
 						if (loc != null) {
 							OnDebuggerOutput (false, string.Format ("Resolved pending breakpoint at '{0}:{1}' to {2} [0x{3:x5}].\n",
 							                                        s, bp.Line, loc.Method.FullName, loc.ILOffset));
+							bi.AssemblyLocation = type.Assembly.Location;
 							ResolvePendingBreakpoint (bi, loc);
 							
 							// Note: if the type or method is generic, there may be more instances so don't assume we are done resolving the breakpoint
