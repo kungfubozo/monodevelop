@@ -1877,7 +1877,7 @@ namespace Mono.Debugging.Soft
 				}
 				
 				foreach (var src in mdb.Sources) {
-					if (src.FileName == file) {
+					if (PathToFileName(src.FileName) == file) {
 						fileId = src.Index;
 						break;
 					}
