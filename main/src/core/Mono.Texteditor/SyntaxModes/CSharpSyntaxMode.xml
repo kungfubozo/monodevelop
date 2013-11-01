@@ -325,6 +325,7 @@
 		<Word>BoneWeight</Word>
 		<Word>Bounds</Word>
 		<Word>BoxCollider</Word>
+		<Word>BoxCollider2D</Word>
 		<Word>CacheIndex</Word>
 		<Word>Caching</Word>
 		<Word>CalendarIdentifier</Word>
@@ -334,12 +335,16 @@
 		<Word>CapsuleCollider</Word>
 		<Word>CharacterController</Word>
 		<Word>CharacterJoint</Word>
+		<Word>CircleCollider2D</Word>
 		<Word>Cloth</Word>
 		<Word>ClothRenderer</Word>
 		<Word>ClothSkinningCoefficient</Word>
 		<Word>Collider</Word>
+		<Word>Collider2D</Word>
 		<Word>Collision</Word>
+		<Word>Collision2D</Word>
 		<Word>CollisionDetectionMode</Word>
+		<Word>CollisionDetectionMode2D</Word>
 		<Word>CollisionFlags</Word>
 		<Word>Color</Word>
 		<Word>Color32</Word>
@@ -351,6 +356,7 @@
 		<Word>ConnectionTesterStatus</Word>
 		<Word>ConstantForce</Word>
 		<Word>ContactPoint</Word>
+		<Word>ContactPoint2D</Word>
 		<Word>ContextMenu</Word>
 		<Word>ControllerColliderHit</Word>
 		<Word>Coroutine</Word>
@@ -362,6 +368,8 @@
 		<Word>DetailRenderMode</Word>
 		<Word>DeviceOrientation</Word>
 		<Word>DeviceType</Word>
+		<Word>DistanceJoint2D</Word>
+		<Word>EdgeCollider2D</Word>
 		<Word>Event</Word>
 		<Word>EventModifiers</Word>
 		<Word>EventType</Word>
@@ -401,6 +409,7 @@
 		<Word>HideFlags</Word>
 		<Word>HideInInspector</Word>
 		<Word>HingeJoint</Word>
+		<Word>HingeJoint2D</Word>
 		<Word>HostData</Word>
 		<Word>ImageEffectOpaque</Word>
 		<Word>ImageEffectTransformsToLDR</Word>
@@ -425,12 +434,17 @@
 		<Word>iPhoneTouchPhase</Word>
 		<Word>iPhoneUtils</Word>
 		<Word>Joint</Word>
+		<Word>Joint2D</Word>
+		<Word>JointAngleLimits2D</Word>
 		<Word>JointDrive</Word>
 		<Word>JointDriveMode</Word>
 		<Word>JointLimits</Word>
 		<Word>JointMotor</Word>
+		<Word>JointMotor2D</Word>
 		<Word>JointProjectionMode</Word>
 		<Word>JointSpring</Word>
+		<Word>JointSuspension2D</Word>
+		<Word>JointTranslationLimits2D</Word>
 		<Word>jvalue</Word>
 		<Word>KeyCode</Word>
 		<Word>Keyframe</Word>
@@ -504,11 +518,14 @@
 		<Word>PhysicMaterial</Word>
 		<Word>PhysicMaterialCombine</Word>
 		<Word>Physics</Word>
+		<Word>Physics2D</Word>
+		<Word>PhysicsMaterial2D</Word>
 		<Word>Ping</Word>
 		<Word>Plane</Word>
 		<Word>PlayerPrefs</Word>
 		<Word>PlayerPrefsException</Word>
 		<Word>PlayMode</Word>
+		<Word>PolygonCollider2D</Word>
 		<Word>PrimitiveType</Word>
 		<Word>ProceduralCacheSize</Word>
 		<Word>ProceduralMaterial</Word>
@@ -523,8 +540,10 @@
 		<Word>QueueMode</Word>
 		<Word>Random</Word>
 		<Word>Ray</Word>
+		<Word>Ray2D</Word>
 		<Word>RaycastCollider</Word>
 		<Word>RaycastHit</Word>
+		<Word>RaycastHit2D</Word>
 		<Word>Rect</Word>
 		<Word>RectOffset</Word>
 		<Word>RemoteNotification</Word>
@@ -540,8 +559,11 @@
 		<Word>Resolution</Word>
 		<Word>Resources</Word>
 		<Word>Rigidbody</Word>
+		<Word>Rigidbody2D</Word>
 		<Word>RigidbodyConstraints</Word>
 		<Word>RigidbodyInterpolation</Word>
+		<Word>RigidbodyInterpolation2D</Word>
+		<Word>RigidbodySleepMode2D</Word>
 		<Word>RotationDriveMode</Word>
 		<Word>RPC</Word>
 		<Word>RPCMode</Word>
@@ -561,6 +583,7 @@
 		<Word>SkinQuality</Word>
 		<Word>Skybox</Word>
 		<Word>SleepTimeout</Word>
+		<Word>SliderJoint2D</Word>
 		<Word>Social</Word>
 		<Word>SoftJointLimit</Word>
 		<Word>Space</Word>
@@ -614,6 +637,7 @@
 		<Word>WheelCollider</Word>
 		<Word>WheelFrictionCurve</Word>
 		<Word>WheelHit</Word>
+		<Word>WheelJoint2D</Word>
 		<Word>WrapMode</Word>
 		<Word>WWW</Word>
 		<Word>WWWForm</Word>
