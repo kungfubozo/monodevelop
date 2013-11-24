@@ -30,9 +30,9 @@
 			<_msgfmt>msgfmt</_msgfmt>
 			<_msgmerge>msgmerge</_msgmerge>
 		</PropertyGroup>
-		<PropertyGroup Condition="Exists('$(MSBuildProgramFiles32)\GnuWin32\bin\msgfmt.exe')">
-			<_msgfmt>$(MSBuildProgramFiles32)\GnuWin32\bin\msgfmt.exe</_msgfmt>
-			<_msgmerge>Exists('$(MSBuildProgramFiles32)\GnuWin32\bin\msgmerge.exe</_msgmerge>
+		<PropertyGroup Condition="Exists('$(SolutionDir)\..\external\gettext-0.14.4-bin\bin\msgfmt.exe')">
+			<_msgfmt>$(SolutionDir)\..\external\gettext-0.14.4-bin\bin\msgfmt.exe</_msgfmt>
+			<_msgmerge>Exists('$(SolutionDir)\..\external\gettext-0.14.4-bin\bin\msgmerge.exe</_msgmerge>
 		</PropertyGroup>
 	</Target>
 	
