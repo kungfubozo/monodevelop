@@ -86,6 +86,8 @@ namespace MonoDevelop.Ide
 			Platform.Initialize ();
 			
 			Counters.Initialization.Trace ("Initializing GTK");
+			if (Platform.IsWindows && !CheckWindowsGtk())
+				return 1;
 			SetupExceptionManager ();
 			
 			try {
@@ -117,7 +119,7 @@ namespace MonoDevelop.Ide
 			EndPoint ep = null;
 			
 			DispatchService.Initialize ();
-			
+
 			// Set a synchronization context for the main gtk thread
 			SynchronizationContext.SetSynchronizationContext (new GtkSynchronizationContext ());
 			
@@ -211,7 +213,7 @@ namespace MonoDevelop.Ide
 				version += "." + Assembly.GetEntryAssembly ().GetName ().Version.Build;
 			if (Assembly.GetEntryAssembly ().GetName ().Version.Revision != 0)
 				version += "." + Assembly.GetEntryAssembly ().GetName ().Version.Revision;
-			
+
 			// System checks
 			if (!CheckBug77135 ())
 				return 1;
@@ -312,6 +314,88 @@ namespace MonoDevelop.Ide
 					Environment.SetEnvironmentVariable ("GTK2_RC_FILES", PropertyService.EntryAssemblyPath.Combine ("gtkrc"));
 			}
 		}
+
+		[System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+		[return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+		static extern bool SetDllDirectory(string lpPathName);
+
+		static bool CheckWindowsGtk()
+		{
+			string location = null;
+			Version version = null;
+			Version minVersion = new Version(2, 12, 22);
+
+			using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Xamarin\GtkSharp\InstallFolder"))
+			{
+				if (key != null)
+					location = key.GetValue(null) as string;
+			}
+			using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Xamarin\GtkSharp\Version"))
+			{
+				if (key != null)
+					Version.TryParse(key.GetValue(null) as string, out version);
+			}
+
+			var path = AppDomain.CurrentDomain.BaseDirectory;
+			if (version == null)
+			{
+				DirectoryInfo dir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+				if (File.Exists(Path.Combine(dir.FullName, "libs", "libgtk-win32-2.0-0.dll")))
+				{
+					path = Path.Combine(dir.FullName, "libs");
+				}
+			}
+			else
+				if (version == null || version < minVersion || location == null || !File.Exists(Path.Combine(location, "bin", "libgtk-win32-2.0-0.dll")))
+				{
+					//TODO: check build version of GTK# dlls in GAC
+					LoggingService.LogError("Did not find required GTK# installation");
+					string url = "http://monodevelop.com/Download";
+					string caption = "Fatal Error";
+					string message =
+						"{0} did not find the required version of GTK#. Please click OK to open the download page, where " +
+						"you can download and install the latest version.";
+					if (DisplayWindowsOkCancelMessage(
+						string.Format(message, BrandingService.ApplicationName, url), caption)
+					)
+					{
+						Process.Start(url);
+					}
+					return false;
+				}
+				else
+				{
+					path = Path.Combine(location, @"bin");
+				}
+
+			try
+			{
+				if (SetDllDirectory(path))
+				{
+					return true;
+				}
+			}
+			catch (EntryPointNotFoundException)
+			{
+			}
+			// this shouldn't happen unless something is weird in Windows
+			LoggingService.LogError("Unable to set GTK+ dll directory");
+			return true;
+		}
+
+		static bool DisplayWindowsOkCancelMessage(string message, string caption)
+		{
+			var name = typeof(int).Assembly.FullName.Replace("mscorlib", "System.Windows.Forms");
+			var asm = Assembly.Load(name);
+			var md = asm.GetType("System.Windows.Forms.MessageBox");
+			var mbb = asm.GetType("System.Windows.Forms.MessageBoxButtons");
+			var okCancel = Enum.ToObject(mbb, 1);
+			var dr = asm.GetType("System.Windows.Forms.DialogResult");
+			var ok = Enum.ToObject(dr, 1);
+
+			const BindingFlags flags = BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Static;
+			return md.InvokeMember("Show", flags, null, null, new object[] { message, caption, okCancel }).Equals(ok);
+		}
 		
 		public bool Initialized {
 			get { return initialized; }
@@ -362,28 +446,28 @@ namespace MonoDevelop.Ide
 			}
 			GLib.Idle.Add(delegate { IdeApp.OpenFiles(files); return false; });
 		}
-		
+
 		FileOpenInformation ParseFile(string file)
 		{
-			if (string.IsNullOrEmpty(file))
+			if (string.IsNullOrEmpty (file))
 			return null;
 			
-			Match fileMatch = StartupInfo.FileExpression.Match(file);
+			Match fileMatch = StartupInfo.FileExpression.Match (file);
 			if (null == fileMatch || !fileMatch.Success)
 				return null;
-			
+				
 			int line = 1,
-			column = 1;
+			    column = 1;
 			
 			file = fileMatch.Groups["filename"].Value;
 			if (fileMatch.Groups["line"].Success)
-				int.TryParse(fileMatch.Groups["line"].Value, out line);
+				int.TryParse (fileMatch.Groups["line"].Value, out line);
 			if (fileMatch.Groups["column"].Success)
-				int.TryParse(fileMatch.Groups["column"].Value, out column);
-			
+				int.TryParse (fileMatch.Groups["column"].Value, out column);
+				
 			return new FileOpenInformation (file, line, column, OpenDocumentOptions.Default | OpenDocumentOptions.BringToFront);
-		}
-		
+				}
+
 		bool CheckQtCurve ()
 		{
 			if (Gtk.Settings.Default.ThemeName == "QtCurve") {
@@ -418,7 +502,7 @@ namespace MonoDevelop.Ide
 				LoggingService.LogWarning ("There was a problem checking whether to use managed file watching", e);
 			}
 		}
-		
+
 		bool CheckBug77135 ()
 		{
 			try {
@@ -506,7 +590,7 @@ namespace MonoDevelop.Ide
 		{
 			// Log the crash to the MonoDevelop.log file first:
 			LoggingService.LogError (string.Format ("An unhandled exception has occured. Terminating MonoDevelop? {0}", willShutdown), ex);
-			
+
 			// Pass it off to the reporting service now.
 			LogReportingService.ReportUnhandledException (ex, willShutdown);
 		}
@@ -531,7 +615,7 @@ namespace MonoDevelop.Ide
 				return options.Error != null? -1 : 0;
 			
 			LoggingService.Initialize (options.RedirectOutput);
-			
+
 			int ret = -1;
 			bool retry = false;
 			do {

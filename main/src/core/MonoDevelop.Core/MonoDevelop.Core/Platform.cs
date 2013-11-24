@@ -92,23 +92,44 @@ namespace MonoDevelop.Core
 		static void InitWindowsNativeLibs ()
 		{
 			string location = null;
-			using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Xamarin\GtkSharp\InstallFolder")) {
-				if (key != null) {
-					location = key.GetValue (null) as string;
+			using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Xamarin\GtkSharp\InstallFolder"))
+			{
+				if (key != null)
+				{
+					location = key.GetValue(null) as string;
 				}
 			}
-			if (location == null || !File.Exists (Path.Combine (location, "bin", "libgtk-win32-2.0-0.dll"))) {
-				LoggingService.LogError ("Did not find registered GTK# installation");
+
+			var path = AppDomain.CurrentDomain.BaseDirectory; ;
+			if (location == null)
+			{
+				var dir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+				if (File.Exists(Path.Combine(Path.Combine(dir.FullName, "libs", "libgtk-win32-2.0-0.dll"))))
+				{
+					path = Path.Combine(dir.FullName, "libs");
+				}
+			}
+			else if (!File.Exists(Path.Combine(location, "bin", "libgtk-win32-2.0-0.dll")))
+			{
+				LoggingService.LogError("Did not find registered GTK# installation");
 				return;
 			}
-			var path = Path.Combine (location, @"bin");
-			try {
-				if (SetDllDirectory (path)) {
+			else
+			{
+				path = Path.Combine(location, @"bin");
+			}
+
+			try
+			{
+				if (SetDllDirectory(path))
+				{
 					return;
 				}
-			} catch (EntryPointNotFoundException) {
 			}
-			LoggingService.LogError ("Unable to set GTK# dll directory");
+			catch (EntryPointNotFoundException)
+			{
+			}
+			LoggingService.LogError("Unable to set GTK# dll directory");
 		}
 	}
 }
