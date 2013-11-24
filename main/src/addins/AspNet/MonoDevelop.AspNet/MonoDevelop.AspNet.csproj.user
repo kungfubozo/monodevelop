@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <ReferencePath>$(SolutionDir)\..\external\GtkSharp-2.12\lib\gtk-sharp-2.0\;$(SolutionDir)\..\external\GtkSharp-2.12\lib\Mono.Cairo\;$(SolutionDir)\..\external\GtkSharp-2.12\lib\Mono.Posix\;$(SolutionDir)\..\external\MonoLibraries-2.6\</ReferencePath>
+  </PropertyGroup>
+</Project>
