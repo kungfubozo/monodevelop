@@ -78,7 +78,7 @@ namespace MonoDevelop.Ide.Gui.Components
 		int customFontSize = -1;
 		bool showSelectionPopupButton;
 		Gtk.TreeIter? lastPopupButtonIter;
-		
+
 		TreePadOption[] options;
 		TreeOptions globalOptions;
 
@@ -128,7 +128,7 @@ namespace MonoDevelop.Ide.Gui.Components
 		{
 			UpdateCustomFont ();
 		}
-
+		
 		Pango.FontDescription customFont;
 		
 		void UpdateCustomFont ()
@@ -792,7 +792,7 @@ namespace MonoDevelop.Ide.Gui.Components
 			else
 				return null;
 		}
-		
+
 		void ExpandCurrentItem ()
 		{
 			try {
@@ -1997,7 +1997,7 @@ namespace MonoDevelop.Ide.Gui.Components
 				builders = null;
 			}
 			builderChains.Clear ();
-
+			
 			if (customFont != null)
 				customFont.Dispose ();
 			
@@ -2258,13 +2258,13 @@ namespace MonoDevelop.Ide.Gui.Components
 				la.GetPixelSize (out w, out h);
 				la.FontDescription = parent.customFont;
 
-				Gtk.StateType st = Gtk.StateType.Normal;
+				Gtk.StateType st = Gtk.StateType.Active;						// moko: change to darker color
 				if ((flags & Gtk.CellRendererState.Prelit) != 0)
-					st = Gtk.StateType.Prelight;
+					st = Gtk.StateType.Active;
 				if ((flags & Gtk.CellRendererState.Focused) != 0)
-					st = Gtk.StateType.Normal;
+					st = Gtk.StateType.Active;
 				if ((flags & Gtk.CellRendererState.Insensitive) != 0)
-					st = Gtk.StateType.Insensitive;
+					st = Gtk.StateType.Active;
 				if ((flags & Gtk.CellRendererState.Selected) != 0)
 					st = widget.HasFocus ? Gtk.StateType.Selected : Gtk.StateType.Active;
 

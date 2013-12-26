@@ -260,6 +260,11 @@ namespace MonoDevelop.Components.Docking
 				if (!string.IsNullOrEmpty (it.Label)) {
 					label = new Gtk.Label (it.Label);
 					label.UseMarkup = true;
+
+					label.ModifyFg(StateType.Normal, Styles.PadLabelColor);		// moko: change to darker color
+					label.ModifyFg(StateType.Active, Styles.PadPrelightLabelColor);
+					label.ModifyFg(StateType.Prelight, Styles.PadPrelightLabelColor);
+
 					if (bar.Orientation == Gtk.Orientation.Vertical)
 						label.Angle = 270;
 					box.PackStart (label, true, true, 0);

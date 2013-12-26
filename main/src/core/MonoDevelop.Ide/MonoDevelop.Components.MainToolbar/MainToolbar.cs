@@ -104,7 +104,7 @@ namespace MonoDevelop.Components.MainToolbar
 
 		void SetSearchCategory (string category)
 		{
-			matchEntry.Entry.Text = category +":";
+			matchEntry.Entry.Text = category + ":";
 			matchEntry.Entry.GrabFocus ();
 			var pos = matchEntry.Entry.Text.Length;
 			matchEntry.Entry.SelectRegion (pos, pos);
@@ -299,7 +299,7 @@ namespace MonoDevelop.Components.MainToolbar
 				currentStartupProject = currentSolution.StartupItem;
 				if (currentStartupProject != null)
 					currentStartupProject.Saved += HandleProjectSaved;
-			}
+				}
 			else
 				currentStartupProject = null;
 		}
@@ -429,7 +429,7 @@ namespace MonoDevelop.Components.MainToolbar
 			TreeIter iter;
 			if (!configurationStore.GetIterFromString (out iter, active.ToString ()))
 				return null;
-			return (string)configurationStore.GetValue (iter, 1);
+			return (string) configurationStore.GetValue (iter, 1);
 		}
 
 		ExecutionTarget GetActiveTarget ()
@@ -482,22 +482,22 @@ namespace MonoDevelop.Components.MainToolbar
 			string name = configurationMerger.GetUnresolvedConfiguration (IdeApp.Workspace.ActiveConfigurationId);
 			int i = 0;
 			Gtk.TreeIter iter;
-			if (configurationStore.GetIterFirst (out iter)) {
-				do {
+				if (configurationStore.GetIterFirst (out iter)) {
+					do {
 					string val = (string)configurationStore.GetValue (iter, 1);
 					if (name == val) {
-						configurationCombo.Active = i;
-						break;
+							configurationCombo.Active = i;
+							break;
+						}
+						i++;
 					}
-					i++;
-				}
 				while (configurationStore.IterNext (ref iter));
-			}
+				}
 			var validTargets = configurationMerger.GetTargetsForConfiguration (IdeApp.Workspace.ActiveConfigurationId, false).ToArray ();
 			if (IdeApp.Workspace.PreferredActiveExecutionTarget == null || !validTargets.Any (t => t.Id == IdeApp.Workspace.PreferredActiveExecutionTarget))
 				IdeApp.Workspace.ActiveExecutionTarget = validTargets.FirstOrDefault ();
 
-			configurationCombo.Changed += HandleConfigurationChanged;
+				configurationCombo.Changed += HandleConfigurationChanged;
 			SelectActiveRuntime ();
 		}
 
@@ -506,21 +506,21 @@ namespace MonoDevelop.Components.MainToolbar
 			runtimeCombo.Changed -= HandleRuntimeChanged;
 			var i = 0;
 			Gtk.TreeIter iter;
-			if (runtimeStore.GetIterFirst (out iter)) {
+				if (runtimeStore.GetIterFirst (out iter)) {
 				do {
 					var val = (ExecutionTarget)runtimeStore.GetValue (iter, 2);
 					if (val.Id == IdeApp.Workspace.PreferredActiveExecutionTarget) {
 						runtimeCombo.Active = i;
 						break;
-					}
+						}
 					i++;
-				}
+					}
 				while (runtimeStore.IterNext (ref iter));
-			}
+				}
 			if (runtimeCombo.Active == -1)
 				runtimeCombo.Active = 0;
-			runtimeCombo.Changed += HandleRuntimeChanged;
-		}
+				runtimeCombo.Changed += HandleRuntimeChanged;
+			}
 
 		void UpdateCombos ()
 		{
@@ -611,9 +611,10 @@ namespace MonoDevelop.Components.MainToolbar
 				} else {
 					context.Rectangle (0, 0, Allocation.Width, Allocation.Height);
 					using (var lg = new LinearGradient (0, 0, 0, Allocation.Height)) {
-						lg.AddColorStop (0, (HslColor)Style.Light (StateType.Normal));
-						lg.AddColorStop (1, (HslColor)Style.Mid (StateType.Normal));
-						context.Pattern = lg;
+						lg.AddColorStop (0, Styles.DockTabBarGradientEnd);		// moko: change to darker color
+						lg.AddColorStop (1, Styles.DockTabBarGradientTop);
+
+						context.SetSource (lg);
 					}
 					context.Fill ();
 
