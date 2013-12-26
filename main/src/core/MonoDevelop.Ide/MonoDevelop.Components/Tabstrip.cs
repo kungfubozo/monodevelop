@@ -37,8 +37,9 @@ namespace MonoDevelop.Components
 {
 	class Tabstrip : DrawingArea
 	{
-		static readonly Cairo.Color BackgroundGradientStart = new Cairo.Color (241d / 255d, 241d / 255d, 241d / 255d);
-		static readonly Cairo.Color BackgroundGradientEnd = BackgroundGradientStart;//new Cairo.Color (224d / 255d, 224d / 255d, 224d / 255d);
+		static readonly Cairo.Color BackgroundGradientStart = new Gdk.Color(45, 44, 44).ToCairoColor();			// moko: change to darker color
+		static readonly Cairo.Color BackgroundGradientEnd = BackgroundGradientStart;
+
 		internal static readonly Cairo.Color ActiveGradientStart = new Cairo.Color (92d / 255d, 93d / 255d, 94d / 255d);
 		internal static readonly Cairo.Color ActiveGradientEnd = new Cairo.Color (134d / 255d, 136d / 255d, 137d / 255d);
 
@@ -87,8 +88,8 @@ namespace MonoDevelop.Components
 		
 		public void AddTab (Tab tab)
 		{
-			tabs.Add (tab);
-			tabSizes.Add (tab.Size);
+				tabs.Add (tab);
+				tabSizes.Add (tab.Size);
 			if (tabs.Count == 1)
 				tab.Active = true;
 			QueueResize ();
@@ -170,8 +171,8 @@ namespace MonoDevelop.Components
 			using (var cr = Gdk.CairoHelper.Create (evnt.Window)) {
 				cr.Rectangle (0, 0, Allocation.Width, Allocation.Height);
 				Cairo.LinearGradient gr = new LinearGradient (0, 0, 0, Allocation.Height);
-				gr.AddColorStop (0, BackgroundGradientStart);
-				gr.AddColorStop (1, BackgroundGradientEnd);
+					gr.AddColorStop (0, BackgroundGradientStart);
+					gr.AddColorStop (1, BackgroundGradientEnd);
 				cr.Pattern = gr;
 				cr.Fill ();
 
@@ -299,8 +300,8 @@ namespace MonoDevelop.Components
 				if (Active) {
 					cr.Rectangle (rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height);
 					Cairo.LinearGradient gr = new LinearGradient (rectangle.X, rectangle.Y, rectangle.X, rectangle.Y + rectangle.Height);
-					gr.AddColorStop (0, Tabstrip.ActiveGradientStart);
-					gr.AddColorStop (1, Tabstrip.ActiveGradientEnd);
+						gr.AddColorStop (0, Tabstrip.ActiveGradientStart);
+						gr.AddColorStop (1, Tabstrip.ActiveGradientEnd);
 					cr.Pattern = gr;
 					cr.Fill ();
 					cr.Rectangle (rectangle.X + 0.5, rectangle.Y + 0.5, rectangle.Width - 1, rectangle.Height - 1);
@@ -310,12 +311,12 @@ namespace MonoDevelop.Components
 				} else if (HoverPosition.X >= 0) {
 					cr.Rectangle (rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height);
 					Cairo.LinearGradient gr = new LinearGradient (rectangle.X, rectangle.Y, rectangle.X, rectangle.Y + rectangle.Height);
-					var c1 = Tabstrip.ActiveGradientStart;
-					var c2 = Tabstrip.ActiveGradientEnd;
-					c1.A = 0.2;
-					c2.A = 0.2;
-					gr.AddColorStop (0, c1);
-					gr.AddColorStop (1, c2);
+						var c1 = Tabstrip.ActiveGradientStart;
+						var c2 = Tabstrip.ActiveGradientEnd;
+						c1.A = 0.2;
+						c2.A = 0.2;
+						gr.AddColorStop (0, c1);
+						gr.AddColorStop (1, c2);
 					cr.Pattern = gr;
 					cr.Fill ();
 				}

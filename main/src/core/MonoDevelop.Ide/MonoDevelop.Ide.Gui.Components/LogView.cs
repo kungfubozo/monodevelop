@@ -121,7 +121,7 @@ namespace MonoDevelop.Ide.Gui.Components
 			buffer = new Gtk.TextBuffer (new Gtk.TextTagTable ());
 			textEditorControl = new LogTextView (buffer);
 			textEditorControl.Editable = false;
-			
+
 			ShadowType = ShadowType.None;
 			Add (textEditorControl);
 
@@ -144,6 +144,9 @@ namespace MonoDevelop.Ide.Gui.Components
 			tags.Add (tag);
 			
 			endMark = buffer.CreateMark ("end-mark", buffer.EndIter, false);
+
+			textEditorControl.ModifyBase(StateType.Normal, Styles.PadActiveBackground);		// moko: change to darker color
+			textEditorControl.ModifyText(StateType.Normal, Styles.PadLabelColor);
 
 			UpdateCustomFont ();
 			IdeApp.Preferences.CustomOutputPadFontChanged += HandleCustomFontChanged;
