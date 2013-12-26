@@ -794,8 +794,8 @@ namespace MonoDevelop.Components.MainToolbar
 				} else {
 					context.Rectangle (0, 0, Allocation.Width, Allocation.Height);
 					using (var lg = new LinearGradient (0, 0, 0, Allocation.Height)) {
-						lg.AddColorStop (0, (HslColor)Style.Light (StateType.Normal));
-						lg.AddColorStop (1, (HslColor)Style.Mid (StateType.Normal));
+						lg.AddColorStop(0, Styles.DockTabBarGradientEnd);		// moko: change to darker color
+						lg.AddColorStop(1, Styles.DockTabBarGradientTop);
 						context.SetSource (lg);
 					}
 					context.Fill ();

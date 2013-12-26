@@ -2292,13 +2292,13 @@ namespace MonoDevelop.Ide.Gui.Components
 
 			protected override void Render (Gdk.Drawable window, Gtk.Widget widget, Gdk.Rectangle background_area, Gdk.Rectangle cell_area, Gdk.Rectangle expose_area, Gtk.CellRendererState flags)
 			{
-				Gtk.StateType st = Gtk.StateType.Normal;
+				Gtk.StateType st = Gtk.StateType.Active;						// moko: change to darker color
 				if ((flags & Gtk.CellRendererState.Prelit) != 0)
-					st = Gtk.StateType.Prelight;
+					st = Gtk.StateType.Active;
 				if ((flags & Gtk.CellRendererState.Focused) != 0)
-					st = Gtk.StateType.Normal;
+					st = Gtk.StateType.Active;
 				if ((flags & Gtk.CellRendererState.Insensitive) != 0)
-					st = Gtk.StateType.Insensitive;
+					st = Gtk.StateType.Active;
 				if ((flags & Gtk.CellRendererState.Selected) != 0)
 					st = widget.HasFocus ? Gtk.StateType.Selected : Gtk.StateType.Active;
 

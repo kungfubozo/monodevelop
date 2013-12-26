@@ -1050,13 +1050,14 @@ namespace MonoDevelop.Ide.Gui
 			ctx.LineWidth = 1;
 			LayoutTabBorder (ctx, allocation, tabBounds.Width, tabBounds.X, 0, active);
 			ctx.ClosePath ();
-			using (LinearGradient gr = new LinearGradient (tabBounds.X, TopBarPadding, tabBounds.X, allocation.Bottom)) {
+			using (LinearGradient gr = new LinearGradient (tabBounds.X, TopBarPadding, tabBounds.X, allocation.Bottom)) {				
 				if (active) {
-					gr.AddColorStop (0, Styles.BreadcrumbGradientStartColor.MultiplyAlpha (tab.Opacity));
-					gr.AddColorStop (1, Styles.BreadcrumbBackgroundColor.MultiplyAlpha (tab.Opacity));
+					var c = Styles.BreadcrumbGradientStartColor.MultiplyAlpha(tab.Opacity); c.R *= 2;	// moko: change to darker color
+					gr.AddColorStop(0, c);
+					gr.AddColorStop(1, Styles.TabBarGradientMidColor.MultiplyAlpha(tab.Opacity));
 				} else {
-					gr.AddColorStop (0, CairoExtensions.ParseColor ("f4f4f4").MultiplyAlpha (tab.Opacity));
-					gr.AddColorStop (1, CairoExtensions.ParseColor ("cecece").MultiplyAlpha (tab.Opacity));
+					gr.AddColorStop(0, Styles.BreadcrumbGradientEndColor.MultiplyAlpha(tab.Opacity));	// moko: change to darker color
+					gr.AddColorStop(1, Styles.TabBarGradientMidColor.MultiplyAlpha(tab.Opacity));
 				}
 				ctx.SetSource (gr);
 			}
@@ -1108,7 +1109,7 @@ namespace MonoDevelop.Ide.Gui
 			ctx.MoveTo (textStart, tabBounds.Y + TopPadding + TextOffset + VerticalTextSize);
 			// ellipses are for space wasting ..., we cant afford that
 			using (var lg = new LinearGradient (textStart + w - 5, 0, textStart + w + 3, 0)) {
-				var color = tab.Notify ? new Cairo.Color (0, 0, 1) : Styles.TabBarActiveTextColor;
+				var color = tab.Notify ? new Cairo.Color (0, 0, 1) : (active ? Styles.TabBarActiveTextColor : Styles.TabBarInactiveTextColor);
 				color = color.MultiplyAlpha (tab.Opacity);
 				lg.AddColorStop (0, color);
 				color.A = 0;
