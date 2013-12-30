@@ -604,7 +604,7 @@ namespace MonoDevelop.Components.MainToolbar
 				);
 				context.Clip ();
 				context.LineWidth = 1;
-				if (Background != null && Background.Width > 0) {
+				if ((Background != null && Background.Width > 0) && false) {		// moko: skip the osx background image on main toolbar
 					for (int x=0; x < Allocation.Width; x += Background.Width) {
 						Background.Show (context, x, -TitleBarHeight);
 					}
@@ -614,7 +614,7 @@ namespace MonoDevelop.Components.MainToolbar
 						lg.AddColorStop (0, Styles.DockTabBarGradientEnd);		// moko: change to darker color
 						lg.AddColorStop (1, Styles.DockTabBarGradientTop);
 
-						context.SetSource (lg);
+						context.Pattern = lg;
 					}
 					context.Fill ();
 
