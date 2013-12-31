@@ -611,10 +611,11 @@ namespace MonoDevelop.Components.MainToolbar
 				} else {
 					context.Rectangle (0, 0, Allocation.Width, Allocation.Height);
 					using (var lg = new LinearGradient (0, 0, 0, Allocation.Height)) {
+
 						lg.AddColorStop (0, Styles.DockTabBarGradientEnd);		// moko: change to darker color
 						lg.AddColorStop (1, Styles.DockTabBarGradientTop);
 
-						context.SetSource (lg);
+						context.Pattern = lg; 
 					}
 					context.Fill ();
 
